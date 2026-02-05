@@ -1,0 +1,15 @@
+{
+  "name": "yearbook-ai-generator",
+  "version": "1.0.0",
+  "description": "AI-powered yearbook spread generator using Claude API",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "jest --detectOpenHandles"
+  },
+  "keywords": ["yearbook", "ai", "layout", "pdf", "puppeteer"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
