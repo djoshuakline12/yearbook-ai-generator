@@ -1,7 +1,14 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { PAGE } = require('../utils/constants');
 
-const client = new Anthropic();
+let client = null;
+
+function getClient() {
+  if (!client) {
+    client = new Anthropic();
+  }
+  return client;
+}
 
 /**
  * Generate a unique layout composition using Claude AI.
@@ -16,7 +23,7 @@ async function generateLayout({ photos, topic, headline, captions, theme }) {
 
   const prompt = buildPrompt({ photoDescriptions, topic, headline, captions, theme });
 
-  const response = await client.messages.create({
+  const response = await getClient().messages.create({
     model: 'claude-sonnet-4-5-20250514',
     max_tokens: 4096,
     messages: [{ role: 'user', content: prompt }],
