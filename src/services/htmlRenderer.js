@@ -401,31 +401,39 @@ function renderQuote(el, dpi) {
   const y = inToPx(el.y, dpi);
   const w = inToPx(el.width, dpi);
   const fontSize = ptToPx(el.fontSize || 16, dpi);
-  const accentColor = el.accentColor || el.color || '#8b5cf6';
+
+  // DCHS Style: Purple background with white text
+  const hasBgColor = el.backgroundColor;
+  const bgStyle = hasBgColor
+    ? `background-color: ${el.backgroundColor}; padding: ${inToPx(0.12, dpi)}px ${inToPx(0.15, dpi)}px;`
+    : '';
+  const textColor = hasBgColor ? (el.color || '#FFFFFF') : (el.color || '#1a1a1a');
+  const quoteMarkColor = hasBgColor ? '#FFFFFF' : (el.accentColor || '#523D73');
 
   return `<div class="element" style="
     left: ${x}px; top: ${y}px;
     width: ${w}px;
     z-index: ${el.zIndex || 10};
+    ${bgStyle}
   ">
     <div style="
       font-family: '${el.fontFamily || 'Playfair Display'}', serif;
       font-size: ${fontSize}px;
       font-style: ${el.fontStyle || 'italic'};
-      font-weight: ${el.fontWeight || '400'};
-      color: ${el.color || '#1a1a1a'};
+      font-weight: ${el.fontWeight || '700'};
+      color: ${textColor};
       line-height: 1.3;
     ">
-      <span style="color: ${accentColor}; font-size: ${Math.round(fontSize * 1.5)}px;">"</span>${escapeHtml(el.text)}<span style="color: ${accentColor}; font-size: ${Math.round(fontSize * 1.5)}px;">"</span>
+      <span style="color: ${quoteMarkColor}; font-size: ${Math.round(fontSize * 1.5)}px;">"</span>${escapeHtml(el.text)}<span style="color: ${quoteMarkColor}; font-size: ${Math.round(fontSize * 1.5)}px;">"</span>
     </div>
     ${el.attribution ? `<div style="
-      font-family: '${el.fontFamily || 'Playfair Display'}', serif;
+      font-family: '${el.fontFamily || 'Source Sans Pro'}', sans-serif;
       font-size: ${Math.round(fontSize * 0.75)}px;
       font-style: normal;
-      font-weight: 600;
-      color: ${el.color || '#1a1a1a'};
-      margin-top: ${inToPx(0.05, dpi)}px;
-    ">${escapeHtml(el.attribution)}</div>` : ''}
+      font-weight: 700;
+      color: ${textColor};
+      margin-top: ${inToPx(0.08, dpi)}px;
+    ">— ${escapeHtml(el.attribution)}</div>` : ''}
   </div>`;
 }
 

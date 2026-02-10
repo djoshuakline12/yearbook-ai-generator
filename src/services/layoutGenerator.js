@@ -1,5 +1,6 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { PAGE } = require('../utils/constants');
+const { validateAndCorrectLayout } = require('./layoutValidator');
 
 let client = null;
 
@@ -73,7 +74,11 @@ async function generateLayout({ photos, pageContent, theme, pageType = 'page' })
 
   // Extract JSON from the response
   const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, text];
-  const layoutJson = JSON.parse(jsonMatch[1].trim());
+  let layoutJson = JSON.parse(jsonMatch[1].trim());
+
+  // CRITICAL: Validate and correct the layout for style guide compliance
+  // This ensures DCHS colors, fonts, and styling are enforced regardless of AI output
+  layoutJson = validateAndCorrectLayout(layoutJson, theme);
 
   // Add page dimensions to the response
   layoutJson.pageType = pageType;
