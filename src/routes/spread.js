@@ -313,18 +313,28 @@ function parsePhotoCaptions(body) {
 function parseTheme(body) {
   let themeInput = body.theme;
 
+  console.log('parseTheme - Raw input:', themeInput);
+  console.log('parseTheme - Type:', typeof themeInput);
+
   if (typeof themeInput === 'string') {
     if (!themeInput.startsWith('{')) {
-      return getTheme(themeInput);
+      const theme = getTheme(themeInput);
+      console.log('parseTheme - Resolved from string key:', themeInput, '→', theme.preset || theme.name);
+      return theme;
     }
     try {
       themeInput = JSON.parse(themeInput);
+      console.log('parseTheme - Parsed JSON:', themeInput);
     } catch {
-      return getTheme(themeInput);
+      const theme = getTheme(themeInput);
+      console.log('parseTheme - JSON parse failed, using as key:', themeInput);
+      return theme;
     }
   }
 
-  return getTheme(themeInput);
+  const theme = getTheme(themeInput);
+  console.log('parseTheme - Final theme:', { preset: theme.preset, name: theme.name, hasStyleGuide: !!theme.styleGuide });
+  return theme;
 }
 
 function slugify(str) {
