@@ -461,96 +461,140 @@ function getCategoryGuidance(category) {
  * Build DCHS-specific style instructions based on the comprehensive style guide
  */
 function buildDCHSInstructions(theme, pageCategory) {
-  const sg = theme.styleGuide || {};
-  const rules = theme.rules || {};
-
   return `
-=== DCHS MASTER STYLE GUIDE ===
-IMPORTANT: Follow these specific design rules consistently across ALL pages.
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    MANDATORY DCHS STYLE GUIDE                                 ║
+║           YOU MUST FOLLOW THESE RULES EXACTLY - NO EXCEPTIONS                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 
-COLOR RULES:
-- Primary brand purple: #523D73 (CMYK: C43 M68 Y0 K43)
-- Core palette: BLACK, WHITE, and PURPLE only
-- Use purple (#523D73) for:
-  • Headline background bars
-  • Record/stats highlight bars
-  • Pull quote backgrounds
-  • Special callout bars
-- Text colors: #1A1A1A (primary), #333333 (secondary), #666666 (subtle)
+⛔ FORBIDDEN COLORS - DO NOT USE:
+- NO pink, magenta, hot pink (#FF69B4, #FF1493, #E91E8B, etc.)
+- NO bright blue (#0000FF, #00BFFF, etc.)
+- NO red (#FF0000, #E53E3E, etc.)
+- NO orange, yellow, green, teal, cyan
+- NO pastel colors of any kind
+- NO neon or bright colors
 
-TYPOGRAPHY RULES:
-- Section headers: Script font (Dancing Script fallback), 28pt, elegant/italic feel
-  Example style: "mens soccer" in lowercase italic script
-- School name: Bold display font, 60pt, uppercase, tight letter-spacing
-  Example: "DCHS" large and commanding
-- Headlines on purple bars: Bold, 18-24pt, WHITE text on #523D73 background
-- Body copy: 10pt, clean sans-serif, justified, single column 2.5-3.5" wide
-- Captions: 10pt, descriptive, identify people left-to-right
-- Roster: 11pt bold title + 8pt names as comma-separated flowing text
+✅ ONLY THESE COLORS ARE ALLOWED:
+- Background: #FFFFFF (white) or #F5F5F5 (off-white)
+- Primary accent: #523D73 (DCHS purple - the ONLY accent color)
+- Text: #1A1A1A (dark), #333333 (medium), #666666 (light)
+- Black: #000000
+- White: #FFFFFF
 
-PHOTO TREATMENT RULES:
-- BLACK & WHITE: Use selectively for dramatic effect
-  • Dominant/hero photos: OFTEN in B&W (70% of the time)
-  • Action shots: Prefer B&W for drama
-  • Group photos: Keep in COLOR
-  • Small grid photos: Usually COLOR
-- Mark which photos should be "blackAndWhite: true" in the layout JSON
-- NO rounded corners - all photos have SHARP corners
-- Minimal shadows - only subtle when photos overlap
-- NO thick borders - clean edges
+⛔ FORBIDDEN STYLING - DO NOT USE:
+- NO rounded corners on photos (borderRadius must be 0)
+- NO decorative diagonal lines
+- NO circles or dots as decorative elements
+- NO gradients (background must be solid color)
+- NO thick photo borders
+- NO playful or whimsical layouts
+- NO tilted/rotated photos beyond 2 degrees
 
-PURPLE BAR ELEMENTS:
-- Create headline bars with:
-  • backgroundColor: "#523D73"
-  • padding: 0.03" vertical, 0.08" horizontal
-  • text color: "#FFFFFF"
-  • font weight: 700
-- Stack multiple bars for visual hierarchy (like reference shows):
-  • "Delmarva Christian 3-12" (top bar)
-  • "11 as 1 for an audience+" (second bar)
+✅ REQUIRED STYLING:
+- ALL photo borderRadius: 0 (sharp corners)
+- Headlines with purple background: backgroundColor: "#523D73", color: "#FFFFFF"
+- Section header: fontFamily: "Dancing Script", lowercase, italic feel
+- School name: fontFamily: "Playfair Display", uppercase, very large (48-60pt)
+- Body text: fontFamily: "Source Sans Pro", 10pt
+- Dominant photo: blackAndWhite: true (for dramatic effect)
 
-CAPTION NUMBERING SYSTEM:
-- Number photos with small BLACK square badges (0.15" x 0.15")
-- Badge: white number on black background
-- Group all caption text together, referenced by number
-- Caption format: "1. [Person name] is seen [action] in [context]."
+✅ LAYOUT STRUCTURE (MUST FOLLOW):
+For a SPREAD (two-page):
+- LEFT PAGE: Dominant B&W photo (40-50% of left page), secondary color photos
+- RIGHT PAGE: Section header (script font, right-aligned), school name (bold),
+  headline bars (purple background), body copy, roster
+- BOTTOM: Numbered captions with black square badges
 
-PULL QUOTE STYLING:
-- Purple background bar (#523D73)
-- White text, bold, 16pt
-- Include opening quote mark
-- Attribution on separate line with "- Name"
-- Example from reference:
-  "I was really proud of the teams perseverance and how they kept and displayed true Christian character."
-  - Josh Kline
+For a SINGLE PAGE:
+- Top area: Section header + school name
+- Center: Dominant photo + supporting photos
+- Right side: Body copy, record bars
+- Bottom: Captions
 
-ROSTER FORMAT:
-- Title: Bold, 11pt (e.g., "Roster:")
-- Names: 8pt, flowing comma-separated paragraph
-- Include coaches at beginning: "Coaches Luke Shiderly, Josh Kline, Aaron Dale, Pat Parrish,"
-- Then players in alphabetical or position order
+✅ ELEMENT SPECIFICS:
 
-LAYOUT COMPOSITION:
-- One DOMINANT photo (30-50% of spread area) - often B&W action shot
-- Secondary photos at varied sizes creating visual interest
-- Text blocks anchor to outer edges of spread
-- Captions grouped at bottom with numbered references
-- Section header + School name in upper right area
-- Record/stats bars prominently displayed
+1. HEADLINE/RECORD BARS (purple background):
+   {
+     "type": "headline" or "record",
+     "backgroundColor": "#523D73",
+     "color": "#FFFFFF",
+     "fontWeight": "700"
+   }
 
-ELEMENT POSITIONING FOR SPREAD:
-- Left page: Large dominant photo, supporting action shots
-- Right page: Section header, school name, body copy, roster
-- Bottom: Numbered captions spanning both pages
-- Center gutter: Avoid placing faces or important text
+2. PHOTOS:
+   {
+     "type": "photo",
+     "borderRadius": 0,
+     "blackAndWhite": true/false,  // true for dominant/action photos
+     "shadow": false
+   }
+
+3. SECTION HEADER:
+   {
+     "type": "sectionHeader",
+     "fontFamily": "Dancing Script",
+     "color": "#1A1A1A",
+     "textTransform": "lowercase"
+   }
+
+4. PULL QUOTES:
+   {
+     "type": "quote",
+     "backgroundColor": "#523D73",
+     "color": "#FFFFFF",
+     "fontWeight": "700"
+   }
+
+5. CAPTION NUMBERS:
+   {
+     "type": "captionNumber",
+     "backgroundColor": "#000000",
+     "color": "#FFFFFF"
+   }
+
+FINAL CHECK - Before outputting JSON, verify:
+□ No pink/magenta colors anywhere
+□ No rounded corners on photos
+□ Purple (#523D73) is the ONLY accent color
+□ Background is white (#FFFFFF)
+□ At least one photo has blackAndWhite: true
+□ No decorative diagonal lines or circles
 `;
 }
 
 function buildThemeDetails(theme) {
   const details = [];
 
-  const colors = theme.colors || {};
-  details.push(`Colors:
+  // Check if DCHS theme - force specific colors
+  const isDCHS = theme.styleGuide || theme.preset === 'dchs-official';
+
+  if (isDCHS) {
+    // Force DCHS colors - be very explicit
+    details.push(`Colors (DCHS OFFICIAL - USE EXACTLY):
+  - Background: #FFFFFF (white only)
+  - Primary/Accent: #523D73 (purple - the ONLY accent color allowed)
+  - Secondary: #000000 (black)
+  - Text Dark: #1A1A1A
+  - Text Medium: #333333
+  - Text Light: #666666
+  - DO NOT use any other colors!`);
+
+    details.push(`Typography (DCHS OFFICIAL):
+  - Section Header: Dancing Script (script/italic style)
+  - School Name: Playfair Display (bold, uppercase)
+  - Headlines: Playfair Display Bold
+  - Body: Source Sans Pro`);
+
+    details.push(`Photo Treatment (DCHS OFFICIAL):
+  - Corners: SHARP (borderRadius: 0 always)
+  - Shadows: NONE or very subtle
+  - Borders: NONE
+  - B&W: Apply to dominant/action photos`);
+  } else {
+    // Non-DCHS themes
+    const colors = theme.colors || {};
+    details.push(`Colors:
   - Background: ${colors.background || theme.backgroundColor || '#ffffff'}
   - Primary: ${colors.primary || theme.primaryColor || '#1a1a2e'}
   - Secondary: ${colors.secondary || theme.secondaryColor || '#4a4a4a'}
@@ -558,16 +602,17 @@ function buildThemeDetails(theme) {
   - Text: ${colors.text || theme.textColor || '#1a1a1a'}
   - Text Light: ${colors.textLight || theme.textLightColor || '#666666'}`);
 
-  const typography = theme.typography || {};
-  details.push(`Typography:
+    const typography = theme.typography || {};
+    details.push(`Typography:
   - Headline Font: ${typography.headlineFont || theme.headlineFont || 'Playfair Display'}
   - Body Font: ${typography.bodyFont || theme.bodyFont || 'Source Sans Pro'}`);
 
-  const layout = theme.layout || {};
-  details.push(`Photo Treatment:
+    const layout = theme.layout || {};
+    details.push(`Photo Treatment:
   - Corners: ${layout.photoTreatment || 'sharp-corners'}
   - Shadows: ${layout.photoShadows || 'subtle'}
   - Borders: ${layout.photoBorders || 'none'}`);
+  }
 
   return details.join('\n\n');
 }
