@@ -1,6 +1,7 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { PAGE } = require('../utils/constants');
 const { validateAndCorrectLayout } = require('./layoutValidator');
+const { generateHybridLayout } = require('./recraftLayoutGenerator');
 
 let client = null;
 
@@ -10,6 +11,9 @@ function getClient() {
   }
   return client;
 }
+
+// Feature flag for using Recraft hybrid layout
+const USE_RECRAFT_LAYOUT = process.env.USE_RECRAFT_LAYOUT === 'true';
 
 /**
  * Generate a professional yearbook layout using Claude AI.
@@ -41,6 +45,37 @@ async function generateLayout({ photos, pageContent, theme, pageType = 'page' })
 
   // Detect page category from content or explicit setting
   const pageCategory = detectPageCategory(pageContent);
+
+  // ============================================================
+  // OPTION 1: Try Recraft hybrid layout (design-focused AI)
+  // ============================================================
+  if (USE_RECRAFT_LAYOUT && process.env.RECRAFT_API_KEY) {
+    console.log('Using Recraft hybrid layout generator...');
+    try {
+      const recraftLayout = await generateHybridLayout({
+        photos,
+        pageContent,
+        theme,
+        pageType,
+      });
+
+      if (recraftLayout) {
+        // Validate and correct for DCHS compliance
+        let layoutJson = validateAndCorrectLayout(recraftLayout, theme);
+        layoutJson.pageCategory = pageCategory;
+        layoutJson.generatedBy = 'recraft-hybrid';
+        console.log('Recraft layout generated successfully');
+        return layoutJson;
+      }
+    } catch (error) {
+      console.error('Recraft layout failed, falling back to Claude:', error.message);
+    }
+  }
+
+  // ============================================================
+  // OPTION 2: Fall back to Claude AI layout generation
+  // ============================================================
+  console.log('Using Claude AI layout generator...');
 
   const photoDescriptions = photos.map((p, i) => {
     const captionInfo = (pageContent.photoCaptions || [])[i] || {};
@@ -83,6 +118,7 @@ async function generateLayout({ photos, pageContent, theme, pageType = 'page' })
   // Add page dimensions to the response
   layoutJson.pageType = pageType;
   layoutJson.pageCategory = pageCategory;
+  layoutJson.generatedBy = 'claude';
   layoutJson.dimensions = {
     width: pageWidth,
     height: pageHeight,

@@ -14,7 +14,7 @@ const THEMES = {
     description: 'Official Delmarva Christian style - purple, black & white',
     primaryColor: '#523D73',           // DCHS Purple (C43 M68 Y0 K43)
     secondaryColor: '#000000',
-    accentColor: '#D4A84B',            // Gold accent
+    accentColor: '#523D73',            // SAME AS PRIMARY - NO GOLD (confirmed from eDesign)
     backgroundColor: '#FFFFFF',
     textColor: '#1A1A1A',
     headlineFont: 'Playfair Display',  // Web fallback for AHJ Bodoni Display
