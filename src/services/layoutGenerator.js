@@ -137,8 +137,15 @@ function buildPrompt({ photoDescriptions, pageContent, pageCategory, theme, page
   const style = theme.style || 'editorial';
   const photoCount = photoDescriptions.length;
 
+  // Check if using DCHS style guide
+  const hasDCHSStyleGuide = theme.styleGuide || theme.preset === 'dchs-official';
+  const dchsRules = theme.rules || {};
+
   // Build theme details
   const themeDetails = buildThemeDetails(theme);
+
+  // Build DCHS-specific instructions if applicable
+  const dchsInstructions = hasDCHSStyleGuide ? buildDCHSInstructions(theme, pageCategory) : '';
 
   // Find primary photo
   const primaryPhotoIndex = photoDescriptions.findIndex(p => p.isPrimary);
@@ -206,6 +213,8 @@ ${themeDetails}
 DESIGN STYLE: "${style}"
 ${getStyleInstructions(style, isSpread)}
 
+${dchsInstructions}
+
 YEARBOOK DESIGN PRINCIPLES:
 1. VISUAL HIERARCHY: One dominant photo (30-50% of page area), varied supporting sizes
 2. TEXT READABILITY: Body copy in 2.5-3.5" columns, 9-11pt font
@@ -234,6 +243,7 @@ Return ONLY valid JSON:
       "borderColor": "#hex",
       "shadow": boolean,
       "shadowIntensity": "subtle" | "medium" | "dramatic",
+      "blackAndWhite": boolean (true for dramatic B&W treatment),
       "zIndex": number,
       "cropFit": "cover"
     },
@@ -445,6 +455,95 @@ function getCategoryGuidance(category) {
   };
 
   return guidance[category] || guidance.general;
+}
+
+/**
+ * Build DCHS-specific style instructions based on the comprehensive style guide
+ */
+function buildDCHSInstructions(theme, pageCategory) {
+  const sg = theme.styleGuide || {};
+  const rules = theme.rules || {};
+
+  return `
+=== DCHS MASTER STYLE GUIDE ===
+IMPORTANT: Follow these specific design rules consistently across ALL pages.
+
+COLOR RULES:
+- Primary brand purple: #523D73 (CMYK: C43 M68 Y0 K43)
+- Core palette: BLACK, WHITE, and PURPLE only
+- Use purple (#523D73) for:
+  • Headline background bars
+  • Record/stats highlight bars
+  • Pull quote backgrounds
+  • Special callout bars
+- Text colors: #1A1A1A (primary), #333333 (secondary), #666666 (subtle)
+
+TYPOGRAPHY RULES:
+- Section headers: Script font (Dancing Script fallback), 28pt, elegant/italic feel
+  Example style: "mens soccer" in lowercase italic script
+- School name: Bold display font, 60pt, uppercase, tight letter-spacing
+  Example: "DCHS" large and commanding
+- Headlines on purple bars: Bold, 18-24pt, WHITE text on #523D73 background
+- Body copy: 10pt, clean sans-serif, justified, single column 2.5-3.5" wide
+- Captions: 10pt, descriptive, identify people left-to-right
+- Roster: 11pt bold title + 8pt names as comma-separated flowing text
+
+PHOTO TREATMENT RULES:
+- BLACK & WHITE: Use selectively for dramatic effect
+  • Dominant/hero photos: OFTEN in B&W (70% of the time)
+  • Action shots: Prefer B&W for drama
+  • Group photos: Keep in COLOR
+  • Small grid photos: Usually COLOR
+- Mark which photos should be "blackAndWhite: true" in the layout JSON
+- NO rounded corners - all photos have SHARP corners
+- Minimal shadows - only subtle when photos overlap
+- NO thick borders - clean edges
+
+PURPLE BAR ELEMENTS:
+- Create headline bars with:
+  • backgroundColor: "#523D73"
+  • padding: 0.03" vertical, 0.08" horizontal
+  • text color: "#FFFFFF"
+  • font weight: 700
+- Stack multiple bars for visual hierarchy (like reference shows):
+  • "Delmarva Christian 3-12" (top bar)
+  • "11 as 1 for an audience+" (second bar)
+
+CAPTION NUMBERING SYSTEM:
+- Number photos with small BLACK square badges (0.15" x 0.15")
+- Badge: white number on black background
+- Group all caption text together, referenced by number
+- Caption format: "1. [Person name] is seen [action] in [context]."
+
+PULL QUOTE STYLING:
+- Purple background bar (#523D73)
+- White text, bold, 16pt
+- Include opening quote mark
+- Attribution on separate line with "- Name"
+- Example from reference:
+  "I was really proud of the teams perseverance and how they kept and displayed true Christian character."
+  - Josh Kline
+
+ROSTER FORMAT:
+- Title: Bold, 11pt (e.g., "Roster:")
+- Names: 8pt, flowing comma-separated paragraph
+- Include coaches at beginning: "Coaches Luke Shiderly, Josh Kline, Aaron Dale, Pat Parrish,"
+- Then players in alphabetical or position order
+
+LAYOUT COMPOSITION:
+- One DOMINANT photo (30-50% of spread area) - often B&W action shot
+- Secondary photos at varied sizes creating visual interest
+- Text blocks anchor to outer edges of spread
+- Captions grouped at bottom with numbered references
+- Section header + School name in upper right area
+- Record/stats bars prominently displayed
+
+ELEMENT POSITIONING FOR SPREAD:
+- Left page: Large dominant photo, supporting action shots
+- Right page: Section header, school name, body copy, roster
+- Bottom: Numbered captions spanning both pages
+- Center gutter: Avoid placing faces or important text
+`;
 }
 
 function buildThemeDetails(theme) {

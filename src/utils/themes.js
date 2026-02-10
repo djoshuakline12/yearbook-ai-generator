@@ -3,7 +3,38 @@
  * Students select a theme by name; the backend applies the full configuration.
  */
 
+const { DCHS_STYLE_GUIDE, DCHS_THEME } = require('../themes/dchs-style-guide');
+
 const THEMES = {
+  // ============================================================
+  // DCHS OFFICIAL THEME (Default)
+  // ============================================================
+  'dchs-official': {
+    name: 'DCHS Official',
+    description: 'Official Delmarva Christian style - purple, black & white',
+    primaryColor: '#523D73',           // DCHS Purple (C43 M68 Y0 K43)
+    secondaryColor: '#000000',
+    accentColor: '#D4A84B',            // Gold accent
+    backgroundColor: '#FFFFFF',
+    textColor: '#1A1A1A',
+    headlineFont: 'Playfair Display',  // Web fallback for AHJ Bodoni Display
+    scriptFont: 'Dancing Script',       // Web fallback for AHJ Bungalow Script
+    bodyFont: 'Source Sans Pro',
+    style: 'editorial',
+    // Include full style guide reference
+    styleGuide: DCHS_STYLE_GUIDE,
+    // Specific DCHS rules
+    rules: {
+      photoBlackAndWhite: 'selective',  // Select photos in B&W for drama
+      purpleBars: true,                 // Use purple background bars for headlines
+      captionNumbering: true,           // Number captions with black badges
+      rosterFormat: 'inline-comma',     // Roster as flowing comma-separated text
+    },
+  },
+
+  // ============================================================
+  // Classic & Traditional
+  // ============================================================
   // Classic & Traditional
   'classic-navy': {
     name: 'Classic Navy',
@@ -145,8 +176,8 @@ function getTheme(themeInput) {
     if (preset) {
       return { ...preset, preset: themeInput };
     }
-    // Default to classic-navy if unknown
-    return { ...THEMES['classic-navy'], preset: 'classic-navy' };
+    // Default to DCHS Official if unknown
+    return { ...THEMES['dchs-official'], preset: 'dchs-official' };
   }
 
   // If it's an object, check if it has a preset key
@@ -168,7 +199,7 @@ function getTheme(themeInput) {
   }
 
   // Fallback
-  return { ...THEMES['classic-navy'], preset: 'classic-navy' };
+  return { ...THEMES['dchs-official'], preset: 'dchs-official' };
 }
 
 /**

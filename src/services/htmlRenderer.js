@@ -142,6 +142,9 @@ function renderPhoto(el, photos, dpi) {
   const shadow = getShadowCss(el, dpi);
   const border = borderWidth > 0 ? `border: ${borderWidth}px solid ${borderColor};` : '';
 
+  // Black and white filter for dramatic effect (DCHS style)
+  const bwFilter = el.blackAndWhite ? 'filter: grayscale(100%) contrast(1.1);' : '';
+
   const imgData = fs.readFileSync(photo.processedPath);
   const base64 = imgData.toString('base64');
 
@@ -157,7 +160,7 @@ function renderPhoto(el, photos, dpi) {
     ${border}
   ">
     <img src="data:image/jpeg;base64,${base64}"
-         style="width: 100%; height: 100%; object-fit: ${el.cropFit || 'cover'};"
+         style="width: 100%; height: 100%; object-fit: ${el.cropFit || 'cover'}; ${bwFilter}"
          alt="Photo ${el.photoIndex}">
   </div>`;
 }
