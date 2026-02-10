@@ -7,6 +7,8 @@ const { renderLayoutToHtml } = require('../services/htmlRenderer');
 const { exportToFile } = require('../services/exporter');
 const { MAX_PHOTOS, MAX_FILE_SIZE } = require('../utils/constants');
 const { getTheme, getAllThemes } = require('../utils/themes');
+const { extractThemeFromImage } = require('../services/themeExtractor');
+const fs = require('fs').promises;
 
 const router = express.Router();
 
@@ -16,6 +18,59 @@ const router = express.Router();
  */
 router.get('/themes', (req, res) => {
   res.json({ themes: getAllThemes() });
+});
+
+/**
+ * POST /api/extract-theme
+ * Upload an example page image and AI extracts the visual theme.
+ * Students use this to create custom presets from pages they like.
+ */
+const themeUpload = multer({
+  storage: multer.diskStorage({
+    destination: path.join(__dirname, '../../uploads'),
+    filename: (req, file, cb) => {
+      const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      cb(null, `theme-${unique}-${file.originalname}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  fileFilter: (req, file, cb) => {
+    const allowed = /jpeg|jpg|png|webp|gif/;
+    const ext = allowed.test(path.extname(file.originalname).toLowerCase());
+    const mime = allowed.test(file.mimetype);
+    cb(null, ext && mime);
+  },
+});
+
+router.post('/extract-theme', themeUpload.single('image'), async (req, res) => {
+  let imagePath = null;
+
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Image is required.' });
+    }
+
+    imagePath = req.file.path;
+
+    // Extract theme using Claude vision
+    const theme = await extractThemeFromImage(imagePath);
+
+    res.json({
+      success: true,
+      theme,
+      message: 'Theme extracted successfully. Save this to your presets.',
+    });
+  } catch (err) {
+    console.error('Extract theme error:', err);
+    res.status(500).json({ error: 'Failed to extract theme.', details: err.message });
+  } finally {
+    // Clean up uploaded image
+    if (imagePath) {
+      try {
+        await fs.unlink(imagePath);
+      } catch {}
+    }
+  }
 });
 
 // Configure multer for file uploads
