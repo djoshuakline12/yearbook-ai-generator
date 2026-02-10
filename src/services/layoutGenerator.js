@@ -24,7 +24,7 @@ async function generateLayout({ photos, topic, headline, captions, theme }) {
   const prompt = buildPrompt({ photoDescriptions, topic, headline, captions, theme });
 
   const response = await getClient().messages.create({
-    model: 'claude-sonnet-4-5-20250514',
+    model: 'claude-3-5-sonnet-20241022',
     max_tokens: 4096,
     messages: [{ role: 'user', content: prompt }],
   });
