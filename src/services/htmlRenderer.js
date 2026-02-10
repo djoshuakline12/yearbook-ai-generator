@@ -7,7 +7,9 @@ const { PAGE } = require('../utils/constants');
  * suitable for Puppeteer rendering at 300 DPI.
  */
 function renderLayoutToHtml(layout, photos) {
-  const widthPx = PAGE.WIDTH_PX;
+  // Use layout dimensions if available, otherwise default to single page
+  const isSpread = layout.pageType === 'spread';
+  const widthPx = isSpread ? PAGE.SPREAD_WIDTH_PX : PAGE.WIDTH_PX;
   const heightPx = PAGE.HEIGHT_PX;
   const dpi = PAGE.DPI;
 
@@ -23,7 +25,7 @@ function renderLayoutToHtml(layout, photos) {
     if (el.fontFamily) fonts.add(el.fontFamily);
   }
   const fontLink = fonts.size > 0
-    ? `<link href="https://fonts.googleapis.com/css2?${[...fonts].map(f => `family=${f.replace(/ /g, '+')}:wght@300;400;700;900`).join('&')}&display=swap" rel="stylesheet">`
+    ? `<link href="https://fonts.googleapis.com/css2?${[...fonts].map(f => `family=${f.replace(/ /g, '+')}:wght@300;400;500;600;700;800;900&ital,wght@0,400;0,700;1,400;1,700`).join('&')}&display=swap" rel="stylesheet">`
     : '';
 
   return `<!DOCTYPE html>
@@ -80,6 +82,7 @@ function renderElement(el, photos, dpi) {
     case 'photo': return renderPhoto(el, photos, dpi);
     case 'headline': return renderHeadline(el, dpi);
     case 'caption': return renderCaption(el, dpi);
+    case 'quote': return renderQuote(el, dpi);
     case 'decorative': return renderDecorative(el, dpi);
     case 'pageNumber': return renderPageNumber(el, dpi);
     default: return '';
@@ -91,10 +94,20 @@ function inToPx(inches, dpi) {
 }
 
 function ptToPx(pts, dpi) {
-  // At 300 DPI, 1 CSS px = 1/96 inch, 1 pt = 1/72 inch
-  // We need to scale pts for our 300 DPI canvas
   // 1 pt = 1/72 inch = 300/72 px at 300 DPI ≈ 4.167px
   return Math.round(pts * (dpi / 72));
+}
+
+function getShadowCss(el, dpi) {
+  if (!el.shadow) return '';
+
+  const intensity = el.shadowIntensity || 'subtle';
+  const shadows = {
+    subtle: `box-shadow: ${inToPx(0.01, dpi)}px ${inToPx(0.02, dpi)}px ${inToPx(0.05, dpi)}px rgba(0,0,0,0.2);`,
+    medium: `box-shadow: ${inToPx(0.02, dpi)}px ${inToPx(0.03, dpi)}px ${inToPx(0.08, dpi)}px rgba(0,0,0,0.3);`,
+    dramatic: `box-shadow: ${inToPx(0.04, dpi)}px ${inToPx(0.06, dpi)}px ${inToPx(0.15, dpi)}px rgba(0,0,0,0.4);`,
+  };
+  return shadows[intensity] || shadows.subtle;
 }
 
 function renderPhoto(el, photos, dpi) {
@@ -107,9 +120,12 @@ function renderPhoto(el, photos, dpi) {
   const h = inToPx(el.height, dpi);
   const rotation = el.rotation || 0;
   const borderRadius = el.borderRadius ? inToPx(el.borderRadius, dpi) : 0;
+  const borderWidth = el.borderWidth ? inToPx(el.borderWidth, dpi) : 0;
+  const borderColor = el.borderColor || '#ffffff';
   const opacity = el.opacity != null ? el.opacity : 1;
   const zIndex = el.zIndex || 1;
-  const shadow = el.shadow ? `box-shadow: ${inToPx(0.02, dpi)}px ${inToPx(0.03, dpi)}px ${inToPx(0.08, dpi)}px rgba(0,0,0,0.3);` : '';
+  const shadow = getShadowCss(el, dpi);
+  const border = borderWidth > 0 ? `border: ${borderWidth}px solid ${borderColor};` : '';
 
   // Read the image as base64 for embedding
   const imgData = fs.readFileSync(photo.processedPath);
@@ -125,6 +141,7 @@ function renderPhoto(el, photos, dpi) {
     z-index: ${zIndex};
     overflow: hidden;
     ${shadow}
+    ${border}
   ">
     <img src="data:${mimeType};base64,${base64}"
          style="width: 100%; height: 100%; object-fit: ${el.cropFit || 'cover'};"
@@ -139,6 +156,7 @@ function renderHeadline(el, dpi) {
   const fontSize = ptToPx(el.fontSize || 48, dpi);
   const letterSpacing = el.letterSpacing ? `${el.letterSpacing * (dpi / 96)}px` : '0';
   const zIndex = el.zIndex || 10;
+  const bgColor = el.backgroundColor ? `background-color: ${el.backgroundColor}; padding: ${inToPx(0.1, dpi)}px ${inToPx(0.2, dpi)}px;` : '';
 
   return `<div class="element" style="
     left: ${x}px; top: ${y}px;
@@ -152,6 +170,7 @@ function renderHeadline(el, dpi) {
     text-transform: ${el.textTransform || 'none'};
     line-height: 1.1;
     z-index: ${zIndex};
+    ${bgColor}
   ">${escapeHtml(el.text)}</div>`;
 }
 
@@ -162,16 +181,42 @@ function renderCaption(el, dpi) {
   const fontSize = ptToPx(el.fontSize || 11, dpi);
   const lineHeight = el.lineHeight || 1.4;
   const zIndex = el.zIndex || 10;
+  const fontStyle = el.fontStyle || 'normal';
+  const fontWeight = el.fontWeight || 'normal';
 
   return `<div class="element" style="
     left: ${x}px; top: ${y}px;
     width: ${w}px;
     font-family: '${el.fontFamily || 'Open Sans'}', sans-serif;
     font-size: ${fontSize}px;
+    font-weight: ${fontWeight};
+    font-style: ${fontStyle};
     color: ${el.color || '#333333'};
     line-height: ${lineHeight};
     z-index: ${zIndex};
   ">${escapeHtml(el.text)}</div>`;
+}
+
+function renderQuote(el, dpi) {
+  const x = inToPx(el.x, dpi);
+  const y = inToPx(el.y, dpi);
+  const w = inToPx(el.width, dpi);
+  const fontSize = ptToPx(el.fontSize || 18, dpi);
+  const zIndex = el.zIndex || 10;
+
+  return `<div class="element" style="
+    left: ${x}px; top: ${y}px;
+    width: ${w}px;
+    font-family: '${el.fontFamily || 'Playfair Display'}', serif;
+    font-size: ${fontSize}px;
+    font-style: ${el.fontStyle || 'italic'};
+    color: ${el.color || '#333333'};
+    line-height: 1.4;
+    z-index: ${zIndex};
+  ">
+    <div style="margin-bottom: ${inToPx(0.1, dpi)}px;">"${escapeHtml(el.text)}"</div>
+    <div style="font-size: ${Math.round(fontSize * 0.7)}px; font-style: normal;">${escapeHtml(el.attribution || '')}</div>
+  </div>`;
 }
 
 function renderDecorative(el, dpi) {

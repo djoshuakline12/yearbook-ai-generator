@@ -82,18 +82,7 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({
-  storage,
-  limits: { fileSize: MAX_FILE_SIZE, files: MAX_PHOTOS },
-  fileFilter: (req, file, cb) => {
-    const allowed = /jpeg|jpg|png|webp/;
-    const ext = allowed.test(path.extname(file.originalname).toLowerCase());
-    const mime = allowed.test(file.mimetype);
-    cb(null, ext && mime);
-  },
-});
-
-// Accept any field name for photos (photos, photos[], images, files, etc.)
+// Accept any field name for photos
 const uploadAny = multer({
   storage,
   limits: { fileSize: MAX_FILE_SIZE, files: MAX_PHOTOS },
@@ -108,6 +97,16 @@ const uploadAny = multer({
 /**
  * POST /api/generate-spread
  * Full pipeline: upload photos → AI layout → render → export PDF/PNG
+ *
+ * Form fields:
+ * - photos[] / photos: Image files (required)
+ * - topic: Page topic string (required)
+ * - headline: Main headline text (required)
+ * - pageType: "page" (single) or "spread" (double) - default "page"
+ * - photoDetails: JSON array of {who, whatIsHappening, caption, isPrimary} for each photo
+ * - quotes: JSON array of {text, attribution}
+ * - theme: Theme preset key or JSON object
+ * - format: "pdf" or "png" - default "pdf"
  */
 router.post('/generate-spread', uploadAny.any(), async (req, res) => {
   let photoResults = [];
@@ -118,13 +117,14 @@ router.post('/generate-spread', uploadAny.any(), async (req, res) => {
       return res.status(400).json({ error: 'At least one photo is required.' });
     }
 
-    const { topic, headline, format = 'pdf' } = req.body;
+    const { topic, headline, format = 'pdf', pageType = 'page' } = req.body;
     if (!topic || !headline) {
       return res.status(400).json({ error: 'Topic and headline are required.' });
     }
 
     // Parse arrays and objects from form data
-    const captions = parseCaptions(req.body);
+    const photoDetails = parsePhotoDetails(req.body);
+    const quotes = parseQuotes(req.body);
     const theme = parseTheme(req.body);
 
     // 1. Process photos
@@ -135,15 +135,17 @@ router.post('/generate-spread', uploadAny.any(), async (req, res) => {
       photos: photoResults,
       topic,
       headline,
-      captions,
+      photoDetails,
+      quotes,
       theme,
+      pageType,
     });
 
     // 3. Render to HTML
     const html = renderLayoutToHtml(layout, photoResults);
 
     // 4. Export to PDF/PNG
-    const result = await exportToFile(html, format);
+    const result = await exportToFile(html, format, pageType);
 
     // 5. Send the file
     const filename = `${slugify(topic)}-yearbook.${result.extension}`;
@@ -176,12 +178,13 @@ router.post('/preview-layout', uploadAny.any(), async (req, res) => {
       return res.status(400).json({ error: 'At least one photo is required.' });
     }
 
-    const { topic, headline } = req.body;
+    const { topic, headline, pageType = 'page' } = req.body;
     if (!topic || !headline) {
       return res.status(400).json({ error: 'Topic and headline are required.' });
     }
 
-    const captions = parseCaptions(req.body);
+    const photoDetails = parsePhotoDetails(req.body);
+    const quotes = parseQuotes(req.body);
     const theme = parseTheme(req.body);
 
     // Process photos (to get orientation/aspect ratio metadata)
@@ -192,8 +195,10 @@ router.post('/preview-layout', uploadAny.any(), async (req, res) => {
       photos: photoResults,
       topic,
       headline,
-      captions,
+      photoDetails,
+      quotes,
       theme,
+      pageType,
     });
 
     res.json({ layout });
@@ -207,22 +212,72 @@ router.post('/preview-layout', uploadAny.any(), async (req, res) => {
   }
 });
 
-// Helper: parse captions from form data (supports captions[] or captions as JSON string)
-function parseCaptions(body) {
-  if (Array.isArray(body.captions)) return body.captions;
-  if (typeof body.captions === 'string') {
-    try { return JSON.parse(body.captions); } catch { return [body.captions]; }
+/**
+ * Parse photoDetails from form data
+ * Supports: JSON string array, or indexed fields like photoDetails[0][who]
+ */
+function parsePhotoDetails(body) {
+  // Try JSON string first
+  if (typeof body.photoDetails === 'string') {
+    try {
+      return JSON.parse(body.photoDetails);
+    } catch {}
   }
-  // Also handle captions[0], captions[1], etc.
-  const captions = [];
+
+  // Try indexed fields
+  const details = [];
   for (let i = 0; i < MAX_PHOTOS; i++) {
-    if (body[`captions[${i}]`]) captions.push(body[`captions[${i}]`]);
+    const who = body[`photoDetails[${i}][who]`] || body[`photoDetails[${i}].who`];
+    const whatIsHappening = body[`photoDetails[${i}][whatIsHappening]`] || body[`photoDetails[${i}].whatIsHappening`];
+    const caption = body[`photoDetails[${i}][caption]`] || body[`photoDetails[${i}].caption`];
+    const isPrimary = body[`photoDetails[${i}][isPrimary]`] || body[`photoDetails[${i}].isPrimary`];
+
+    if (who || whatIsHappening || caption) {
+      details[i] = {
+        who: who || '',
+        whatIsHappening: whatIsHappening || '',
+        caption: caption || '',
+        isPrimary: isPrimary === 'true' || isPrimary === true,
+      };
+    }
   }
-  return captions;
+
+  return details;
 }
 
-// Helper: parse theme from form data
-// Supports: theme preset key (string), JSON string, or object
+/**
+ * Parse quotes from form data
+ * Supports: JSON string array, or indexed fields like quotes[0][text]
+ */
+function parseQuotes(body) {
+  // Try JSON string first
+  if (typeof body.quotes === 'string') {
+    try {
+      return JSON.parse(body.quotes);
+    } catch {}
+  }
+
+  // Try indexed fields
+  const quotes = [];
+  for (let i = 0; i < 10; i++) {
+    const text = body[`quotes[${i}][text]`] || body[`quotes[${i}].text`];
+    const attribution = body[`quotes[${i}][attribution]`] || body[`quotes[${i}].attribution`];
+
+    if (text) {
+      quotes.push({
+        text,
+        attribution: attribution || 'Anonymous',
+      });
+    }
+  }
+
+  return quotes;
+}
+
+/**
+ * Parse theme from form data
+ * Supports: theme preset key (string), JSON string, or object
+ */
 function parseTheme(body) {
   let themeInput = body.theme;
 
