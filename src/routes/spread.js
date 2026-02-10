@@ -6,8 +6,17 @@ const { generateLayout } = require('../services/layoutGenerator');
 const { renderLayoutToHtml } = require('../services/htmlRenderer');
 const { exportToFile } = require('../services/exporter');
 const { MAX_PHOTOS, MAX_FILE_SIZE } = require('../utils/constants');
+const { getTheme, getAllThemes } = require('../utils/themes');
 
 const router = express.Router();
+
+/**
+ * GET /api/themes
+ * Returns all available preset themes for the frontend dropdown.
+ */
+router.get('/themes', (req, res) => {
+  res.json({ themes: getAllThemes() });
+});
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -158,12 +167,27 @@ function parseCaptions(body) {
 }
 
 // Helper: parse theme from form data
+// Supports: theme preset key (string), JSON string, or object
 function parseTheme(body) {
-  if (typeof body.theme === 'string') {
-    try { return JSON.parse(body.theme); } catch { return {}; }
+  let themeInput = body.theme;
+
+  // If it's a JSON string, parse it
+  if (typeof themeInput === 'string') {
+    // Check if it's a preset key (no braces) or JSON
+    if (!themeInput.startsWith('{')) {
+      // It's a preset key like "classic-navy"
+      return getTheme(themeInput);
+    }
+    try {
+      themeInput = JSON.parse(themeInput);
+    } catch {
+      // Failed to parse, treat as preset key
+      return getTheme(themeInput);
+    }
   }
-  if (typeof body.theme === 'object' && body.theme !== null) return body.theme;
-  return {};
+
+  // Now themeInput is an object (or null/undefined)
+  return getTheme(themeInput);
 }
 
 function slugify(str) {
