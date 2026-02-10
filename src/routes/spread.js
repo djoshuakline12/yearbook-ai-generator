@@ -29,11 +29,23 @@ const upload = multer({
   },
 });
 
+// Accept any field name for photos (photos, photos[], images, files, etc.)
+const uploadAny = multer({
+  storage,
+  limits: { fileSize: MAX_FILE_SIZE, files: MAX_PHOTOS },
+  fileFilter: (req, file, cb) => {
+    const allowed = /jpeg|jpg|png|webp/;
+    const ext = allowed.test(path.extname(file.originalname).toLowerCase());
+    const mime = allowed.test(file.mimetype);
+    cb(null, ext && mime);
+  },
+});
+
 /**
  * POST /api/generate-spread
  * Full pipeline: upload photos → AI layout → render → export PDF/PNG
  */
-router.post('/generate-spread', upload.array('photos', MAX_PHOTOS), async (req, res) => {
+router.post('/generate-spread', uploadAny.any(), async (req, res) => {
   let photoResults = [];
 
   try {
@@ -92,7 +104,7 @@ router.post('/generate-spread', upload.array('photos', MAX_PHOTOS), async (req, 
  * POST /api/preview-layout
  * Returns only the layout JSON (for frontend preview) without rendering.
  */
-router.post('/preview-layout', upload.array('photos', MAX_PHOTOS), async (req, res) => {
+router.post('/preview-layout', uploadAny.any(), async (req, res) => {
   let photoResults = [];
 
   try {
