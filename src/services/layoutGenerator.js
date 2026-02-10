@@ -11,39 +11,44 @@ function getClient() {
 }
 
 /**
- * Generate a unique layout composition using Claude AI.
+ * Generate a professional yearbook layout using Claude AI.
+ *
  * @param {object} options
  * @param {array} options.photos - Processed photo metadata
- * @param {string} options.topic - Page topic (e.g., "Boys Soccer")
- * @param {string} options.headline - Main headline text
- * @param {array} options.photoDetails - Array of {who, whatIsHappening, caption} for each photo
- * @param {array} options.quotes - Array of {text, attribution} for quotes
+ * @param {object} options.pageContent - All page content
+ * @param {string} options.pageContent.section - Section name (e.g., "mens soccer", "fall dance")
+ * @param {string} options.pageContent.schoolName - School name/abbreviation
+ * @param {string} options.pageContent.headline - Main headline
+ * @param {string} options.pageContent.subheadline - Optional subheadline
+ * @param {string} options.pageContent.record - Record/stats line (e.g., "3-12", "11 as 1 for an audience")
+ * @param {array} options.pageContent.roster - Array of names for roster list
+ * @param {string} options.pageContent.bodyCopy - Main body text (season recap, event description)
+ * @param {array} options.pageContent.quotes - Array of {text, attribution}
+ * @param {array} options.pageContent.photoCaptions - Array of {photoIndex, caption, people} for each photo
+ * @param {string} options.pageContent.folio - Page numbers (e.g., "42" or "42-43")
  * @param {object} options.theme - Theme configuration
  * @param {string} options.pageType - "page" (single) or "spread" (double)
  */
-async function generateLayout({ photos, topic, headline, photoDetails = [], quotes = [], theme, pageType = 'page' }) {
+async function generateLayout({ photos, pageContent, theme, pageType = 'page' }) {
   const isSpread = pageType === 'spread';
   const pageWidth = isSpread ? PAGE.SPREAD_WIDTH_IN : PAGE.WIDTH_IN;
   const pageHeight = PAGE.HEIGHT_IN;
 
   const photoDescriptions = photos.map((p, i) => {
-    const details = photoDetails[i] || {};
+    const captionInfo = (pageContent.photoCaptions || [])[i] || {};
     return {
       index: i,
       orientation: p.orientation,
       aspectRatio: parseFloat(p.aspectRatio.toFixed(2)),
-      who: details.who || 'Unknown',
-      whatIsHappening: details.whatIsHappening || '',
-      caption: details.caption || '',
-      isPrimary: details.isPrimary || false,
+      people: captionInfo.people || '',
+      caption: captionInfo.caption || '',
+      isPrimary: captionInfo.isPrimary || false,
     };
   });
 
   const prompt = buildPrompt({
     photoDescriptions,
-    topic,
-    headline,
-    quotes,
+    pageContent,
     theme,
     pageWidth,
     pageHeight,
@@ -52,13 +57,13 @@ async function generateLayout({ photos, topic, headline, photoDetails = [], quot
 
   const response = await getClient().messages.create({
     model: 'claude-sonnet-4-20250514',
-    max_tokens: 8192,
+    max_tokens: 16384,
     messages: [{ role: 'user', content: prompt }],
   });
 
   const text = response.content[0].text;
 
-  // Extract JSON from the response (may be wrapped in markdown code fence)
+  // Extract JSON from the response
   const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, text];
   const layoutJson = JSON.parse(jsonMatch[1].trim());
 
@@ -74,141 +79,220 @@ async function generateLayout({ photos, topic, headline, photoDetails = [], quot
   return layoutJson;
 }
 
-function buildPrompt({ photoDescriptions, topic, headline, quotes, theme, pageWidth, pageHeight, isSpread }) {
-  const style = theme.style || 'dynamic';
+function buildPrompt({ photoDescriptions, pageContent, theme, pageWidth, pageHeight, isSpread }) {
+  const style = theme.style || 'editorial';
   const photoCount = photoDescriptions.length;
 
-  // Build detailed theme instructions from extracted theme
+  // Build theme details
   const themeDetails = buildThemeDetails(theme);
 
-  // Find primary photo if specified
+  // Find primary photo
   const primaryPhotoIndex = photoDescriptions.findIndex(p => p.isPrimary);
-  const dominantPhotoNote = primaryPhotoIndex >= 0
-    ? `Photo ${primaryPhotoIndex} should be the DOMINANT image (marked as primary).`
-    : `Make the first photo or the most visually interesting one the DOMINANT image.`;
 
-  return `You are a professional yearbook designer creating a ${isSpread ? 'two-page spread' : 'single page'} layout.
+  // Content summary
+  const hasRoster = pageContent.roster && pageContent.roster.length > 0;
+  const hasBodyCopy = pageContent.bodyCopy && pageContent.bodyCopy.length > 50;
+  const hasQuotes = pageContent.quotes && pageContent.quotes.length > 0;
+  const hasRecord = pageContent.record && pageContent.record.length > 0;
+
+  return `You are a professional yearbook designer creating a ${isSpread ? 'two-page spread (pages side by side)' : 'single page'} layout. Study professional yearbook designs — they have complex, magazine-quality layouts with multiple text blocks, varied photo sizes, and clear visual hierarchy.
 
 PAGE SPECIFICATIONS:
-- Dimensions: ${pageWidth}" × ${pageHeight}" (${isSpread ? 'spread - two pages side by side' : 'single page'})
+- Total dimensions: ${pageWidth}" × ${pageHeight}"
 - Safe margin: ${PAGE.SAFE_MARGIN_IN}" from all edges
-- ${isSpread ? `Gutter margin: ${PAGE.GUTTER_MARGIN_IN}" on each side of the center fold (avoid placing faces/text in center ${PAGE.GUTTER_MARGIN_IN * 2}" zone)` : ''}
-- Bleed: ${PAGE.BLEED_IN}" on all edges (photos can extend beyond page edges)
+${isSpread ? `- CENTER GUTTER: There is a binding fold at x=${pageWidth/2}" (${PAGE.WIDTH_IN}"). Avoid placing faces, important text, or key elements within 0.5" of the center (x: ${PAGE.WIDTH_IN - 0.5}" to ${PAGE.WIDTH_IN + 0.5}").
+- LEFT PAGE: x: 0" to ${PAGE.WIDTH_IN}"
+- RIGHT PAGE: x: ${PAGE.WIDTH_IN}" to ${pageWidth}"` : ''}
 - All positions in INCHES from top-left corner
 
-CONTENT:
-Topic: "${topic}"
-Headline: "${headline}"
-Photo Count: ${photoCount}
+CONTENT TO INCLUDE:
 
-PHOTOS WITH CONTEXT:
+SECTION HEADER: "${pageContent.section || ''}"
+SCHOOL NAME: "${pageContent.schoolName || ''}"
+HEADLINE: "${pageContent.headline || ''}"
+${pageContent.subheadline ? `SUBHEADLINE: "${pageContent.subheadline}"` : ''}
+${hasRecord ? `RECORD/STATS: "${pageContent.record}"` : ''}
+
+${hasRoster ? `ROSTER (${pageContent.roster.length} names):
+${pageContent.roster.slice(0, 10).join(', ')}${pageContent.roster.length > 10 ? `, ... (${pageContent.roster.length} total)` : ''}
+Format as a compact list with "Roster:" header.` : ''}
+
+${hasBodyCopy ? `BODY COPY (${pageContent.bodyCopy.length} chars):
+"${pageContent.bodyCopy.substring(0, 300)}${pageContent.bodyCopy.length > 300 ? '...' : ''}"
+This is the main story text. Place in readable columns (2.5-3.5" wide).` : ''}
+
+${hasQuotes ? `QUOTES:
+${pageContent.quotes.map((q, i) => `  ${i + 1}. "${q.text}" — ${q.attribution}`).join('\n')}
+Style as prominent pull quotes with large quotation marks or accent styling.` : ''}
+
+PHOTOS (${photoCount} total):
 ${photoDescriptions.map(p => `  Photo ${p.index}: ${p.orientation} (${p.aspectRatio}:1)
-    - Who: ${p.who}
-    - What's happening: ${p.whatIsHappening || 'Not specified'}
+    - People: ${p.people || 'Not specified'}
     - Caption: ${p.caption || 'No caption'}`).join('\n')}
 
-${quotes.length > 0 ? `QUOTES TO INCLUDE:
-${quotes.map((q, i) => `  ${i + 1}. "${q.text}" — ${q.attribution}`).join('\n')}` : ''}
+${primaryPhotoIndex >= 0 ? `Photo ${primaryPhotoIndex} is marked as PRIMARY — make it the dominant image (largest).` : 'Choose the most impactful photo as the dominant image.'}
 
-THEME SPECIFICATIONS:
+FOLIO: "${pageContent.folio || ''}" (page numbers, bottom corners)
+
+THEME:
 ${themeDetails}
 
 DESIGN STYLE: "${style}"
-${getStyleInstructions(style)}
+${getStyleInstructions(style, isSpread)}
 
-CRITICAL RULES:
-1. ${dominantPhotoNote} The dominant photo should be at least 40% of page area.
-2. Vary photo sizes dramatically — create visual hierarchy.
-3. Every photo (index 0 to ${photoCount - 1}) MUST appear exactly once.
-4. Use the WHO information to ensure faces are not cropped awkwardly.
-5. Place captions near their corresponding photos — use the photo context to make captions meaningful.
-6. ${quotes.length > 0 ? 'Include all quotes with attribution, styled as pull quotes.' : 'Add 2-4 decorative elements using theme colors.'}
-7. Ensure text is readable — no text over busy photo areas without a background.
-8. All text must be within the safe margin area.
-9. ${isSpread ? 'CRITICAL: Avoid placing important content (faces, text) in the center gutter zone (7.5" to 8.5" from left edge).' : ''}
-10. Generate a UNIQUE composition — never use the same layout twice.
+YEARBOOK DESIGN PRINCIPLES:
+1. VISUAL HIERARCHY: One dominant photo (30-50% of page), medium supporting photos, small detail shots
+2. PHOTO VARIETY: Mix sizes dramatically — large hero, medium action, small grid/strip
+3. TEXT COLUMNS: Body copy in 2.5-3.5" columns, 9-11pt, good leading
+4. CAPTIONS: Near photos, 8-9pt italic, identify people left-to-right
+5. PULL QUOTES: Large, stylized, break up text blocks
+6. SECTION HEADER: Top of page, distinctive typography
+7. WHITE SPACE: Intentional breathing room, not cramped
+8. PHOTO OVERLAP: Some photos can overlap for dynamic feel
+9. NUMBERS/STATS: Make record/stats visually prominent with accent colors
+10. ${isSpread ? 'SPREAD FLOW: Content should flow across both pages, but respect the gutter' : 'BALANCE: Distribute visual weight across the page'}
 
-Return ONLY valid JSON matching this schema:
+Return ONLY valid JSON:
 
 {
   "background": {
     "type": "solid" | "gradient",
     "color": "#hex",
-    "gradientAngle": number (degrees),
+    "gradientAngle": number,
     "gradientStops": ["#hex1", "#hex2"]
   },
   "elements": [
     {
       "type": "photo",
       "photoIndex": number,
-      "x": number (inches from left),
-      "y": number (inches from top),
-      "width": number (inches),
-      "height": number (inches),
-      "rotation": number (degrees, -5 to 5),
-      "borderRadius": number (inches, based on theme photoTreatment),
-      "borderWidth": number (inches, 0 if none),
+      "x": number, "y": number, "width": number, "height": number,
+      "rotation": number (-3 to 3),
+      "borderRadius": number (0-0.1),
+      "borderWidth": number (0 or 0.02-0.05 for white border),
       "borderColor": "#hex",
       "shadow": boolean,
       "shadowIntensity": "subtle" | "medium" | "dramatic",
       "zIndex": number,
-      "cropFit": "cover",
-      "opacity": number (0.0 to 1.0)
+      "cropFit": "cover"
+    },
+    {
+      "type": "sectionHeader",
+      "text": "section name",
+      "x": number, "y": number, "width": number,
+      "fontSize": number (24-36pt),
+      "fontFamily": "from theme",
+      "fontWeight": "300" | "400" | "700",
+      "color": "#hex",
+      "textTransform": "lowercase" | "uppercase" | "none",
+      "letterSpacing": number,
+      "zIndex": number
+    },
+    {
+      "type": "schoolName",
+      "text": "SCHOOL",
+      "x": number, "y": number, "width": number,
+      "fontSize": number (48-72pt),
+      "fontFamily": "from theme",
+      "fontWeight": "700" | "900",
+      "color": "#hex",
+      "letterSpacing": number,
+      "zIndex": number
     },
     {
       "type": "headline",
-      "text": "${headline}",
-      "x": number,
-      "y": number,
-      "width": number,
-      "fontSize": number (pts, 32-72),
+      "text": "headline text",
+      "x": number, "y": number, "width": number,
+      "fontSize": number (14-24pt),
       "fontFamily": "from theme",
-      "fontWeight": "from theme",
-      "color": "#hex from theme",
+      "fontWeight": "700",
+      "color": "#hex",
+      "backgroundColor": "#hex or null",
       "textAlign": "left" | "center" | "right",
-      "letterSpacing": number (px, based on theme),
-      "textTransform": "uppercase" | "none" | "capitalize",
-      "zIndex": number,
-      "backgroundColor": "#hex or null (for text background block)"
+      "zIndex": number
     },
     {
-      "type": "caption",
-      "text": "caption text using photo context",
-      "photoIndex": number (which photo this caption belongs to),
-      "x": number,
-      "y": number,
-      "width": number,
-      "fontSize": number (pts, 9-14),
-      "fontFamily": "from theme bodyFont",
-      "fontWeight": "from theme",
-      "fontStyle": "normal" | "italic",
-      "color": "#hex from theme",
-      "lineHeight": number (1.2-1.6),
+      "type": "record",
+      "text": "3-12",
+      "x": number, "y": number, "width": number,
+      "fontSize": number (14-20pt),
+      "fontFamily": "from theme",
+      "fontWeight": "700",
+      "color": "#hex",
+      "backgroundColor": "#hex for highlight effect",
+      "zIndex": number
+    },
+    {
+      "type": "roster",
+      "title": "Roster:",
+      "names": ["name1", "name2", ...],
+      "x": number, "y": number, "width": number,
+      "columns": 1 | 2 | 3,
+      "titleFontSize": number (10-12pt),
+      "nameFontSize": number (7-9pt),
+      "fontFamily": "from theme body font",
+      "titleColor": "#hex",
+      "nameColor": "#hex",
+      "zIndex": number
+    },
+    {
+      "type": "bodyCopy",
+      "text": "full body text...",
+      "x": number, "y": number, "width": number, "height": number,
+      "fontSize": number (9-11pt),
+      "fontFamily": "from theme body font",
+      "color": "#hex",
+      "lineHeight": 1.3-1.5,
+      "columns": 1 | 2,
       "zIndex": number
     },
     {
       "type": "quote",
       "text": "quote text",
       "attribution": "— Person Name",
-      "x": number,
-      "y": number,
-      "width": number,
-      "fontSize": number (pts, 14-24),
+      "x": number, "y": number, "width": number,
+      "fontSize": number (14-20pt),
       "fontFamily": "from theme",
       "fontStyle": "italic",
       "color": "#hex",
+      "accentColor": "#hex for quotation marks",
+      "zIndex": number
+    },
+    {
+      "type": "caption",
+      "text": "caption text identifying people",
+      "photoIndex": number,
+      "x": number, "y": number, "width": number,
+      "fontSize": number (8-9pt),
+      "fontFamily": "from theme body font",
+      "fontStyle": "italic" | "normal",
+      "color": "#hex",
+      "zIndex": number
+    },
+    {
+      "type": "captionNumber",
+      "number": "1",
+      "x": number, "y": number,
+      "fontSize": number (8-10pt),
+      "fontFamily": "from theme",
+      "color": "#hex",
+      "backgroundColor": "#hex",
       "zIndex": number
     },
     {
       "type": "decorative",
       "shape": "line" | "rectangle" | "circle",
-      "x": number,
-      "y": number,
-      "width": number,
-      "height": number,
-      "color": "#hex from theme accent",
-      "opacity": number (0.0 to 1.0),
-      "rotation": number,
+      "x": number, "y": number, "width": number, "height": number,
+      "color": "#hex",
+      "opacity": 0-1,
+      "zIndex": number
+    },
+    {
+      "type": "folio",
+      "text": "42",
+      "x": number, "y": number,
+      "fontSize": number (9-10pt),
+      "fontFamily": "from theme",
+      "color": "#hex",
       "zIndex": number
     }
   ]
@@ -219,109 +303,96 @@ function buildThemeDetails(theme) {
   const details = [];
 
   // Colors
-  if (theme.colors) {
-    details.push(`Colors:
-  - Background: ${theme.colors.background || theme.backgroundColor || '#ffffff'}
-  - Primary: ${theme.colors.primary || theme.primaryColor || '#1a1a2e'}
-  - Secondary: ${theme.colors.secondary || theme.secondaryColor || '#16213e'}
-  - Accent: ${theme.colors.accent || theme.accentColor || '#e94560'}
-  - Text: ${theme.colors.text || theme.textColor || '#1a1a1a'}
-  - Text Light: ${theme.colors.textLight || theme.textLightColor || '#666666'}`);
-  } else {
-    details.push(`Colors:
-  - Primary: ${theme.primaryColor || '#1a1a2e'}
-  - Secondary: ${theme.secondaryColor || '#16213e'}
-  - Accent: ${theme.accentColor || '#e94560'}`);
-  }
+  const colors = theme.colors || {};
+  details.push(`Colors:
+  - Background: ${colors.background || theme.backgroundColor || '#ffffff'}
+  - Primary: ${colors.primary || theme.primaryColor || '#1a1a2e'}
+  - Secondary: ${colors.secondary || theme.secondaryColor || '#4a4a4a'}
+  - Accent: ${colors.accent || theme.accentColor || '#8b5cf6'}
+  - Text: ${colors.text || theme.textColor || '#1a1a1a'}
+  - Text Light: ${colors.textLight || theme.textLightColor || '#666666'}`);
 
   // Typography
-  if (theme.typography) {
-    details.push(`Typography:
-  - Headline Font: ${theme.typography.headlineFont || theme.headlineFont || 'Oswald'} (weight: ${theme.typography.headlineFontWeight || 700})
-  - Headline Style: ${theme.typography.headlineStyle || 'uppercase'}, letter-spacing: ${theme.typography.headlineLetterSpacing || 'normal'}
-  - Body Font: ${theme.typography.bodyFont || theme.bodyFont || 'Open Sans'} (weight: ${theme.typography.bodyFontWeight || 400})
-  - Caption Style: ${theme.typography.captionStyle || 'normal'}
-  - Text Alignment: ${theme.typography.textAlignment || 'left'}`);
-  } else {
-    details.push(`Typography:
-  - Headline Font: ${theme.headlineFont || 'Oswald'}
-  - Body Font: ${theme.bodyFont || 'Open Sans'}`);
-  }
+  const typography = theme.typography || {};
+  details.push(`Typography:
+  - Headline Font: ${typography.headlineFont || theme.headlineFont || 'Playfair Display'}
+  - Headline Weight: ${typography.headlineFontWeight || '700'}
+  - Body Font: ${typography.bodyFont || theme.bodyFont || 'Source Sans Pro'}
+  - Body Weight: ${typography.bodyFontWeight || '400'}`);
 
-  // Layout treatment
-  if (theme.layout) {
-    details.push(`Photo Treatment:
-  - Corners: ${theme.layout.photoTreatment || 'sharp-corners'}
-  - Shadows: ${theme.layout.photoShadows || 'subtle'}
-  - Borders: ${theme.layout.photoBorders || 'none'}
-  - Overlap: ${theme.layout.photoOverlap ? 'yes' : 'no'}
-  - Rotation: ${theme.layout.photoRotation || 'none'}
-  - Whitespace: ${theme.layout.whitespaceAmount || 'moderate'}`);
-  }
-
-  // Decorative elements
-  if (theme.decorativeElements) {
-    details.push(`Decorative Elements:
-  - Lines: ${theme.decorativeElements.lineStyle || 'thin'} (${theme.decorativeElements.lineColor || 'accent color'})
-  - Shapes: ${(theme.decorativeElements.shapes || []).join(', ') || 'none'}
-  - Patterns: ${theme.decorativeElements.patterns || 'none'}
-  - Dividers: ${theme.decorativeElements.dividers || 'lines'}`);
-  }
+  // Layout
+  const layout = theme.layout || {};
+  details.push(`Photo Treatment:
+  - Style: ${layout.photoTreatment || 'sharp-corners'}
+  - Shadows: ${layout.photoShadows || 'subtle'}
+  - Borders: ${layout.photoBorders || 'none'}`);
 
   return details.join('\n\n');
 }
 
-function getStyleInstructions(style) {
-  const instructions = {
-    dynamic: `DYNAMIC STYLE:
-- Use diagonal lines and slightly rotated photos (-3° to 3°)
-- Overlap photos with shadows for depth
-- Place headline at an angle or with a bold color block behind it
-- High energy, movement-driven layout
-- Consider placing the dominant photo at an angle spanning most of the page`,
+function getStyleInstructions(style, isSpread) {
+  const baseInstructions = {
+    editorial: `EDITORIAL/MAGAZINE STYLE:
+- Clean, professional layout with clear grid structure
+- Large dominant photo with smaller supporting images
+- Text in defined columns with proper typography
+- Pull quotes as design elements
+- Minimal but intentional decorative elements
+- Strong section headers with hierarchy`,
 
-    elegant: `ELEGANT STYLE:
-- Clean lines, generous white space
-- No rotation on photos — keep everything straight and aligned
-- Use thin rule lines as dividers
-- Headline should use elegant letter spacing (3-5px)
-- Subtle drop shadows, muted decorative elements
-- Refined, sophisticated composition`,
+    dynamic: `DYNAMIC/SPORTS STYLE:
+- High energy with angled photos (-2° to 3°)
+- Overlapping images for depth
+- Bold colors and strong contrasts
+- Action-focused photo selection
+- Energetic decorative lines/shapes
+- Numbers and stats prominently displayed`,
 
-    bold: `BOLD STYLE:
-- Large, impactful headline (60-72pt)
-- Strong color blocks behind text
-- High contrast between elements
-- Minimal decorative elements but make them large
-- Photos with sharp corners, no border radius
-- Powerful, statement-making layout`,
+    elegant: `ELEGANT/FORMAL STYLE:
+- Refined typography with generous spacing
+- Straight, aligned photos
+- Subtle shadows and thin divider lines
+- Sophisticated color palette
+- Balanced white space
+- Classic, timeless feel`,
 
-    minimal: `MINIMAL STYLE:
-- Maximum white space, minimal decorative elements
-- Small, precise typography
-- Photos arranged in a clean grid pattern
-- Thin lines only for decoration
-- Lots of breathing room between elements
-- Less is more — only essential elements`,
+    collage: `COLLAGE/SCRAPBOOK STYLE:
+- Photos at various angles (-5° to 5°)
+- Polaroid-style white borders on photos
+- Overlapping, layered arrangement
+- Handwritten-style fonts for accents
+- Fun, casual energy
+- Mixed photo sizes scattered organically`,
 
-    collage: `COLLAGE STYLE:
-- Overlapping photos at various angles (-5° to 5°)
-- Photos with white borders (simulate printed photo look)
-- Scattered, organic arrangement
-- Headline can be overlaid on photos
-- Fun, casual, scrapbook-like feel
-- Drop shadows on all photos`,
+    minimal: `MINIMAL/MODERN STYLE:
+- Maximum white space
+- Clean grid alignment
+- Limited color palette
+- Simple typography
+- Photos as focal points
+- Restrained decorative elements`,
 
-    editorial: `EDITORIAL STYLE:
-- Magazine-style layout with clear visual hierarchy
-- One very large dominant photo
-- Text in clean columns beside photos
-- Professional typography with varied sizes
-- Strategic use of pull quotes
-- Clean, publication-quality design`,
+    bold: `BOLD/GRAPHIC STYLE:
+- Strong color blocks
+- Large typography
+- High contrast
+- Geometric shapes
+- Impactful visual statements
+- Minimal but large decorative elements`,
   };
 
-  return instructions[style] || instructions.dynamic;
+  let instructions = baseInstructions[style] || baseInstructions.editorial;
+
+  if (isSpread) {
+    instructions += `\n\nSPREAD-SPECIFIC:
+- Create visual flow across both pages
+- Dominant photo can span the gutter (but not faces in gutter)
+- Balance content between left and right pages
+- Section header typically top-left or top-right
+- Body copy can flow from left to right page`;
+  }
+
+  return instructions;
 }
 
 module.exports = { generateLayout };

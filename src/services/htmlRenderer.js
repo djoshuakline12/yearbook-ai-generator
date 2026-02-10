@@ -1,4 +1,3 @@
-const path = require('path');
 const fs = require('fs');
 const { PAGE } = require('../utils/constants');
 
@@ -7,7 +6,6 @@ const { PAGE } = require('../utils/constants');
  * suitable for Puppeteer rendering at 300 DPI.
  */
 function renderLayoutToHtml(layout, photos) {
-  // Use layout dimensions if available, otherwise default to single page
   const isSpread = layout.pageType === 'spread';
   const widthPx = isSpread ? PAGE.SPREAD_WIDTH_PX : PAGE.WIDTH_PX;
   const heightPx = PAGE.HEIGHT_PX;
@@ -24,8 +22,11 @@ function renderLayoutToHtml(layout, photos) {
   for (const el of layout.elements) {
     if (el.fontFamily) fonts.add(el.fontFamily);
   }
+  const fontFamilies = [...fonts].map(f =>
+    `family=${f.replace(/ /g, '+')}:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700`
+  ).join('&');
   const fontLink = fonts.size > 0
-    ? `<link href="https://fonts.googleapis.com/css2?${[...fonts].map(f => `family=${f.replace(/ /g, '+')}:wght@300;400;500;600;700;800;900&ital,wght@0,400;0,700;1,400;1,700`).join('&')}&display=swap" rel="stylesheet">`
+    ? `<link href="https://fonts.googleapis.com/css2?${fontFamilies}&display=swap" rel="stylesheet">`
     : '';
 
   return `<!DOCTYPE html>
@@ -55,6 +56,12 @@ ${fontLink}
   .photo-container img {
     display: block;
   }
+  .multi-column {
+    column-gap: ${inToPx(0.2, dpi)}px;
+  }
+  .roster-list {
+    column-gap: ${inToPx(0.15, dpi)}px;
+  }
 </style>
 </head>
 <body>
@@ -80,11 +87,18 @@ function buildBackgroundCss(bg) {
 function renderElement(el, photos, dpi) {
   switch (el.type) {
     case 'photo': return renderPhoto(el, photos, dpi);
+    case 'sectionHeader': return renderSectionHeader(el, dpi);
+    case 'schoolName': return renderSchoolName(el, dpi);
     case 'headline': return renderHeadline(el, dpi);
-    case 'caption': return renderCaption(el, dpi);
+    case 'record': return renderRecord(el, dpi);
+    case 'roster': return renderRoster(el, dpi);
+    case 'bodyCopy': return renderBodyCopy(el, dpi);
     case 'quote': return renderQuote(el, dpi);
+    case 'caption': return renderCaption(el, dpi);
+    case 'captionNumber': return renderCaptionNumber(el, dpi);
     case 'decorative': return renderDecorative(el, dpi);
-    case 'pageNumber': return renderPageNumber(el, dpi);
+    case 'folio': return renderFolio(el, dpi);
+    case 'pageNumber': return renderFolio(el, dpi); // alias
     default: return '';
   }
 }
@@ -94,18 +108,16 @@ function inToPx(inches, dpi) {
 }
 
 function ptToPx(pts, dpi) {
-  // 1 pt = 1/72 inch = 300/72 px at 300 DPI ≈ 4.167px
   return Math.round(pts * (dpi / 72));
 }
 
 function getShadowCss(el, dpi) {
   if (!el.shadow) return '';
-
   const intensity = el.shadowIntensity || 'subtle';
   const shadows = {
-    subtle: `box-shadow: ${inToPx(0.01, dpi)}px ${inToPx(0.02, dpi)}px ${inToPx(0.05, dpi)}px rgba(0,0,0,0.2);`,
-    medium: `box-shadow: ${inToPx(0.02, dpi)}px ${inToPx(0.03, dpi)}px ${inToPx(0.08, dpi)}px rgba(0,0,0,0.3);`,
-    dramatic: `box-shadow: ${inToPx(0.04, dpi)}px ${inToPx(0.06, dpi)}px ${inToPx(0.15, dpi)}px rgba(0,0,0,0.4);`,
+    subtle: `box-shadow: ${inToPx(0.01, dpi)}px ${inToPx(0.015, dpi)}px ${inToPx(0.04, dpi)}px rgba(0,0,0,0.15);`,
+    medium: `box-shadow: ${inToPx(0.02, dpi)}px ${inToPx(0.03, dpi)}px ${inToPx(0.06, dpi)}px rgba(0,0,0,0.25);`,
+    dramatic: `box-shadow: ${inToPx(0.03, dpi)}px ${inToPx(0.05, dpi)}px ${inToPx(0.12, dpi)}px rgba(0,0,0,0.35);`,
   };
   return shadows[intensity] || shadows.subtle;
 }
@@ -127,10 +139,8 @@ function renderPhoto(el, photos, dpi) {
   const shadow = getShadowCss(el, dpi);
   const border = borderWidth > 0 ? `border: ${borderWidth}px solid ${borderColor};` : '';
 
-  // Read the image as base64 for embedding
   const imgData = fs.readFileSync(photo.processedPath);
   const base64 = imgData.toString('base64');
-  const mimeType = 'image/jpeg';
 
   return `<div class="element photo-container" style="
     left: ${x}px; top: ${y}px;
@@ -143,80 +153,234 @@ function renderPhoto(el, photos, dpi) {
     ${shadow}
     ${border}
   ">
-    <img src="data:${mimeType};base64,${base64}"
+    <img src="data:image/jpeg;base64,${base64}"
          style="width: 100%; height: 100%; object-fit: ${el.cropFit || 'cover'};"
          alt="Photo ${el.photoIndex}">
   </div>`;
 }
 
-function renderHeadline(el, dpi) {
+function renderSectionHeader(el, dpi) {
   const x = inToPx(el.x, dpi);
   const y = inToPx(el.y, dpi);
   const w = inToPx(el.width, dpi);
-  const fontSize = ptToPx(el.fontSize || 48, dpi);
+  const fontSize = ptToPx(el.fontSize || 28, dpi);
   const letterSpacing = el.letterSpacing ? `${el.letterSpacing * (dpi / 96)}px` : '0';
-  const zIndex = el.zIndex || 10;
-  const bgColor = el.backgroundColor ? `background-color: ${el.backgroundColor}; padding: ${inToPx(0.1, dpi)}px ${inToPx(0.2, dpi)}px;` : '';
-
-  return `<div class="element" style="
-    left: ${x}px; top: ${y}px;
-    width: ${w}px;
-    font-family: '${el.fontFamily || 'Oswald'}', sans-serif;
-    font-size: ${fontSize}px;
-    font-weight: ${el.fontWeight || 'bold'};
-    color: ${el.color || '#000000'};
-    text-align: ${el.textAlign || 'left'};
-    letter-spacing: ${letterSpacing};
-    text-transform: ${el.textTransform || 'none'};
-    line-height: 1.1;
-    z-index: ${zIndex};
-    ${bgColor}
-  ">${escapeHtml(el.text)}</div>`;
-}
-
-function renderCaption(el, dpi) {
-  const x = inToPx(el.x, dpi);
-  const y = inToPx(el.y, dpi);
-  const w = inToPx(el.width, dpi);
-  const fontSize = ptToPx(el.fontSize || 11, dpi);
-  const lineHeight = el.lineHeight || 1.4;
-  const zIndex = el.zIndex || 10;
-  const fontStyle = el.fontStyle || 'normal';
-  const fontWeight = el.fontWeight || 'normal';
-
-  return `<div class="element" style="
-    left: ${x}px; top: ${y}px;
-    width: ${w}px;
-    font-family: '${el.fontFamily || 'Open Sans'}', sans-serif;
-    font-size: ${fontSize}px;
-    font-weight: ${fontWeight};
-    font-style: ${fontStyle};
-    color: ${el.color || '#333333'};
-    line-height: ${lineHeight};
-    z-index: ${zIndex};
-  ">${escapeHtml(el.text)}</div>`;
-}
-
-function renderQuote(el, dpi) {
-  const x = inToPx(el.x, dpi);
-  const y = inToPx(el.y, dpi);
-  const w = inToPx(el.width, dpi);
-  const fontSize = ptToPx(el.fontSize || 18, dpi);
-  const zIndex = el.zIndex || 10;
 
   return `<div class="element" style="
     left: ${x}px; top: ${y}px;
     width: ${w}px;
     font-family: '${el.fontFamily || 'Playfair Display'}', serif;
     font-size: ${fontSize}px;
-    font-style: ${el.fontStyle || 'italic'};
-    color: ${el.color || '#333333'};
-    line-height: 1.4;
-    z-index: ${zIndex};
+    font-weight: ${el.fontWeight || '300'};
+    font-style: italic;
+    color: ${el.color || '#666666'};
+    text-transform: ${el.textTransform || 'lowercase'};
+    letter-spacing: ${letterSpacing};
+    z-index: ${el.zIndex || 10};
+  ">${escapeHtml(el.text)}</div>`;
+}
+
+function renderSchoolName(el, dpi) {
+  const x = inToPx(el.x, dpi);
+  const y = inToPx(el.y, dpi);
+  const w = inToPx(el.width, dpi);
+  const fontSize = ptToPx(el.fontSize || 60, dpi);
+  const letterSpacing = el.letterSpacing ? `${el.letterSpacing * (dpi / 96)}px` : '0';
+
+  return `<div class="element" style="
+    left: ${x}px; top: ${y}px;
+    width: ${w}px;
+    font-family: '${el.fontFamily || 'Oswald'}', sans-serif;
+    font-size: ${fontSize}px;
+    font-weight: ${el.fontWeight || '700'};
+    color: ${el.color || '#1a1a1a'};
+    letter-spacing: ${letterSpacing};
+    line-height: 0.9;
+    z-index: ${el.zIndex || 10};
+  ">${escapeHtml(el.text)}</div>`;
+}
+
+function renderHeadline(el, dpi) {
+  const x = inToPx(el.x, dpi);
+  const y = inToPx(el.y, dpi);
+  const w = inToPx(el.width, dpi);
+  const fontSize = ptToPx(el.fontSize || 18, dpi);
+  const bgColor = el.backgroundColor
+    ? `background-color: ${el.backgroundColor}; padding: ${inToPx(0.05, dpi)}px ${inToPx(0.1, dpi)}px; display: inline-block;`
+    : '';
+
+  return `<div class="element" style="
+    left: ${x}px; top: ${y}px;
+    width: ${w}px;
+    font-family: '${el.fontFamily || 'Oswald'}', sans-serif;
+    font-size: ${fontSize}px;
+    font-weight: ${el.fontWeight || '700'};
+    color: ${el.color || '#1a1a1a'};
+    text-align: ${el.textAlign || 'left'};
+    z-index: ${el.zIndex || 10};
+    ${bgColor}
+  ">${escapeHtml(el.text)}</div>`;
+}
+
+function renderRecord(el, dpi) {
+  const x = inToPx(el.x, dpi);
+  const y = inToPx(el.y, dpi);
+  const w = inToPx(el.width, dpi);
+  const fontSize = ptToPx(el.fontSize || 16, dpi);
+  const bgColor = el.backgroundColor
+    ? `background-color: ${el.backgroundColor}; padding: ${inToPx(0.03, dpi)}px ${inToPx(0.08, dpi)}px; display: inline-block;`
+    : '';
+
+  return `<div class="element" style="
+    left: ${x}px; top: ${y}px;
+    width: ${w}px;
+    font-family: '${el.fontFamily || 'Oswald'}', sans-serif;
+    font-size: ${fontSize}px;
+    font-weight: ${el.fontWeight || '700'};
+    color: ${el.color || '#ffffff'};
+    z-index: ${el.zIndex || 10};
+    ${bgColor}
+  ">${escapeHtml(el.text)}</div>`;
+}
+
+function renderRoster(el, dpi) {
+  const x = inToPx(el.x, dpi);
+  const y = inToPx(el.y, dpi);
+  const w = inToPx(el.width, dpi);
+  const titleFontSize = ptToPx(el.titleFontSize || 11, dpi);
+  const nameFontSize = ptToPx(el.nameFontSize || 8, dpi);
+  const columns = el.columns || 1;
+
+  const namesHtml = (el.names || []).map(name =>
+    `<span style="display: inline;">${escapeHtml(name)}</span>`
+  ).join(', ');
+
+  return `<div class="element" style="
+    left: ${x}px; top: ${y}px;
+    width: ${w}px;
+    z-index: ${el.zIndex || 10};
   ">
-    <div style="margin-bottom: ${inToPx(0.1, dpi)}px;">"${escapeHtml(el.text)}"</div>
-    <div style="font-size: ${Math.round(fontSize * 0.7)}px; font-style: normal;">${escapeHtml(el.attribution || '')}</div>
+    <div style="
+      font-family: '${el.fontFamily || 'Source Sans Pro'}', sans-serif;
+      font-size: ${titleFontSize}px;
+      font-weight: 700;
+      color: ${el.titleColor || '#1a1a1a'};
+      margin-bottom: ${inToPx(0.05, dpi)}px;
+    ">${escapeHtml(el.title || 'Roster:')}</div>
+    <div style="
+      font-family: '${el.fontFamily || 'Source Sans Pro'}', sans-serif;
+      font-size: ${nameFontSize}px;
+      font-weight: 400;
+      color: ${el.nameColor || '#333333'};
+      line-height: 1.3;
+      column-count: ${columns};
+      column-gap: ${inToPx(0.15, dpi)}px;
+    ">${namesHtml}</div>
   </div>`;
+}
+
+function renderBodyCopy(el, dpi) {
+  const x = inToPx(el.x, dpi);
+  const y = inToPx(el.y, dpi);
+  const w = inToPx(el.width, dpi);
+  const h = el.height ? inToPx(el.height, dpi) : 'auto';
+  const fontSize = ptToPx(el.fontSize || 10, dpi);
+  const lineHeight = el.lineHeight || 1.4;
+  const columns = el.columns || 1;
+
+  // Convert newlines to paragraphs
+  const paragraphs = (el.text || '').split('\n').filter(p => p.trim());
+  const textHtml = paragraphs.map(p =>
+    `<p style="margin-bottom: ${inToPx(0.08, dpi)}px;">${escapeHtml(p)}</p>`
+  ).join('');
+
+  return `<div class="element" style="
+    left: ${x}px; top: ${y}px;
+    width: ${w}px;
+    ${typeof h === 'number' ? `height: ${h}px;` : ''}
+    font-family: '${el.fontFamily || 'Source Sans Pro'}', sans-serif;
+    font-size: ${fontSize}px;
+    font-weight: ${el.fontWeight || '400'};
+    color: ${el.color || '#1a1a1a'};
+    line-height: ${lineHeight};
+    column-count: ${columns};
+    column-gap: ${inToPx(0.2, dpi)}px;
+    text-align: justify;
+    z-index: ${el.zIndex || 10};
+  ">${textHtml}</div>`;
+}
+
+function renderQuote(el, dpi) {
+  const x = inToPx(el.x, dpi);
+  const y = inToPx(el.y, dpi);
+  const w = inToPx(el.width, dpi);
+  const fontSize = ptToPx(el.fontSize || 16, dpi);
+  const accentColor = el.accentColor || el.color || '#8b5cf6';
+
+  return `<div class="element" style="
+    left: ${x}px; top: ${y}px;
+    width: ${w}px;
+    z-index: ${el.zIndex || 10};
+  ">
+    <div style="
+      font-family: '${el.fontFamily || 'Playfair Display'}', serif;
+      font-size: ${fontSize}px;
+      font-style: ${el.fontStyle || 'italic'};
+      font-weight: ${el.fontWeight || '400'};
+      color: ${el.color || '#1a1a1a'};
+      line-height: 1.3;
+    ">
+      <span style="color: ${accentColor}; font-size: ${Math.round(fontSize * 1.5)}px;">"</span>${escapeHtml(el.text)}<span style="color: ${accentColor}; font-size: ${Math.round(fontSize * 1.5)}px;">"</span>
+    </div>
+    ${el.attribution ? `<div style="
+      font-family: '${el.fontFamily || 'Playfair Display'}', serif;
+      font-size: ${Math.round(fontSize * 0.75)}px;
+      font-style: normal;
+      font-weight: 600;
+      color: ${el.color || '#1a1a1a'};
+      margin-top: ${inToPx(0.05, dpi)}px;
+    ">${escapeHtml(el.attribution)}</div>` : ''}
+  </div>`;
+}
+
+function renderCaption(el, dpi) {
+  const x = inToPx(el.x, dpi);
+  const y = inToPx(el.y, dpi);
+  const w = inToPx(el.width, dpi);
+  const fontSize = ptToPx(el.fontSize || 8, dpi);
+
+  return `<div class="element" style="
+    left: ${x}px; top: ${y}px;
+    width: ${w}px;
+    font-family: '${el.fontFamily || 'Source Sans Pro'}', sans-serif;
+    font-size: ${fontSize}px;
+    font-style: ${el.fontStyle || 'italic'};
+    font-weight: ${el.fontWeight || '400'};
+    color: ${el.color || '#333333'};
+    line-height: 1.3;
+    z-index: ${el.zIndex || 10};
+  ">${escapeHtml(el.text)}</div>`;
+}
+
+function renderCaptionNumber(el, dpi) {
+  const x = inToPx(el.x, dpi);
+  const y = inToPx(el.y, dpi);
+  const fontSize = ptToPx(el.fontSize || 9, dpi);
+  const size = Math.round(fontSize * 1.5);
+
+  return `<div class="element" style="
+    left: ${x}px; top: ${y}px;
+    width: ${size}px; height: ${size}px;
+    font-family: '${el.fontFamily || 'Source Sans Pro'}', sans-serif;
+    font-size: ${fontSize}px;
+    font-weight: 700;
+    color: ${el.color || '#ffffff'};
+    background-color: ${el.backgroundColor || '#1a1a1a'};
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: ${el.zIndex || 15};
+  ">${escapeHtml(el.number)}</div>`;
 }
 
 function renderDecorative(el, dpi) {
@@ -226,37 +390,37 @@ function renderDecorative(el, dpi) {
   const h = inToPx(el.height || 0.02, dpi);
   const rotation = el.rotation || 0;
   const opacity = el.opacity != null ? el.opacity : 1;
-  const zIndex = el.zIndex || 5;
   const borderRadius = el.shape === 'circle' ? '50%' : '0';
 
   return `<div class="element" style="
     left: ${x}px; top: ${y}px;
     width: ${w}px; height: ${h}px;
-    background: ${el.color || '#e94560'};
+    background: ${el.color || '#8b5cf6'};
     opacity: ${opacity};
     transform: rotate(${rotation}deg);
     border-radius: ${borderRadius};
-    z-index: ${zIndex};
+    z-index: ${el.zIndex || 5};
   "></div>`;
 }
 
-function renderPageNumber(el, dpi) {
+function renderFolio(el, dpi) {
   const x = inToPx(el.x, dpi);
   const y = inToPx(el.y, dpi);
-  const fontSize = ptToPx(el.fontSize || 9, dpi);
+  const fontSize = ptToPx(el.fontSize || 10, dpi);
 
   return `<div class="element" style="
     left: ${x}px; top: ${y}px;
-    font-family: '${el.fontFamily || 'Open Sans'}', sans-serif;
+    font-family: '${el.fontFamily || 'Source Sans Pro'}', sans-serif;
     font-size: ${fontSize}px;
-    color: ${el.color || '#999999'};
-    z-index: 100;
+    font-weight: 400;
+    color: ${el.color || '#666666'};
+    z-index: ${el.zIndex || 100};
   ">${escapeHtml(el.text)}</div>`;
 }
 
 function escapeHtml(str) {
   if (!str) return '';
-  return str
+  return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

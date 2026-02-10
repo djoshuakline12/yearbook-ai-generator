@@ -23,7 +23,6 @@ router.get('/themes', (req, res) => {
 /**
  * POST /api/extract-theme
  * Upload an example page image and AI extracts the visual theme.
- * Students use this to create custom presets from pages they like.
  */
 const themeUpload = multer({
   storage: multer.diskStorage({
@@ -33,7 +32,7 @@ const themeUpload = multer({
       cb(null, `theme-${unique}-${file.originalname}`);
     },
   }),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = /jpeg|jpg|png|webp|gif/;
     const ext = allowed.test(path.extname(file.originalname).toLowerCase());
@@ -51,8 +50,6 @@ router.post('/extract-theme', themeUpload.single('image'), async (req, res) => {
     }
 
     imagePath = req.file.path;
-
-    // Extract theme using Claude vision
     const theme = await extractThemeFromImage(imagePath);
 
     res.json({
@@ -64,16 +61,13 @@ router.post('/extract-theme', themeUpload.single('image'), async (req, res) => {
     console.error('Extract theme error:', err);
     res.status(500).json({ error: 'Failed to extract theme.', details: err.message });
   } finally {
-    // Clean up uploaded image
     if (imagePath) {
-      try {
-        await fs.unlink(imagePath);
-      } catch {}
+      try { await fs.unlink(imagePath); } catch {}
     }
   }
 });
 
-// Configure multer for file uploads
+// Configure multer for photo uploads
 const storage = multer.diskStorage({
   destination: path.join(__dirname, '../../uploads'),
   filename: (req, file, cb) => {
@@ -82,7 +76,6 @@ const storage = multer.diskStorage({
   },
 });
 
-// Accept any field name for photos
 const uploadAny = multer({
   storage,
   limits: { fileSize: MAX_FILE_SIZE, files: MAX_PHOTOS },
@@ -96,35 +89,45 @@ const uploadAny = multer({
 
 /**
  * POST /api/generate-spread
- * Full pipeline: upload photos → AI layout → render → export PDF/PNG
+ * Generate a professional yearbook page or spread.
  *
  * Form fields:
- * - photos[] / photos: Image files (required)
- * - topic: Page topic string (required)
- * - headline: Main headline text (required)
- * - pageType: "page" (single) or "spread" (double) - default "page"
- * - photoDetails: JSON array of {who, whatIsHappening, caption, isPrimary} for each photo
- * - quotes: JSON array of {text, attribution}
+ * - photos[]: Image files (required, 1-15)
+ * - pageType: "page" (single 8x10.5") or "spread" (double 16x10.5")
  * - theme: Theme preset key or JSON object
- * - format: "pdf" or "png" - default "pdf"
+ * - format: "pdf" or "png"
+ *
+ * Page content (all in pageContent JSON object or individual fields):
+ * - section: Section name (e.g., "mens soccer", "fall dance")
+ * - schoolName: School name/abbreviation (e.g., "DCHS")
+ * - headline: Main headline
+ * - subheadline: Optional subheadline
+ * - record: Record/stats line (e.g., "3-12", "11 as 1 for an audience")
+ * - roster: Array of names for team/group roster
+ * - bodyCopy: Main body text (season recap, event description)
+ * - quotes: Array of {text, attribution}
+ * - photoCaptions: Array of {photoIndex, caption, people, isPrimary}
+ * - folio: Page numbers (e.g., "42-43")
  */
 router.post('/generate-spread', uploadAny.any(), async (req, res) => {
   let photoResults = [];
 
   try {
-    // Validate inputs
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'At least one photo is required.' });
     }
 
-    const { topic, headline, format = 'pdf', pageType = 'page' } = req.body;
-    if (!topic || !headline) {
-      return res.status(400).json({ error: 'Topic and headline are required.' });
+    const { pageType = 'page', format = 'pdf' } = req.body;
+
+    // Parse page content
+    const pageContent = parsePageContent(req.body);
+
+    // Validate minimum content
+    if (!pageContent.section && !pageContent.headline) {
+      return res.status(400).json({ error: 'Section name or headline is required.' });
     }
 
-    // Parse arrays and objects from form data
-    const photoDetails = parsePhotoDetails(req.body);
-    const quotes = parseQuotes(req.body);
+    // Parse theme
     const theme = parseTheme(req.body);
 
     // 1. Process photos
@@ -133,10 +136,7 @@ router.post('/generate-spread', uploadAny.any(), async (req, res) => {
     // 2. Generate AI layout
     const layout = await generateLayout({
       photos: photoResults,
-      topic,
-      headline,
-      photoDetails,
-      quotes,
+      pageContent,
       theme,
       pageType,
     });
@@ -148,7 +148,7 @@ router.post('/generate-spread', uploadAny.any(), async (req, res) => {
     const result = await exportToFile(html, format, pageType);
 
     // 5. Send the file
-    const filename = `${slugify(topic)}-yearbook.${result.extension}`;
+    const filename = `${slugify(pageContent.section || pageContent.headline || 'yearbook')}-page.${result.extension}`;
     res.set({
       'Content-Type': result.mimeType,
       'Content-Disposition': `attachment; filename="${filename}"`,
@@ -159,7 +159,6 @@ router.post('/generate-spread', uploadAny.any(), async (req, res) => {
     console.error('Generate spread error:', err);
     res.status(500).json({ error: 'Failed to generate spread.', details: err.message });
   } finally {
-    // Clean up uploaded/processed files
     if (photoResults.length > 0) {
       await cleanupFiles(photoResults);
     }
@@ -178,25 +177,15 @@ router.post('/preview-layout', uploadAny.any(), async (req, res) => {
       return res.status(400).json({ error: 'At least one photo is required.' });
     }
 
-    const { topic, headline, pageType = 'page' } = req.body;
-    if (!topic || !headline) {
-      return res.status(400).json({ error: 'Topic and headline are required.' });
-    }
-
-    const photoDetails = parsePhotoDetails(req.body);
-    const quotes = parseQuotes(req.body);
+    const { pageType = 'page' } = req.body;
+    const pageContent = parsePageContent(req.body);
     const theme = parseTheme(req.body);
 
-    // Process photos (to get orientation/aspect ratio metadata)
     photoResults = await processPhotos(req.files);
 
-    // Generate AI layout
     const layout = await generateLayout({
       photos: photoResults,
-      topic,
-      headline,
-      photoDetails,
-      quotes,
+      pageContent,
       theme,
       pageType,
     });
@@ -213,47 +202,56 @@ router.post('/preview-layout', uploadAny.any(), async (req, res) => {
 });
 
 /**
- * Parse photoDetails from form data
- * Supports: JSON string array, or indexed fields like photoDetails[0][who]
+ * Parse all page content from form data
  */
-function parsePhotoDetails(body) {
-  // Try JSON string first
-  if (typeof body.photoDetails === 'string') {
+function parsePageContent(body) {
+  // Try parsing as single JSON object first
+  if (body.pageContent) {
     try {
-      return JSON.parse(body.photoDetails);
+      if (typeof body.pageContent === 'string') {
+        return JSON.parse(body.pageContent);
+      }
+      return body.pageContent;
     } catch {}
   }
 
-  // Try indexed fields
-  const details = [];
-  for (let i = 0; i < MAX_PHOTOS; i++) {
-    const who = body[`photoDetails[${i}][who]`] || body[`photoDetails[${i}].who`];
-    const whatIsHappening = body[`photoDetails[${i}][whatIsHappening]`] || body[`photoDetails[${i}].whatIsHappening`];
-    const caption = body[`photoDetails[${i}][caption]`] || body[`photoDetails[${i}].caption`];
-    const isPrimary = body[`photoDetails[${i}][isPrimary]`] || body[`photoDetails[${i}].isPrimary`];
+  // Parse individual fields
+  return {
+    section: body.section || '',
+    schoolName: body.schoolName || '',
+    headline: body.headline || '',
+    subheadline: body.subheadline || '',
+    record: body.record || '',
+    roster: parseArray(body.roster),
+    bodyCopy: body.bodyCopy || '',
+    quotes: parseQuotes(body),
+    photoCaptions: parsePhotoCaptions(body),
+    folio: body.folio || '',
+  };
+}
 
-    if (who || whatIsHappening || caption) {
-      details[i] = {
-        who: who || '',
-        whatIsHappening: whatIsHappening || '',
-        caption: caption || '',
-        isPrimary: isPrimary === 'true' || isPrimary === true,
-      };
-    }
+/**
+ * Parse an array field (supports JSON string or indexed fields)
+ */
+function parseArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try { return JSON.parse(value); } catch { return [value]; }
   }
-
-  return details;
+  return [];
 }
 
 /**
  * Parse quotes from form data
- * Supports: JSON string array, or indexed fields like quotes[0][text]
  */
 function parseQuotes(body) {
-  // Try JSON string first
-  if (typeof body.quotes === 'string') {
+  if (body.quotes) {
     try {
-      return JSON.parse(body.quotes);
+      if (typeof body.quotes === 'string') {
+        return JSON.parse(body.quotes);
+      }
+      if (Array.isArray(body.quotes)) return body.quotes;
     } catch {}
   }
 
@@ -262,41 +260,62 @@ function parseQuotes(body) {
   for (let i = 0; i < 10; i++) {
     const text = body[`quotes[${i}][text]`] || body[`quotes[${i}].text`];
     const attribution = body[`quotes[${i}][attribution]`] || body[`quotes[${i}].attribution`];
-
     if (text) {
-      quotes.push({
-        text,
-        attribution: attribution || 'Anonymous',
-      });
+      quotes.push({ text, attribution: attribution || '' });
     }
   }
-
   return quotes;
 }
 
 /**
+ * Parse photo captions from form data
+ */
+function parsePhotoCaptions(body) {
+  if (body.photoCaptions) {
+    try {
+      if (typeof body.photoCaptions === 'string') {
+        return JSON.parse(body.photoCaptions);
+      }
+      if (Array.isArray(body.photoCaptions)) return body.photoCaptions;
+    } catch {}
+  }
+
+  // Try indexed fields
+  const captions = [];
+  for (let i = 0; i < MAX_PHOTOS; i++) {
+    const caption = body[`photoCaptions[${i}][caption]`] || body[`photoCaptions[${i}].caption`];
+    const people = body[`photoCaptions[${i}][people]`] || body[`photoCaptions[${i}].people`];
+    const isPrimary = body[`photoCaptions[${i}][isPrimary]`] || body[`photoCaptions[${i}].isPrimary`];
+
+    if (caption || people) {
+      captions[i] = {
+        photoIndex: i,
+        caption: caption || '',
+        people: people || '',
+        isPrimary: isPrimary === 'true' || isPrimary === true,
+      };
+    }
+  }
+  return captions;
+}
+
+/**
  * Parse theme from form data
- * Supports: theme preset key (string), JSON string, or object
  */
 function parseTheme(body) {
   let themeInput = body.theme;
 
-  // If it's a JSON string, parse it
   if (typeof themeInput === 'string') {
-    // Check if it's a preset key (no braces) or JSON
     if (!themeInput.startsWith('{')) {
-      // It's a preset key like "classic-navy"
       return getTheme(themeInput);
     }
     try {
       themeInput = JSON.parse(themeInput);
     } catch {
-      // Failed to parse, treat as preset key
       return getTheme(themeInput);
     }
   }
 
-  // Now themeInput is an object (or null/undefined)
   return getTheme(themeInput);
 }
 
