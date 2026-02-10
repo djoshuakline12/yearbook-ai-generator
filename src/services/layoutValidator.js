@@ -37,12 +37,27 @@ const FORBIDDEN_COLOR_PATTERNS = [
  * @returns {object} - Corrected layout
  */
 function validateAndCorrectLayout(layout, theme) {
-  // Only apply strict validation for DCHS theme
-  const isDCHS = theme.styleGuide || theme.preset === 'dchs-official';
+  // Check multiple ways the DCHS theme might be identified
+  const isDCHS = theme.styleGuide ||
+                 theme.preset === 'dchs-official' ||
+                 (theme.name && theme.name.toLowerCase().includes('dchs')) ||
+                 (theme.primaryColor === '#523D73');
+
+  // Log for debugging
+  console.log('Layout Validator - Theme check:', {
+    preset: theme.preset,
+    name: theme.name,
+    hasStyleGuide: !!theme.styleGuide,
+    primaryColor: theme.primaryColor,
+    isDCHS: isDCHS
+  });
 
   if (!isDCHS) {
+    console.log('Layout Validator - Skipping (not DCHS theme)');
     return layout; // Return unchanged for other themes
   }
+
+  console.log('Layout Validator - Applying DCHS corrections');
 
   const correctedLayout = JSON.parse(JSON.stringify(layout)); // Deep clone
 
@@ -80,39 +95,22 @@ function correctBackground(bg) {
 
 /**
  * Correct a single element
+ * AGGRESSIVE: Force correct colors and styles on EVERY element
  */
 function correctElement(el, allElements, index) {
+  if (!el) return null;
+
   const corrected = { ...el };
 
-  // Fix colors on all elements
-  if (corrected.color) {
-    corrected.color = correctColor(corrected.color, 'text');
-  }
-  if (corrected.backgroundColor) {
-    corrected.backgroundColor = correctColor(corrected.backgroundColor, 'background');
-  }
-  if (corrected.borderColor) {
-    corrected.borderColor = correctColor(corrected.borderColor, 'border');
-  }
-  if (corrected.accentColor) {
-    corrected.accentColor = DCHS_COLORS.purple;
-  }
-  if (corrected.titleColor) {
-    corrected.titleColor = correctColor(corrected.titleColor, 'text');
-  }
-  if (corrected.nameColor) {
-    corrected.nameColor = correctColor(corrected.nameColor, 'text');
-  }
-  if (corrected.itemColor) {
-    corrected.itemColor = correctColor(corrected.itemColor, 'text');
-  }
+  console.log(`Layout Validator - Processing element: ${el.type}`);
 
-  // Element-specific corrections
+  // Element-specific corrections - FORCE correct values
   switch (el.type) {
     case 'photo':
       corrected.borderRadius = 0; // Force sharp corners
       corrected.shadow = false;   // No shadows
       corrected.borderWidth = 0;  // No borders
+      // borderColor doesn't matter since no border
       break;
 
     case 'sectionHeader':
@@ -120,36 +118,55 @@ function correctElement(el, allElements, index) {
       corrected.color = DCHS_COLORS.textDark;
       corrected.textTransform = 'lowercase';
       corrected.fontStyle = 'italic';
+      // Remove any background color
+      delete corrected.backgroundColor;
       break;
 
     case 'schoolName':
       corrected.fontFamily = 'Playfair Display';
       corrected.color = DCHS_COLORS.textDark;
       corrected.fontWeight = '700';
+      delete corrected.backgroundColor;
       break;
 
     case 'headline':
-      // Headlines should have purple background with white text
+      // FORCE purple background with white text
       corrected.backgroundColor = DCHS_COLORS.purple;
       corrected.color = DCHS_COLORS.white;
       corrected.fontFamily = 'Playfair Display';
       corrected.fontWeight = '700';
+      console.log(`Layout Validator - Forced headline to purple bg: ${corrected.text}`);
+      break;
+
+    case 'subheadline':
+      corrected.fontFamily = 'Source Sans Pro';
+      corrected.color = DCHS_COLORS.textMedium;
+      delete corrected.backgroundColor;
+      break;
+
+    case 'date':
+      corrected.fontFamily = 'Source Sans Pro';
+      corrected.color = DCHS_COLORS.textMedium;
+      delete corrected.backgroundColor;
       break;
 
     case 'record':
-      // Records should have purple background with white text
+      // FORCE purple background with white text
       corrected.backgroundColor = DCHS_COLORS.purple;
       corrected.color = DCHS_COLORS.white;
       corrected.fontFamily = 'Playfair Display';
       corrected.fontWeight = '700';
+      console.log(`Layout Validator - Forced record to purple bg: ${corrected.text}`);
       break;
 
     case 'quote':
-      // Quotes should have purple background
+      // FORCE purple background with white text
       corrected.backgroundColor = DCHS_COLORS.purple;
       corrected.color = DCHS_COLORS.white;
       corrected.accentColor = DCHS_COLORS.white;
       corrected.fontFamily = 'Playfair Display';
+      corrected.fontWeight = '700';
+      console.log(`Layout Validator - Forced quote to purple bg`);
       break;
 
     case 'captionNumber':
@@ -159,32 +176,63 @@ function correctElement(el, allElements, index) {
 
     case 'decorative':
       // Only allow simple rectangles, no diagonals or circles
-      if (corrected.shape === 'circle' || corrected.rotation > 5) {
+      if (corrected.shape === 'circle' || Math.abs(corrected.rotation || 0) > 5) {
+        console.log(`Layout Validator - Removing invalid decorative element`);
         return null; // Mark for removal
       }
+      // Force purple color on all decorative elements
       corrected.color = DCHS_COLORS.purple;
       break;
 
     case 'bodyCopy':
       corrected.fontFamily = 'Source Sans Pro';
       corrected.color = DCHS_COLORS.textDark;
+      delete corrected.backgroundColor;
       break;
 
     case 'caption':
       corrected.fontFamily = 'Source Sans Pro';
       corrected.color = DCHS_COLORS.textDark;
+      delete corrected.backgroundColor;
       break;
 
     case 'roster':
       corrected.fontFamily = 'Source Sans Pro';
       corrected.titleColor = DCHS_COLORS.textDark;
       corrected.nameColor = DCHS_COLORS.textMedium;
+      delete corrected.backgroundColor;
+      break;
+
+    case 'highlights':
+      corrected.fontFamily = 'Source Sans Pro';
+      corrected.titleColor = DCHS_COLORS.textDark;
+      corrected.itemColor = DCHS_COLORS.textMedium;
+      delete corrected.backgroundColor;
       break;
 
     case 'folio':
+    case 'pageNumber':
       corrected.color = DCHS_COLORS.textDark;
       corrected.fontFamily = 'Source Sans Pro';
+      delete corrected.backgroundColor;
       break;
+
+    default:
+      // For any unknown element, still fix colors
+      if (corrected.color) {
+        corrected.color = correctColor(corrected.color, 'text');
+      }
+      if (corrected.backgroundColor) {
+        corrected.backgroundColor = correctColor(corrected.backgroundColor, 'background');
+      }
+  }
+
+  // Final pass: ensure no forbidden colors snuck through
+  if (corrected.accentColor) {
+    corrected.accentColor = DCHS_COLORS.purple;
+  }
+  if (corrected.borderColor && corrected.borderWidth > 0) {
+    corrected.borderColor = DCHS_COLORS.purple;
   }
 
   return corrected;
@@ -192,43 +240,57 @@ function correctElement(el, allElements, index) {
 
 /**
  * Correct a color to be DCHS-compliant
+ * AGGRESSIVE: Any color not in our exact whitelist gets replaced
  */
 function correctColor(color, context) {
   if (!color) return DCHS_COLORS.textDark;
 
-  const upperColor = color.toUpperCase();
+  const upperColor = color.toUpperCase().trim();
+
+  // Exact whitelist of allowed colors
+  const ALLOWED_COLORS = [
+    '#523D73', // Purple
+    '#000000', // Black
+    '#FFFFFF', // White
+    '#F5F5F5', // Off-white
+    '#1A1A1A', // Text dark
+    '#333333', // Text medium
+    '#666666', // Text light
+  ];
 
   // Check if it's already an approved color
-  if (Object.values(DCHS_COLORS).map(c => c.toUpperCase()).includes(upperColor)) {
+  if (ALLOWED_COLORS.includes(upperColor)) {
     return color;
   }
 
-  // Check if it's a forbidden color
-  for (const pattern of FORBIDDEN_COLOR_PATTERNS) {
-    if (pattern.test(color)) {
-      // Replace with appropriate DCHS color based on context
-      if (context === 'background') {
-        return DCHS_COLORS.purple; // Accent backgrounds become purple
-      }
-      return DCHS_COLORS.textDark;
-    }
+  // ANY other color gets replaced based on context
+  console.log(`Layout Validator - Replacing forbidden color: ${color} (context: ${context})`);
+
+  // Determine replacement based on context
+  if (context === 'background' || context === 'accent') {
+    // Any accent/highlight background should be purple
+    return DCHS_COLORS.purple;
   }
 
-  // For any other color, try to map it
-  // If it's light (high value), assume it was meant to be white
-  // If it's dark, assume it was meant to be black/text
+  // For text colors, analyze brightness
   const hex = color.replace('#', '');
-  if (hex.length === 6) {
+  if (hex.length >= 6) {
     const r = parseInt(hex.substr(0, 2), 16);
     const g = parseInt(hex.substr(2, 2), 16);
     const b = parseInt(hex.substr(4, 2), 16);
     const brightness = (r * 299 + g * 587 + b * 114) / 1000;
 
     if (brightness > 200) {
-      return context === 'text' ? DCHS_COLORS.textLight : DCHS_COLORS.white;
-    } else if (brightness > 100) {
-      return context === 'background' ? DCHS_COLORS.purple : DCHS_COLORS.textMedium;
+      // Very light color - probably meant to be white
+      return DCHS_COLORS.white;
+    } else if (brightness > 128) {
+      // Medium-light - use light text
+      return DCHS_COLORS.textLight;
+    } else if (brightness > 50) {
+      // Medium-dark - use medium text
+      return DCHS_COLORS.textMedium;
     } else {
+      // Dark - use dark text
       return DCHS_COLORS.textDark;
     }
   }
