@@ -98,14 +98,18 @@ const uploadAny = multer({
  * - format: "pdf" or "png"
  *
  * Page content (all in pageContent JSON object or individual fields):
- * - section: Section name (e.g., "mens soccer", "fall dance")
+ * - section: Section name (e.g., "mens soccer", "fall dance", "robotics club")
+ * - pageCategory: Optional - "sports", "events", "clubs", "academics", "people", "student-life"
  * - schoolName: School name/abbreviation (e.g., "DCHS")
  * - headline: Main headline
  * - subheadline: Optional subheadline
- * - record: Record/stats line (e.g., "3-12", "11 as 1 for an audience")
+ * - dateOrYear: Date or year (e.g., "2024", "October 15, 2024")
+ * - record: Record/stats line (e.g., "3-12" for sports, "15 members" for clubs)
  * - roster: Array of names for team/group roster
- * - bodyCopy: Main body text (season recap, event description)
+ * - rosterTitle: Custom roster title (e.g., "Team Roster:", "Members:", "Cast:")
+ * - bodyCopy: Main body text (season recap, event description, etc.)
  * - quotes: Array of {text, attribution}
+ * - highlights: Array of highlight items (e.g., achievements, awards, key moments)
  * - photoCaptions: Array of {photoIndex, caption, people, isPrimary}
  * - folio: Page numbers (e.g., "42-43")
  */
@@ -221,12 +225,16 @@ function parsePageContent(body) {
     schoolName: body.schoolName || '',
     headline: body.headline || '',
     subheadline: body.subheadline || '',
+    dateOrYear: body.dateOrYear || '',
     record: body.record || '',
     roster: parseArray(body.roster),
+    rosterTitle: body.rosterTitle || '',
     bodyCopy: body.bodyCopy || '',
     quotes: parseQuotes(body),
+    highlights: parseArray(body.highlights),
     photoCaptions: parsePhotoCaptions(body),
     folio: body.folio || '',
+    pageCategory: body.pageCategory || '',
   };
 }
 

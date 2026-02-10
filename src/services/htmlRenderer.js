@@ -90,7 +90,10 @@ function renderElement(el, photos, dpi) {
     case 'sectionHeader': return renderSectionHeader(el, dpi);
     case 'schoolName': return renderSchoolName(el, dpi);
     case 'headline': return renderHeadline(el, dpi);
+    case 'subheadline': return renderSubheadline(el, dpi);
+    case 'date': return renderDate(el, dpi);
     case 'record': return renderRecord(el, dpi);
+    case 'highlights': return renderHighlights(el, dpi);
     case 'roster': return renderRoster(el, dpi);
     case 'bodyCopy': return renderBodyCopy(el, dpi);
     case 'quote': return renderQuote(el, dpi);
@@ -222,6 +225,49 @@ function renderHeadline(el, dpi) {
   ">${escapeHtml(el.text)}</div>`;
 }
 
+function renderSubheadline(el, dpi) {
+  const x = inToPx(el.x, dpi);
+  const y = inToPx(el.y, dpi);
+  const w = inToPx(el.width, dpi);
+  const fontSize = ptToPx(el.fontSize || 14, dpi);
+
+  return `<div class="element" style="
+    left: ${x}px; top: ${y}px;
+    width: ${w}px;
+    font-family: '${el.fontFamily || 'Source Sans Pro'}', sans-serif;
+    font-size: ${fontSize}px;
+    font-weight: ${el.fontWeight || '400'};
+    font-style: ${el.fontStyle || 'italic'};
+    color: ${el.color || '#555555'};
+    text-align: ${el.textAlign || 'left'};
+    line-height: 1.3;
+    z-index: ${el.zIndex || 10};
+  ">${escapeHtml(el.text)}</div>`;
+}
+
+function renderDate(el, dpi) {
+  const x = inToPx(el.x, dpi);
+  const y = inToPx(el.y, dpi);
+  const w = inToPx(el.width, dpi);
+  const fontSize = ptToPx(el.fontSize || 12, dpi);
+  const bgColor = el.backgroundColor
+    ? `background-color: ${el.backgroundColor}; padding: ${inToPx(0.03, dpi)}px ${inToPx(0.08, dpi)}px; display: inline-block;`
+    : '';
+
+  return `<div class="element" style="
+    left: ${x}px; top: ${y}px;
+    width: ${w}px;
+    font-family: '${el.fontFamily || 'Source Sans Pro'}', sans-serif;
+    font-size: ${fontSize}px;
+    font-weight: ${el.fontWeight || '600'};
+    color: ${el.color || '#666666'};
+    text-transform: ${el.textTransform || 'uppercase'};
+    letter-spacing: 1px;
+    z-index: ${el.zIndex || 10};
+    ${bgColor}
+  ">${escapeHtml(el.text)}</div>`;
+}
+
 function renderRecord(el, dpi) {
   const x = inToPx(el.x, dpi);
   const y = inToPx(el.y, dpi);
@@ -241,6 +287,43 @@ function renderRecord(el, dpi) {
     z-index: ${el.zIndex || 10};
     ${bgColor}
   ">${escapeHtml(el.text)}</div>`;
+}
+
+function renderHighlights(el, dpi) {
+  const x = inToPx(el.x, dpi);
+  const y = inToPx(el.y, dpi);
+  const w = inToPx(el.width, dpi);
+  const titleFontSize = ptToPx(el.titleFontSize || 11, dpi);
+  const itemFontSize = ptToPx(el.itemFontSize || 9, dpi);
+
+  const itemsHtml = (el.items || []).map(item =>
+    `<li style="margin-bottom: ${inToPx(0.03, dpi)}px;">${escapeHtml(item)}</li>`
+  ).join('');
+
+  return `<div class="element" style="
+    left: ${x}px; top: ${y}px;
+    width: ${w}px;
+    z-index: ${el.zIndex || 10};
+  ">
+    ${el.title ? `<div style="
+      font-family: '${el.fontFamily || 'Oswald'}', sans-serif;
+      font-size: ${titleFontSize}px;
+      font-weight: 700;
+      color: ${el.titleColor || '#1a1a1a'};
+      margin-bottom: ${inToPx(0.06, dpi)}px;
+      text-transform: uppercase;
+    ">${escapeHtml(el.title)}</div>` : ''}
+    <ul style="
+      font-family: '${el.fontFamily || 'Source Sans Pro'}', sans-serif;
+      font-size: ${itemFontSize}px;
+      font-weight: 400;
+      color: ${el.itemColor || '#333333'};
+      line-height: 1.4;
+      list-style: ${el.bulletStyle || 'disc'};
+      padding-left: ${inToPx(0.15, dpi)}px;
+      margin: 0;
+    ">${itemsHtml}</ul>
+  </div>`;
 }
 
 function renderRoster(el, dpi) {
