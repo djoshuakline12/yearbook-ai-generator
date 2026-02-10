@@ -41,36 +41,57 @@ const DCHS_STYLE_GUIDE = {
     backgroundLight: '#F5F5F5',  // Subtle off-white for contrast
     backgroundDark: '#1A1A1A',   // For reversed sections
 
-    // Accent usage
-    accentPurple: '#523D73',     // Headlines, special text, bars
-    accentGold: '#D4A84B',       // Optional secondary accent (royalty theme)
+    // Accent usage - ONLY PURPLE, NO GOLD
+    // Confirmed from eDesign portal: Only 3 colors in use: White, Black, Purple
+    accentPurple: '#523D73',     // Headlines, special text, bars - THE ONLY ACCENT
+    // NO accentGold - removed to ensure strict 3-color palette compliance
   },
 
   // ============================================================
   // TYPOGRAPHY SYSTEM
   // ============================================================
+  // CONFIRMED FROM EDESIGN PORTAL - Fonts activated for DCHS:
+  // - AHJ Bodoni Display
+  // - AHJ Bodoni Display Bold
+  // - AHJ Bungalow Script Regular
+  // - AHJ Craft Gothic Bold Condensed
+  // - AHJ Graphein Bold
+  // - AHJ Times
+  // - AHJ Times Bold
+  //
+  // Character Styles from eDesign:
+  // - Caption: AHJ Times, 10pt, 1.2 line-height, Black
+  // - Default System Style: AHJ Times, 8pt, 1.2 line-height, Black
+  // - Portrait Names: AHJ Times, 7pt, 1.0 line-height, Black
   typography: {
     // Herff Jones specific fonts - AHJ font family
     fonts: {
-      // Primary display font - for headlines, school name
+      // Primary display font - for headlines, school name, bold text
       display: {
-        family: 'AHJ Bodoni Display',
+        family: 'AHJ Bodoni Display Bold',
         fallback: 'Bodoni MT, Didot, Georgia, serif',
         webFallback: 'Playfair Display', // Google Fonts fallback for web
       },
 
-      // Script font - for special/decorative text
+      // Script font - for section headers (special/decorative text)
       script: {
-        family: 'AHJ Bungalow Script',
+        family: 'AHJ Bungalow Script Regular',
         fallback: 'Brush Script MT, cursive',
         webFallback: 'Dancing Script', // Google Fonts fallback
       },
 
-      // Body font - for captions, body copy, roster
+      // Body font - for captions, body copy, roster (uses AHJ Times)
       body: {
-        family: 'AHJ Bodoni Display',
-        fallback: 'Bodoni MT, Georgia, serif',
+        family: 'AHJ Times',
+        fallback: 'Times New Roman, Georgia, serif',
         webFallback: 'Source Sans Pro', // Google Fonts fallback for readability
+      },
+
+      // Condensed font - for roster/lists when space is tight
+      condensed: {
+        family: 'AHJ Craft Gothic Bold Condensed',
+        fallback: 'Arial Narrow, Helvetica, sans-serif',
+        webFallback: 'Source Sans Pro', // Google Fonts fallback
       },
     },
 
@@ -152,14 +173,14 @@ const DCHS_STYLE_GUIDE = {
         columnWidth: { min: 2.5, max: 3.5 },
       },
 
-      // Captions
+      // Captions - CONFIRMED: AHJ Times, 10pt, 1.2 line-height from eDesign
       caption: {
-        font: 'body',
-        size: 10,
+        font: 'body',           // AHJ Times
+        size: 10,               // 10pt from eDesign Character Styles
         weight: '400',
         style: 'normal',
-        lineHeight: 1.3,
-        color: 'textDark',
+        lineHeight: 1.2,        // 1.2 from eDesign Character Styles
+        color: 'textDark',      // Black (K=100)
         maxWidth: 2.5,
       },
 
@@ -316,8 +337,17 @@ const DCHS_STYLE_GUIDE = {
     },
 
     // Margins and safe zones
+    // CONFIRMED FROM EDESIGN: (picas converted to inches, 1 pica = 1/6 inch)
+    // - Top: 3p0 = 0.5"
+    // - Outside: 3p0 = 0.5"
+    // - Inside: 1p0 = 0.167" (gutter side - pages bind here)
+    // - Bottom: 5p0 = 0.833"
     margins: {
-      page: 0.375,                  // Safe margin from page edge
+      top: 0.5,                     // 3p0 from eDesign
+      outside: 0.5,                 // 3p0 from eDesign
+      inside: 0.167,                // 1p0 from eDesign (gutter side)
+      bottom: 0.833,                // 5p0 from eDesign
+      page: 0.375,                  // General safe margin
       gutter: 0.5,                  // Keep away from center binding
       bleed: 0.125,                 // Bleed area
     },
@@ -570,12 +600,12 @@ const DCHS_THEME = {
   style: 'editorial',
 
   colors: {
-    primary: DCHS_STYLE_GUIDE.colors.primary,
-    secondary: DCHS_STYLE_GUIDE.colors.black,
-    accent: DCHS_STYLE_GUIDE.colors.accentGold,
-    background: DCHS_STYLE_GUIDE.colors.white,
-    text: DCHS_STYLE_GUIDE.colors.textDark,
-    textLight: DCHS_STYLE_GUIDE.colors.textLight,
+    primary: DCHS_STYLE_GUIDE.colors.primary,      // #523D73 (purple)
+    secondary: DCHS_STYLE_GUIDE.colors.black,      // #000000
+    accent: DCHS_STYLE_GUIDE.colors.accentPurple,  // #523D73 - SAME AS PRIMARY (no gold!)
+    background: DCHS_STYLE_GUIDE.colors.white,     // #FFFFFF
+    text: DCHS_STYLE_GUIDE.colors.textDark,        // #1A1A1A
+    textLight: DCHS_STYLE_GUIDE.colors.textLight,  // #666666
   },
 
   typography: {

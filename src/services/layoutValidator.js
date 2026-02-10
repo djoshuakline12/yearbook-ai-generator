@@ -19,15 +19,18 @@ const DCHS_COLORS = {
   textLight: '#666666',
 };
 
-// Colors that are definitely wrong and need replacement
+// Colors that are definitely wrong and need replacement with purple
+// CONFIRMED FROM EDESIGN: Only 3 colors allowed - C0M0Y0K0 (white), C0M0Y0K100 (black), C43M68Y0K43 (purple)
 const FORBIDDEN_COLOR_PATTERNS = [
   /^#(?:FF|E9|F0|D5)[0-9A-F]{4}$/i,  // Pinks/magentas
   /^#(?:00|1E|0D)[0-9A-F]{2}(?:FF|BF|8B)/i,  // Bright blues
   /^#(?:FF|E5)[0-9A-F]{2}(?:00|1E|3E)/i,  // Reds/oranges
-  /^#(?:F7|FA|FF)(?:F0|E6|D7|89)/i,  // Yellows/golds (except our approved ones)
+  /^#(?:F7|FA|FF)(?:F0|E6|D7|89)/i,  // Yellows/golds
   /^#(?:00|10|22|38)[A-F][0-9A-F]{3}$/i,  // Teals/greens
   /^#D4A84B$/i,  // Gold accent - replace with purple
   /^#D69E2E$/i,  // Another gold
+  /^#(?:D[0-9A-F]|E[0-9A-F]|C[0-9A-F]|B[89A-F])[0-9A-F]{2}(?:2E|3E|4[0-9A-F]|5[0-9A-F]|6[0-9A-F]|7[0-9A-F]|8[0-9A-F])$/i,  // Various gold/amber shades
+  /^#(?:FFD|FFC|FFB|FFA|FF9|F[0-9A-F][0-9A-F]|E[0-9A-F][0-9A-F]|D[0-9A-F][0-9A-F])[0-9A-F]{3}$/i,  // Warm yellows/oranges/golds
 ];
 
 /**
