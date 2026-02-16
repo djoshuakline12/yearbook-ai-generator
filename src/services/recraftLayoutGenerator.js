@@ -398,6 +398,45 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
     });
     elements.push(...photoElements);
 
+    // ----- RIGHT PAGE: ADDITIONAL PHOTOS (if space available) -----
+    // Place extra photos in the white space below body copy/above roster
+    const usedPhotoIndices = new Set(photoElements.map(e => e.photoIndex));
+    const remainingPhotos = photos.filter((_, i) => !usedPhotoIndices.has(i));
+
+    if (remainingPhotos.length > 0) {
+      // Add photos between body copy and roster (y: 7.2 to 7.9)
+      const extraPhotoY = 7.2;
+      const extraPhotoHeight = 1.8;
+      const maxExtraPhotos = Math.min(remainingPhotos.length, 3);
+      const extraPhotoWidth = (rightPageWidth - (maxExtraPhotos - 1) * 0.15) / maxExtraPhotos;
+
+      for (let i = 0; i < maxExtraPhotos; i++) {
+        const originalIndex = photos.findIndex((_, idx) => !usedPhotoIndices.has(idx) && !Array.from(usedPhotoIndices).slice(-i).includes(idx));
+        const actualIndex = photos.indexOf(remainingPhotos[i]);
+
+        elements.push({
+          type: 'photo',
+          photoIndex: actualIndex,
+          x: rightPageStart + i * (extraPhotoWidth + 0.15),
+          y: extraPhotoY,
+          width: extraPhotoWidth,
+          height: extraPhotoHeight,
+          borderRadius: 0,
+          shadow: false,
+          blackAndWhite: false,
+          zIndex: 1,
+          cropFit: 'cover',
+        });
+        usedPhotoIndices.add(actualIndex);
+      }
+
+      // Adjust roster position down if we added photos
+      const rosterElement = elements.find(e => e.type === 'roster');
+      if (rosterElement) {
+        rosterElement.y = 9.2;
+      }
+    }
+
   } else {
     // =====================================================
     // SINGLE PAGE LAYOUT
@@ -628,8 +667,8 @@ function buildPhotoLayout(photos, bounds) {
         });
         secondaryIdx++;
       }
-    } else {
-      // 4+ photos - dominant + 2 on right + bottom row
+    } else if (photoCount <= 6) {
+      // 4-6 photos - dominant + 2 on right + bottom row (up to 3)
       const dominantWidth = availableWidth * 0.58;
       const dominantHeight = availableHeight * 0.6;
       const secondaryWidth = availableWidth - dominantWidth - GAP;
@@ -674,14 +713,88 @@ function buildPhotoLayout(photos, bounds) {
         sideIdx++;
       }
 
-      // Bottom row - remaining photos
+      // Bottom row - remaining photos (up to 3)
       const remainingPhotos = [];
       for (let i = 0; i < photoCount; i++) {
         if (!usedPhotos.has(i)) remainingPhotos.push(i);
       }
 
       if (remainingPhotos.length > 0) {
-        const bottomPhotoCount = Math.min(remainingPhotos.length, 2);
+        const bottomPhotoCount = Math.min(remainingPhotos.length, 3);
+        const bottomPhotoWidth = (availableWidth - (bottomPhotoCount - 1) * GAP) / bottomPhotoCount;
+
+        for (let i = 0; i < bottomPhotoCount; i++) {
+          elements.push({
+            type: 'photo',
+            photoIndex: remainingPhotos[i],
+            x: startX + i * (bottomPhotoWidth + GAP),
+            y: startY + dominantHeight + GAP,
+            width: bottomPhotoWidth,
+            height: bottomHeight,
+            borderRadius: 0,
+            shadow: false,
+            blackAndWhite: false,
+            zIndex: 1,
+            cropFit: 'cover',
+          });
+        }
+      }
+    } else {
+      // 7+ photos - maximize usage with grid layout
+      // Top section: dominant + 3 stacked on right
+      // Bottom section: row of 4 photos
+      const dominantWidth = availableWidth * 0.55;
+      const dominantHeight = availableHeight * 0.55;
+      const secondaryWidth = availableWidth - dominantWidth - GAP;
+      const secondaryHeight = (dominantHeight - 2 * GAP) / 3;
+      const bottomHeight = availableHeight - dominantHeight - GAP;
+
+      // Dominant photo (large, B&W)
+      elements.push({
+        type: 'photo',
+        photoIndex: dominantIdx,
+        x: startX,
+        y: startY,
+        width: dominantWidth,
+        height: dominantHeight,
+        borderRadius: 0,
+        shadow: false,
+        blackAndWhite: true,
+        zIndex: 1,
+        cropFit: 'cover',
+      });
+
+      // Three stacked photos on right of dominant
+      const usedPhotos = new Set([dominantIdx]);
+      let sideIdx = 0;
+      for (let i = 0; i < photoCount && sideIdx < 3; i++) {
+        if (i === dominantIdx) continue;
+
+        elements.push({
+          type: 'photo',
+          photoIndex: i,
+          x: startX + dominantWidth + GAP,
+          y: startY + sideIdx * (secondaryHeight + GAP),
+          width: secondaryWidth,
+          height: secondaryHeight,
+          borderRadius: 0,
+          shadow: false,
+          blackAndWhite: false,
+          zIndex: 2,
+          cropFit: 'cover',
+        });
+        usedPhotos.add(i);
+        sideIdx++;
+      }
+
+      // Bottom row - up to 4 photos
+      const remainingPhotos = [];
+      for (let i = 0; i < photoCount; i++) {
+        if (!usedPhotos.has(i)) remainingPhotos.push(i);
+      }
+
+      if (remainingPhotos.length > 0) {
+        const bottomPhotoCount = Math.min(remainingPhotos.length, 4);
         const bottomPhotoWidth = (availableWidth - (bottomPhotoCount - 1) * GAP) / bottomPhotoCount;
 
         for (let i = 0; i < bottomPhotoCount; i++) {
