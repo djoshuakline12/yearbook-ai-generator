@@ -17,13 +17,6 @@ const RECRAFT_API_URL = 'https://external.api.recraft.ai/v1';
 
 /**
  * Generate a yearbook layout template using Recraft AI
- *
- * @param {object} options
- * @param {object} options.pageContent - Content for the page
- * @param {object} options.theme - Theme configuration
- * @param {string} options.pageType - 'page' or 'spread'
- * @param {number} options.photoCount - Number of photos to place
- * @returns {object} - Layout specification with photo placeholders
  */
 async function generateLayoutWithRecraft({ pageContent, theme, pageType = 'page', photoCount }) {
   const apiKey = process.env.RECRAFT_API_KEY;
@@ -34,8 +27,6 @@ async function generateLayoutWithRecraft({ pageContent, theme, pageType = 'page'
   }
 
   const isSpread = pageType === 'spread';
-  const width = isSpread ? 2048 : 1024; // Use larger sizes for quality
-  const height = 1280; // ~8x10.5 aspect ratio
 
   // Build the prompt for yearbook design
   const prompt = buildRecraftPrompt(pageContent, theme, isSpread, photoCount);
@@ -53,11 +44,10 @@ async function generateLayoutWithRecraft({ pageContent, theme, pageType = 'page'
       body: JSON.stringify({
         prompt,
         style: 'digital_illustration',
-        substyle: '2d_art_poster', // Magazine/poster style
+        substyle: '2d_art_poster',
         model: 'recraftv3',
         size: isSpread ? '2048x1024' : '1024x1280',
         text_layouts: textLayouts,
-        // Use DCHS color palette
         controls: {
           colors: [
             { rgb: [82, 61, 115] },  // Purple #523D73
@@ -76,8 +66,6 @@ async function generateLayoutWithRecraft({ pageContent, theme, pageType = 'page'
 
     const result = await response.json();
 
-    // Recraft returns an image - we need to parse it for layout info
-    // or use it as a visual guide
     return {
       layoutImage: result.data?.[0]?.url || result.data?.[0]?.b64_json,
       prompt,
@@ -97,15 +85,11 @@ function buildRecraftPrompt(pageContent, theme, isSpread, photoCount) {
   const section = pageContent.section || 'yearbook';
   const schoolName = pageContent.schoolName || 'DCHS';
 
-  // Describe the layout we want
   let prompt = `Professional yearbook page layout design for "${section}" section. `;
   prompt += `Clean editorial magazine style with ${photoCount} photo placeholder frames. `;
   prompt += `School: ${schoolName}. `;
-
-  // Color scheme
   prompt += `Color scheme: deep purple (#523D73), white background, black text. `;
 
-  // Layout specifics
   if (isSpread) {
     prompt += `Two-page spread design (16x10.5 inches). `;
     prompt += `Left page: dominant large photo area with smaller supporting photos. `;
@@ -114,7 +98,6 @@ function buildRecraftPrompt(pageContent, theme, isSpread, photoCount) {
     prompt += `Single page design (8x10.5 inches). `;
   }
 
-  // Style elements
   prompt += `Features: `;
   prompt += `- Script/cursive section header in elegant style `;
   prompt += `- Bold uppercase school name `;
@@ -123,11 +106,7 @@ function buildRecraftPrompt(pageContent, theme, isSpread, photoCount) {
   prompt += `- Sharp-cornered photo frames (no rounded corners) `;
   prompt += `- Mix of large dominant photo and smaller supporting photos `;
   prompt += `- Professional magazine editorial aesthetic `;
-
-  // Photo placeholders
   prompt += `Photo placeholder areas shown as gray rectangles with photo icons. `;
-
-  // Avoid
   prompt += `No gradients, no decorative swirls, no diagonal lines, minimal decorations. `;
   prompt += `Clean, professional, print-ready yearbook quality.`;
 
@@ -136,8 +115,6 @@ function buildRecraftPrompt(pageContent, theme, isSpread, photoCount) {
 
 /**
  * Build text_layouts array for precise text positioning
- * Each text element has: { text: string, bbox: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]] }
- * Coordinates are 0-1 relative to image dimensions
  */
 function buildTextLayouts(pageContent, isSpread) {
   const layouts = [];
@@ -146,7 +123,6 @@ function buildTextLayouts(pageContent, isSpread) {
   const xOffset = isSpread ? 0.52 : 0.05;
   const textWidth = isSpread ? 0.43 : 0.9;
 
-  // Section header (script font, top right)
   if (pageContent.section) {
     layouts.push({
       text: pageContent.section.toLowerCase(),
@@ -159,7 +135,6 @@ function buildTextLayouts(pageContent, isSpread) {
     });
   }
 
-  // School name (bold, large)
   if (pageContent.schoolName) {
     layouts.push({
       text: pageContent.schoolName.toUpperCase(),
@@ -172,7 +147,6 @@ function buildTextLayouts(pageContent, isSpread) {
     });
   }
 
-  // Headline (purple bar)
   if (pageContent.headline) {
     layouts.push({
       text: pageContent.headline,
@@ -185,7 +159,6 @@ function buildTextLayouts(pageContent, isSpread) {
     });
   }
 
-  // Record/stats (purple bar)
   if (pageContent.record) {
     layouts.push({
       text: pageContent.record,
@@ -198,7 +171,6 @@ function buildTextLayouts(pageContent, isSpread) {
     });
   }
 
-  // Date
   if (pageContent.dateOrYear) {
     layouts.push({
       text: pageContent.dateOrYear,
@@ -216,7 +188,7 @@ function buildTextLayouts(pageContent, isSpread) {
 
 /**
  * Generate a complete yearbook layout by combining Recraft design
- * with Claude's content placement intelligence
+ * with proper element positioning
  */
 async function generateHybridLayout({ photos, pageContent, theme, pageType = 'page' }) {
   // Step 1: Try to get a design template from Recraft
@@ -229,120 +201,294 @@ async function generateHybridLayout({ photos, pageContent, theme, pageType = 'pa
 
   if (recraftResult?.layoutImage) {
     console.log('Recraft layout generated successfully');
-    // Could use this as visual reference or overlay
-    // For now, we'll use the text_layouts to inform our HTML layout
   }
 
-  // Step 2: Generate precise element placements
-  // This converts the Recraft-style positioning to our layout format
-  return convertToLayoutJson(pageContent, photos, theme, pageType, recraftResult?.textLayouts);
+  // Step 2: Generate precise element placements with proper spacing
+  return buildSpreadLayout(pageContent, photos, theme, pageType);
 }
 
 /**
- * Convert Recraft text_layouts to our internal layout JSON format
+ * Build a properly spaced spread layout
+ * This function creates distinct zones for photos and text to prevent overlaps
  */
-function convertToLayoutJson(pageContent, photos, theme, pageType, textLayouts) {
+function buildSpreadLayout(pageContent, photos, theme, pageType) {
   const isSpread = pageType === 'spread';
   const pageWidth = isSpread ? PAGE.SPREAD_WIDTH_IN : PAGE.WIDTH_IN;
   const pageHeight = PAGE.HEIGHT_IN;
+  const photoCount = photos.length;
 
   const elements = [];
 
-  // Convert text layouts to our element format
-  if (textLayouts) {
-    for (const tl of textLayouts) {
-      // Convert 0-1 coordinates to inches
-      const x = tl.bbox[0][0] * pageWidth;
-      const y = tl.bbox[0][1] * pageHeight;
-      const width = (tl.bbox[1][0] - tl.bbox[0][0]) * pageWidth;
+  // Define margins and safe areas
+  const MARGIN = 0.5;
+  const GUTTER = isSpread ? pageWidth / 2 : 0; // Center fold at 8"
 
-      // Determine element type based on content
-      let type = 'headline';
-      if (tl.text === pageContent.section?.toLowerCase()) {
-        type = 'sectionHeader';
-      } else if (tl.text === pageContent.schoolName?.toUpperCase()) {
-        type = 'schoolName';
-      } else if (tl.text === pageContent.record) {
-        type = 'record';
-      } else if (tl.text === pageContent.dateOrYear) {
-        type = 'date';
-      }
+  if (isSpread) {
+    // =====================================================
+    // SPREAD LAYOUT - Left page for photos, right for text
+    // =====================================================
 
+    // LEFT PAGE ZONES (0 to 7.5" with margin)
+    const leftPageEnd = GUTTER - 0.5; // Leave 0.5" gutter margin
+
+    // RIGHT PAGE ZONES (8.5" to 16" with margin)
+    const rightPageStart = GUTTER + 0.5;
+    const rightPageEnd = pageWidth - MARGIN;
+    const rightPageWidth = rightPageEnd - rightPageStart;
+
+    // ----- RIGHT PAGE: TEXT CONTENT -----
+
+    // Section header (script font, top right of right page)
+    if (pageContent.section) {
       elements.push({
-        type,
-        text: type === 'sectionHeader' ? pageContent.section :
-              type === 'schoolName' ? pageContent.schoolName :
-              tl.text,
-        x,
-        y,
-        width,
-        fontSize: type === 'schoolName' ? 48 : type === 'sectionHeader' ? 28 : 16,
-        fontFamily: type === 'sectionHeader' ? 'Dancing Script' : 'Playfair Display',
+        type: 'sectionHeader',
+        text: pageContent.section,
+        x: rightPageEnd - 3,
+        y: 0.5,
+        width: 2.8,
+        fontSize: 32,
+        fontFamily: 'Dancing Script',
+        fontWeight: '400',
+        fontStyle: 'italic',
+        color: '#1A1A1A',
+        textAlign: 'right',
+        zIndex: 10,
+      });
+    }
+
+    // School name (large, bold, top left of right page)
+    if (pageContent.schoolName) {
+      elements.push({
+        type: 'schoolName',
+        text: pageContent.schoolName,
+        x: rightPageStart,
+        y: 1.2,
+        width: 3,
+        fontSize: 60,
+        fontFamily: 'Playfair Display',
+        fontWeight: '900',
+        color: '#1A1A1A',
+        zIndex: 10,
+      });
+    }
+
+    // Headline with purple background
+    if (pageContent.headline) {
+      elements.push({
+        type: 'headline',
+        text: pageContent.headline,
+        x: rightPageStart,
+        y: 2.1,
+        width: rightPageWidth * 0.7,
+        fontSize: 16,
+        fontFamily: 'Playfair Display',
         fontWeight: '700',
-        color: type === 'headline' || type === 'record' ? '#FFFFFF' : '#1A1A1A',
-        backgroundColor: type === 'headline' || type === 'record' ? '#523D73' : undefined,
+        color: '#FFFFFF',
+        backgroundColor: '#523D73',
+        zIndex: 10,
+      });
+    }
+
+    // Record/stats bar
+    if (pageContent.record) {
+      elements.push({
+        type: 'record',
+        text: pageContent.record,
+        x: rightPageStart,
+        y: 2.7,
+        width: 1.5,
+        fontSize: 14,
+        fontFamily: 'Playfair Display',
+        fontWeight: '700',
+        color: '#FFFFFF',
+        backgroundColor: '#523D73',
+        zIndex: 10,
+      });
+    }
+
+    // Date/Year
+    if (pageContent.dateOrYear) {
+      elements.push({
+        type: 'date',
+        text: pageContent.dateOrYear,
+        x: rightPageStart + 2,
+        y: 2.7,
+        width: 2,
+        fontSize: 14,
+        fontFamily: 'Playfair Display',
+        fontWeight: '700',
+        color: '#1A1A1A',
+        zIndex: 10,
+      });
+    }
+
+    // Body copy (two columns on right page)
+    if (pageContent.bodyCopy) {
+      elements.push({
+        type: 'bodyCopy',
+        text: pageContent.bodyCopy,
+        x: rightPageStart,
+        y: 3.4,
+        width: rightPageWidth,
+        height: 4,
+        fontSize: 9,
+        fontFamily: 'Source Sans Pro',
+        fontWeight: '400',
+        color: '#1A1A1A',
+        lineHeight: 1.35,
+        columns: 2,
+        zIndex: 10,
+      });
+    }
+
+    // Roster (bottom of right page)
+    if (pageContent.roster?.length > 0) {
+      elements.push({
+        type: 'roster',
+        title: pageContent.rosterTitle || '2025 Roster',
+        names: pageContent.roster,
+        x: rightPageStart,
+        y: 7.6,
+        width: rightPageWidth,
+        columns: 2,
+        titleFontSize: 11,
+        nameFontSize: 7,
+        fontFamily: 'Source Sans Pro',
+        titleColor: '#1A1A1A',
+        nameColor: '#333333',
+        zIndex: 10,
+      });
+    }
+
+    // Quote (if present, styled as pull quote)
+    if (pageContent.quotes?.length > 0) {
+      const quote = pageContent.quotes[0];
+      elements.push({
+        type: 'quote',
+        text: quote.text,
+        attribution: quote.attribution,
+        x: rightPageStart + rightPageWidth * 0.5,
+        y: 5.5,
+        width: rightPageWidth * 0.45,
+        fontSize: 13,
+        fontFamily: 'Playfair Display',
+        fontWeight: '700',
+        fontStyle: 'italic',
+        color: '#FFFFFF',
+        backgroundColor: '#523D73',
+        zIndex: 11,
+      });
+    }
+
+    // ----- LEFT PAGE: PHOTOS -----
+    const photoElements = buildPhotoLayout(photos, {
+      startX: MARGIN,
+      startY: MARGIN,
+      maxX: leftPageEnd,
+      maxY: pageHeight - MARGIN,
+      isSpread: true,
+    });
+    elements.push(...photoElements);
+
+  } else {
+    // =====================================================
+    // SINGLE PAGE LAYOUT
+    // =====================================================
+
+    const contentWidth = pageWidth - (MARGIN * 2);
+
+    // Section header (top right)
+    if (pageContent.section) {
+      elements.push({
+        type: 'sectionHeader',
+        text: pageContent.section,
+        x: pageWidth - MARGIN - 2.5,
+        y: 0.5,
+        width: 2.3,
+        fontSize: 28,
+        fontFamily: 'Dancing Script',
+        fontWeight: '400',
+        fontStyle: 'italic',
+        color: '#1A1A1A',
+        textAlign: 'right',
+        zIndex: 10,
+      });
+    }
+
+    // School name
+    if (pageContent.schoolName) {
+      elements.push({
+        type: 'schoolName',
+        text: pageContent.schoolName,
+        x: MARGIN,
+        y: 1.0,
+        width: 2.5,
+        fontSize: 48,
+        fontFamily: 'Playfair Display',
+        fontWeight: '900',
+        color: '#1A1A1A',
+        zIndex: 10,
+      });
+    }
+
+    // Headline
+    if (pageContent.headline) {
+      elements.push({
+        type: 'headline',
+        text: pageContent.headline,
+        x: MARGIN,
+        y: 1.8,
+        width: contentWidth * 0.6,
+        fontSize: 14,
+        fontFamily: 'Playfair Display',
+        fontWeight: '700',
+        color: '#FFFFFF',
+        backgroundColor: '#523D73',
+        zIndex: 10,
+      });
+    }
+
+    // Photos for single page
+    const photoElements = buildPhotoLayout(photos, {
+      startX: MARGIN,
+      startY: 2.5,
+      maxX: pageWidth - MARGIN,
+      maxY: pageHeight - 2,
+      isSpread: false,
+    });
+    elements.push(...photoElements);
+
+    // Body copy (bottom portion)
+    if (pageContent.bodyCopy) {
+      elements.push({
+        type: 'bodyCopy',
+        text: pageContent.bodyCopy,
+        x: MARGIN,
+        y: 7.5,
+        width: contentWidth,
+        height: 2.5,
+        fontSize: 9,
+        fontFamily: 'Source Sans Pro',
+        fontWeight: '400',
+        color: '#1A1A1A',
+        lineHeight: 1.35,
+        columns: 2,
         zIndex: 10,
       });
     }
   }
 
-  // Add photo placements using a professional grid
-  const photoLayouts = generatePhotoGrid(photos, isSpread, pageWidth, pageHeight);
-  elements.push(...photoLayouts);
-
-  // Add body copy if present
-  if (pageContent.bodyCopy) {
-    const bodyX = isSpread ? pageWidth * 0.52 : 0.5;
+  // Folio (page numbers)
+  if (pageContent.folio) {
     elements.push({
-      type: 'bodyCopy',
-      text: pageContent.bodyCopy,
-      x: bodyX,
-      y: 4.5,
-      width: 3,
-      height: 3,
+      type: 'folio',
+      text: pageContent.folio,
+      x: isSpread ? pageWidth - 1 : pageWidth / 2,
+      y: pageHeight - 0.4,
       fontSize: 10,
       fontFamily: 'Source Sans Pro',
-      color: '#1A1A1A',
-      lineHeight: 1.4,
-      zIndex: 10,
-    });
-  }
-
-  // Add roster if present
-  if (pageContent.roster?.length > 0) {
-    const rosterX = isSpread ? pageWidth * 0.52 : 0.5;
-    elements.push({
-      type: 'roster',
-      title: pageContent.rosterTitle || 'Roster:',
-      names: pageContent.roster,
-      x: rosterX,
-      y: 7.5,
-      width: 3.5,
-      titleFontSize: 11,
-      nameFontSize: 8,
-      fontFamily: 'Source Sans Pro',
-      titleColor: '#1A1A1A',
-      nameColor: '#333333',
-      zIndex: 10,
-    });
-  }
-
-  // Add quote if present
-  if (pageContent.quotes?.length > 0) {
-    const quote = pageContent.quotes[0];
-    elements.push({
-      type: 'quote',
-      text: quote.text,
-      attribution: quote.attribution,
-      x: isSpread ? pageWidth * 0.55 : 4.5,
-      y: isSpread ? 6 : 7,
-      width: 3.5,
-      fontSize: 14,
-      fontFamily: 'Playfair Display',
-      fontWeight: '700',
-      color: '#FFFFFF',
-      backgroundColor: '#523D73',
-      zIndex: 10,
+      color: '#666666',
+      zIndex: 100,
     });
   }
 
@@ -360,90 +506,40 @@ function convertToLayoutJson(pageContent, photos, theme, pageType, textLayouts) 
 }
 
 /**
- * Generate a professional photo grid layout
+ * Build photo layout within specified bounds
+ * Creates a clean, non-overlapping photo arrangement
  */
-function generatePhotoGrid(photos, isSpread, pageWidth, pageHeight) {
+function buildPhotoLayout(photos, bounds) {
   const elements = [];
   const photoCount = photos.length;
 
   if (photoCount === 0) return elements;
 
-  // Define photo zones based on spread type
-  if (isSpread) {
-    // Left page is primarily photos
-    const leftPageWidth = pageWidth / 2 - 0.5; // Leave gutter margin
+  const { startX, startY, maxX, maxY, isSpread } = bounds;
+  const availableWidth = maxX - startX;
+  const availableHeight = maxY - startY;
 
-    // Dominant photo (largest, possibly B&W)
-    const dominantIdx = photos.findIndex(p => p.isPrimary) ?? 0;
+  // Find primary photo index
+  const primaryIdx = photos.findIndex(p => p.isPrimary);
+  const dominantIdx = primaryIdx >= 0 ? primaryIdx : 0;
+
+  if (isSpread) {
+    // SPREAD: Large dominant photo + supporting photos in clean grid
+    // Layout: Dominant on left taking ~60% width, smaller photos on right in column
+
+    const dominantWidth = availableWidth * 0.6;
+    const dominantHeight = availableHeight * 0.65;
+    const smallPhotoWidth = availableWidth - dominantWidth - 0.2;
+    const smallPhotoHeight = 2.2;
+
+    // Dominant photo (B&W for DCHS style)
     elements.push({
       type: 'photo',
       photoIndex: dominantIdx,
-      x: 0.5,
-      y: 1.5,
-      width: leftPageWidth * 0.65,
-      height: 5,
-      borderRadius: 0,
-      shadow: false,
-      blackAndWhite: true, // DCHS style - dominant in B&W
-      zIndex: 1,
-      cropFit: 'cover',
-    });
-
-    // Secondary photos on left page
-    let secondaryIdx = 0;
-    for (let i = 0; i < photoCount && secondaryIdx < 3; i++) {
-      if (i === dominantIdx) continue;
-
-      const col = secondaryIdx % 2;
-      const row = Math.floor(secondaryIdx / 2);
-
-      elements.push({
-        type: 'photo',
-        photoIndex: i,
-        x: leftPageWidth * 0.7 + col * 2.2,
-        y: 1.5 + row * 2.5,
-        width: 2,
-        height: 2.2,
-        borderRadius: 0,
-        shadow: false,
-        blackAndWhite: false,
-        zIndex: 2,
-        cropFit: 'cover',
-      });
-      secondaryIdx++;
-    }
-
-    // Bottom photos spanning both pages
-    let bottomIdx = 0;
-    for (let i = 0; i < photoCount && bottomIdx < 4; i++) {
-      if (i === dominantIdx || elements.some(e => e.photoIndex === i)) continue;
-
-      elements.push({
-        type: 'photo',
-        photoIndex: i,
-        x: 0.5 + bottomIdx * 3.8,
-        y: 7,
-        width: 3.5,
-        height: 2.8,
-        borderRadius: 0,
-        shadow: false,
-        blackAndWhite: false,
-        zIndex: 1,
-        cropFit: 'cover',
-      });
-      bottomIdx++;
-    }
-
-  } else {
-    // Single page layout
-    // Dominant photo at top
-    elements.push({
-      type: 'photo',
-      photoIndex: 0,
-      x: 0.5,
-      y: 1.5,
-      width: 4.5,
-      height: 3.5,
+      x: startX,
+      y: startY + 0.8, // Leave room for breathing
+      width: dominantWidth,
+      height: dominantHeight,
       borderRadius: 0,
       shadow: false,
       blackAndWhite: true,
@@ -451,25 +547,140 @@ function generatePhotoGrid(photos, isSpread, pageWidth, pageHeight) {
       cropFit: 'cover',
     });
 
-    // Supporting photos
-    for (let i = 1; i < Math.min(photoCount, 4); i++) {
+    // Secondary photos in a column on the right side of left page
+    let secondaryY = startY + 0.8;
+    let placedCount = 0;
+    const maxSecondary = 2;
+
+    for (let i = 0; i < photoCount && placedCount < maxSecondary; i++) {
+      if (i === dominantIdx) continue;
+
       elements.push({
         type: 'photo',
         photoIndex: i,
-        x: 5.2 + ((i - 1) % 2) * 1.4,
-        y: 1.5 + Math.floor((i - 1) / 2) * 1.8,
-        width: 1.3,
-        height: 1.6,
+        x: startX + dominantWidth + 0.2,
+        y: secondaryY,
+        width: smallPhotoWidth,
+        height: smallPhotoHeight,
         borderRadius: 0,
         shadow: false,
         blackAndWhite: false,
         zIndex: 2,
         cropFit: 'cover',
       });
+
+      secondaryY += smallPhotoHeight + 0.2;
+      placedCount++;
+    }
+
+    // Bottom row photo (spans wider, below dominant)
+    const usedPhotos = new Set([dominantIdx]);
+    elements.filter(e => e.type === 'photo' && e.photoIndex !== dominantIdx)
+      .forEach(e => usedPhotos.add(e.photoIndex));
+
+    let bottomX = startX;
+    const bottomY = startY + dominantHeight + 1.0;
+    const bottomPhotoWidth = (availableWidth - 0.2) / 2;
+    const bottomPhotoHeight = availableHeight - dominantHeight - 1.2;
+
+    for (let i = 0; i < photoCount && bottomX < maxX - 1; i++) {
+      if (usedPhotos.has(i)) continue;
+
+      elements.push({
+        type: 'photo',
+        photoIndex: i,
+        x: bottomX,
+        y: bottomY,
+        width: Math.min(bottomPhotoWidth, maxX - bottomX - 0.1),
+        height: bottomPhotoHeight,
+        borderRadius: 0,
+        shadow: false,
+        blackAndWhite: false,
+        zIndex: 1,
+        cropFit: 'cover',
+      });
+
+      bottomX += bottomPhotoWidth + 0.2;
+      usedPhotos.add(i);
+    }
+
+  } else {
+    // SINGLE PAGE: Grid layout
+    const gridCols = photoCount <= 2 ? 2 : photoCount <= 4 ? 2 : 3;
+    const gridRows = Math.ceil(photoCount / gridCols);
+    const cellWidth = (availableWidth - (gridCols - 1) * 0.15) / gridCols;
+    const cellHeight = (availableHeight - (gridRows - 1) * 0.15) / gridRows;
+
+    // Make first photo larger if we have multiple photos
+    if (photoCount > 1) {
+      // Large photo spans 2 cells
+      elements.push({
+        type: 'photo',
+        photoIndex: 0,
+        x: startX,
+        y: startY,
+        width: cellWidth * 1.5,
+        height: cellHeight * 1.2,
+        borderRadius: 0,
+        shadow: false,
+        blackAndWhite: true,
+        zIndex: 1,
+        cropFit: 'cover',
+      });
+
+      // Remaining photos in grid
+      let col = 0;
+      let row = 0;
+      const smallStartX = startX + cellWidth * 1.5 + 0.15;
+
+      for (let i = 1; i < photoCount; i++) {
+        const x = col === 0 ? smallStartX : startX + col * (cellWidth * 0.8 + 0.15);
+        const y = startY + (i === 1 ? 0 : cellHeight * 1.2 + 0.15) + row * (cellHeight * 0.8 + 0.15);
+
+        elements.push({
+          type: 'photo',
+          photoIndex: i,
+          x,
+          y,
+          width: cellWidth * 0.8,
+          height: cellHeight * 0.8,
+          borderRadius: 0,
+          shadow: false,
+          blackAndWhite: false,
+          zIndex: 2,
+          cropFit: 'cover',
+        });
+
+        col++;
+        if (col >= 2) {
+          col = 0;
+          row++;
+        }
+      }
+    } else {
+      // Single photo - center it
+      elements.push({
+        type: 'photo',
+        photoIndex: 0,
+        x: startX,
+        y: startY,
+        width: availableWidth,
+        height: availableHeight * 0.7,
+        borderRadius: 0,
+        shadow: false,
+        blackAndWhite: true,
+        zIndex: 1,
+        cropFit: 'cover',
+      });
     }
   }
 
   return elements;
+}
+
+// Keep old function name for compatibility
+function convertToLayoutJson(pageContent, photos, theme, pageType, textLayouts) {
+  return buildSpreadLayout(pageContent, photos, theme, pageType);
 }
 
 module.exports = {
