@@ -8,7 +8,11 @@ const { exportToFile } = require('../services/exporter');
 const { MAX_PHOTOS, MAX_FILE_SIZE } = require('../utils/constants');
 const { getTheme, getAllThemes } = require('../utils/themes');
 const { extractThemeFromImage } = require('../services/themeExtractor');
+const { polishContent, needsPolishing } = require('../services/contentPolisher');
 const fs = require('fs').promises;
+
+// Feature flag for content polishing
+const USE_CONTENT_POLISHING = process.env.USE_CONTENT_POLISHING !== 'false'; // Default ON
 
 const router = express.Router();
 
@@ -124,7 +128,7 @@ router.post('/generate-spread', uploadAny.any(), async (req, res) => {
     const { pageType = 'page', format = 'pdf' } = req.body;
 
     // Parse page content
-    const pageContent = parsePageContent(req.body);
+    let pageContent = parsePageContent(req.body);
 
     // Validate minimum content
     if (!pageContent.section && !pageContent.headline) {
@@ -137,7 +141,39 @@ router.post('/generate-spread', uploadAny.any(), async (req, res) => {
     // 1. Process photos
     photoResults = await processPhotos(req.files);
 
-    // 2. Generate AI layout
+    // 2. CONTENT POLISHING - AI enhances all text before layout
+    if (USE_CONTENT_POLISHING) {
+      console.log('Content Polishing - Starting...');
+      const polishCheck = needsPolishing(pageContent);
+      console.log('Content Polishing - Needs polish:', polishCheck.needsPolishing, polishCheck.issues);
+
+      // Build photo descriptions for context
+      const photoDescriptions = photoResults.map((p, i) => {
+        const captionInfo = (pageContent.photoCaptions || [])[i] || {};
+        return {
+          index: i,
+          orientation: p.orientation,
+          people: captionInfo.people || '',
+          caption: captionInfo.caption || '',
+          isPrimary: captionInfo.isPrimary || false,
+        };
+      });
+
+      // Detect page category
+      const pageCategory = detectPageCategory(pageContent);
+
+      // Polish content with AI
+      pageContent = await polishContent(pageContent, photoDescriptions, pageCategory);
+      console.log('Content Polishing - Complete');
+
+      // Log quality score if available
+      if (pageContent._polishingMetadata) {
+        console.log('Content Polishing - Quality score:', pageContent._polishingMetadata.contentQualityScore);
+        console.log('Content Polishing - Changes:', pageContent._polishingMetadata.changesApplied);
+      }
+    }
+
+    // 3. Generate AI layout
     const layout = await generateLayout({
       photos: photoResults,
       pageContent,
@@ -182,10 +218,27 @@ router.post('/preview-layout', uploadAny.any(), async (req, res) => {
     }
 
     const { pageType = 'page' } = req.body;
-    const pageContent = parsePageContent(req.body);
+    let pageContent = parsePageContent(req.body);
     const theme = parseTheme(req.body);
 
     photoResults = await processPhotos(req.files);
+
+    // Apply content polishing if enabled
+    if (USE_CONTENT_POLISHING) {
+      const photoDescriptions = photoResults.map((p, i) => {
+        const captionInfo = (pageContent.photoCaptions || [])[i] || {};
+        return {
+          index: i,
+          orientation: p.orientation,
+          people: captionInfo.people || '',
+          caption: captionInfo.caption || '',
+          isPrimary: captionInfo.isPrimary || false,
+        };
+      });
+
+      const pageCategory = detectPageCategory(pageContent);
+      pageContent = await polishContent(pageContent, photoDescriptions, pageCategory);
+    }
 
     const layout = await generateLayout({
       photos: photoResults,
@@ -194,7 +247,12 @@ router.post('/preview-layout', uploadAny.any(), async (req, res) => {
       pageType,
     });
 
-    res.json({ layout });
+    // Include polishing metadata in response
+    res.json({
+      layout,
+      polishedContent: USE_CONTENT_POLISHING ? pageContent : null,
+      polishingMetadata: pageContent._polishingMetadata || null,
+    });
   } catch (err) {
     console.error('Preview layout error:', err);
     res.status(500).json({ error: 'Failed to generate layout.', details: err.message });
@@ -339,6 +397,51 @@ function parseTheme(body) {
 
 function slugify(str) {
   return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+/**
+ * Detect page category from content
+ */
+function detectPageCategory(pageContent) {
+  // Explicit category
+  if (pageContent.pageCategory) return pageContent.pageCategory;
+
+  const section = (pageContent.section || '').toLowerCase();
+  const headline = (pageContent.headline || '').toLowerCase();
+  const combined = `${section} ${headline}`;
+
+  // Sports keywords
+  if (/soccer|football|basketball|baseball|softball|volleyball|tennis|golf|track|cross country|swimming|wrestling|cheer|lacrosse|hockey|team|varsity|jv|junior varsity|coach/i.test(combined)) {
+    return 'sports';
+  }
+
+  // Events keywords
+  if (/dance|prom|homecoming|formal|spirit week|rally|assembly|concert|play|musical|performance|show|festival|fair|carnival|celebration|ceremony|graduation|commencement/i.test(combined)) {
+    return 'events';
+  }
+
+  // Clubs/Organizations keywords
+  if (/club|society|council|organization|nhs|national honor|student government|ffa|fbla|deca|key club|interact|rotary|volunteer|community service|debate|forensics|model un|robotics|stem|science olympiad/i.test(combined)) {
+    return 'clubs';
+  }
+
+  // Academics keywords
+  if (/class|course|department|english|math|science|history|social studies|art|music|band|choir|orchestra|drama|theatre|language|spanish|french|german|latin|ap |honors|gifted|special ed|faculty|teacher|professor/i.test(combined)) {
+    return 'academics';
+  }
+
+  // People/Portraits keywords
+  if (/senior|junior|sophomore|freshman|class of|portrait|headshot|staff|faculty|administration|principal|counselor/i.test(combined)) {
+    return 'people';
+  }
+
+  // Student life keywords
+  if (/lunch|cafeteria|hallway|locker|campus|student life|day in the life|candid|around school|moments|memories|friends|hangout/i.test(combined)) {
+    return 'student-life';
+  }
+
+  // Default
+  return 'general';
 }
 
 module.exports = router;
