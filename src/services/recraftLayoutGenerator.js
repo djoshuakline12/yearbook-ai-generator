@@ -290,8 +290,28 @@ function buildPhotosLeftLayout(elements, photos, pageContent, bounds) {
 
   const photoCount = photos.length;
 
-  // Reserve 40-50% of photos for the right page to fill white space
-  const rightPagePhotoCount = Math.max(2, Math.min(Math.ceil(photoCount * 0.45), 8));
+  // First, calculate how much space text will take up
+  const textEndY = addTextContent(elements, pageContent, {
+    startX: rightPageStart,
+    endX: rightPageEnd,
+    width: rightPageWidth,
+    pageHeight,
+    MARGIN,
+    compact: true
+  });
+
+  // Calculate available space for photos on right page
+  const photoStartY = textEndY + 0.2;  // 0.2" gap after text
+  const rightPagePhotoSpace = pageHeight - MARGIN - photoStartY;
+  const totalPhotoSpace = (pageHeight - 2 * MARGIN) + rightPagePhotoSpace;
+
+  // Distribute photos based on available space ratio
+  // Right page gets photos proportional to its available space
+  const rightPageRatio = rightPagePhotoSpace / totalPhotoSpace;
+  const rightPagePhotoCount = Math.max(1, Math.min(
+    Math.round(photoCount * rightPageRatio),
+    photoCount - 1  // Always leave at least 1 for left page
+  ));
   const leftPagePhotoCount = photoCount - rightPagePhotoCount;
 
   const leftPhotos = photos.slice(0, leftPagePhotoCount);
@@ -307,26 +327,17 @@ function buildPhotosLeftLayout(elements, photos, pageContent, bounds) {
   }, 0, photoCaptions);
   elements.push(...leftPhotoElements);
 
-  // RIGHT PAGE: Text content in upper portion (compact)
-  const textEndY = addTextContent(elements, pageContent, {
-    startX: rightPageStart,
-    endX: rightPageEnd,
-    width: rightPageWidth,
-    pageHeight,
-    MARGIN,
-    compact: true
-  });
-
-  // RIGHT PAGE: Photos filling everything below text (dynamic based on text height)
-  const photoStartY = Math.max(textEndY + 0.2, 4.5); // At least 0.2" gap, but photos start no higher than 4.5"
-  const rightPhotoElements = buildPhotoGrid(rightPhotos, {
-    startX: rightPageStart,
-    startY: photoStartY,
-    maxX: rightPageEnd,
-    maxY: pageHeight - MARGIN,
-    GAP
-  }, leftPagePhotoCount, photoCaptions);
-  elements.push(...rightPhotoElements);
+  // RIGHT PAGE: Photos filling everything below text
+  if (rightPhotos.length > 0) {
+    const rightPhotoElements = buildPhotoGrid(rightPhotos, {
+      startX: rightPageStart,
+      startY: photoStartY,
+      maxX: rightPageEnd,
+      maxY: pageHeight - MARGIN,
+      GAP
+    }, leftPagePhotoCount, photoCaptions);
+    elements.push(...rightPhotoElements);
+  }
 }
 
 // =============================================================================
@@ -339,14 +350,7 @@ function buildPhotosRightLayout(elements, photos, pageContent, bounds) {
 
   const photoCount = photos.length;
 
-  // Reserve 40-50% of photos for the left page to fill white space
-  const leftPagePhotoCount = Math.max(2, Math.min(Math.ceil(photoCount * 0.45), 8));
-  const rightPagePhotoCount = photoCount - leftPagePhotoCount;
-
-  const leftPhotos = photos.slice(0, leftPagePhotoCount);
-  const rightPhotos = photos.slice(leftPagePhotoCount);
-
-  // LEFT PAGE: Text content in upper portion (compact)
+  // First, calculate how much space text will take up on left page
   const textEndY = addTextContent(elements, pageContent, {
     startX: leftPageStart,
     endX: leftPageEnd,
@@ -357,16 +361,33 @@ function buildPhotosRightLayout(elements, photos, pageContent, bounds) {
     compact: true
   });
 
+  // Calculate available space for photos on left page
+  const photoStartY = textEndY + 0.2;  // 0.2" gap after text
+  const leftPagePhotoSpace = pageHeight - MARGIN - photoStartY;
+  const totalPhotoSpace = leftPagePhotoSpace + (pageHeight - 2 * MARGIN);
+
+  // Distribute photos based on available space ratio
+  const leftPageRatio = leftPagePhotoSpace / totalPhotoSpace;
+  const leftPagePhotoCount = Math.max(1, Math.min(
+    Math.round(photoCount * leftPageRatio),
+    photoCount - 1  // Always leave at least 1 for right page
+  ));
+  const rightPagePhotoCount = photoCount - leftPagePhotoCount;
+
+  const leftPhotos = photos.slice(0, leftPagePhotoCount);
+  const rightPhotos = photos.slice(leftPagePhotoCount);
+
   // LEFT PAGE: Photos filling everything below text
-  const photoStartY = Math.max(textEndY + 0.2, 4.5);
-  const leftPhotoElements = buildPhotoGrid(leftPhotos, {
-    startX: leftPageStart,
-    startY: photoStartY,
-    maxX: leftPageEnd,
-    maxY: pageHeight - MARGIN,
-    GAP
-  }, 0, photoCaptions);
-  elements.push(...leftPhotoElements);
+  if (leftPhotos.length > 0) {
+    const leftPhotoElements = buildPhotoGrid(leftPhotos, {
+      startX: leftPageStart,
+      startY: photoStartY,
+      maxX: leftPageEnd,
+      maxY: pageHeight - MARGIN,
+      GAP
+    }, 0, photoCaptions);
+    elements.push(...leftPhotoElements);
+  }
 
   // RIGHT PAGE: Main photos (full page)
   const rightPhotoElements = buildPhotoGrid(rightPhotos, {
