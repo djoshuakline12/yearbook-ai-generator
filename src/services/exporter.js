@@ -22,6 +22,16 @@ async function exportToFile(html, format = 'pdf', pageType = 'page') {
       '--disable-dev-shm-usage',
       '--disable-gpu',
       '--font-render-hinting=none',
+      '--disable-extensions',
+      '--disable-background-networking',
+      '--disable-sync',
+      '--disable-translate',
+      '--hide-scrollbars',
+      '--mute-audio',
+      '--no-first-run',
+      '--safebrowsing-disable-auto-update',
+      // Memory optimization for large renders
+      '--js-flags=--max-old-space-size=512',
     ],
   };
 
@@ -44,21 +54,24 @@ async function exportToFile(html, format = 'pdf', pageType = 'page') {
 
     await page.setContent(html, {
       waitUntil: 'domcontentloaded',  // Fastest - just wait for DOM, images are base64 embedded
-      timeout: 30000,
+      timeout: 60000,  // Increased for higher DPI rendering
     });
 
     // Wait for fonts to load (with timeout)
     await Promise.race([
       page.evaluate(() => document.fonts.ready),
-      new Promise(r => setTimeout(r, 3000))  // 3s max for fonts
+      new Promise(r => setTimeout(r, 5000))  // 5s max for fonts
     ]);
 
     // Brief delay for final rendering
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 800));
 
     if (format === 'png') {
+      // Use JPEG for faster encoding at high DPI, with high quality
+      // PNG is slow for large images; JPEG at 95% quality is visually identical but much faster
       const buffer = await page.screenshot({
-        type: 'png',
+        type: 'jpeg',
+        quality: 95,
         clip: {
           x: 0,
           y: 0,
@@ -67,7 +80,7 @@ async function exportToFile(html, format = 'pdf', pageType = 'page') {
         },
         omitBackground: false,
       });
-      return { buffer, mimeType: 'image/png', extension: 'png' };
+      return { buffer, mimeType: 'image/jpeg', extension: 'jpg' };
     }
 
     // PDF export

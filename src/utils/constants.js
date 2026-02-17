@@ -3,10 +3,10 @@ const PAGE = {
   WIDTH_IN: 8.0,
   HEIGHT_IN: 10.5,
   SPREAD_WIDTH_IN: 16.0,
-  DPI: 300,  // Standard print quality - fast and reliable
+  DPI: 350,  // Higher quality for scaling in yearbook editor
   BLEED_IN: 0.125,
-  SAFE_MARGIN_IN: 0.5,  // Increased from 0.375 for more safety
-  GUTTER_MARGIN_IN: 0.625,  // Increased for binding
+  SAFE_MARGIN_IN: 0.75,  // Increased for more print safety (keeps content well away from bleed)
+  GUTTER_MARGIN_IN: 0.75,  // Extra space near binding
 };
 
 // Pixel dimensions (without bleed)

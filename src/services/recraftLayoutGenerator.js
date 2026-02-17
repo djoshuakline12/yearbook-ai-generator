@@ -208,7 +208,7 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
   const photoCaptions = pageContent.photoCaptions || [];
 
   const elements = [];
-  const MARGIN = 0.625;  // Increased margin for print safety - keeps content away from bleed zone
+  const MARGIN = 0.75;  // Increased margin for print safety - keeps content well away from bleed zone
   const GUTTER = isSpread ? pageWidth / 2 : 0;
   const GUTTER_MARGIN = 0.75;  // Extra space near gutter for binding
   const GAP = 0.125;  // Gaps between photos
@@ -712,7 +712,7 @@ function addTextContent(elements, pageContent, options) {
 
   let currentY = compact ? 0.6 : 0.5;
 
-  // SECTION NAME - This is the BIG title (e.g., "boys soccer")
+  // SECTION NAME - This is the BIG title (preserve user's capitalization)
   if (pageContent.section) {
     elements.push({
       type: 'sectionHeader',
@@ -725,7 +725,6 @@ function addTextContent(elements, pageContent, options) {
       fontWeight: '900',
       color: '#1A1A1A',
       textAlign: 'left',
-      textTransform: 'lowercase',
       zIndex: 10,
     });
     currentY += compact ? 0.7 : 0.85;
@@ -767,42 +766,48 @@ function addTextContent(elements, pageContent, options) {
     currentY += compact ? 0.4 : 0.5;
   }
 
-  // Record and Date on same line (with more spacing from headline)
+  // Record with purple bar
+  if (pageContent.record) {
+    currentY += 0.1;
+    elements.push({
+      type: 'record',
+      text: pageContent.record,
+      x: startX,
+      y: currentY,
+      width: 1.5,
+      fontSize: compact ? 11 : 12,
+      fontFamily: 'Playfair Display',
+      fontWeight: '700',
+      color: '#FFFFFF',
+      backgroundColor: '#523D73',
+      zIndex: 10,
+    });
+    currentY += compact ? 0.35 : 0.4;
+  }
+
+  // Date on its own line (no purple bar, clean look)
+  if (pageContent.dateOrYear) {
+    currentY += 0.05;
+    elements.push({
+      type: 'date',
+      text: pageContent.dateOrYear,
+      x: startX,
+      y: currentY,
+      width: 2,
+      fontSize: compact ? 10 : 11,
+      fontFamily: 'Source Sans Pro',
+      fontWeight: '600',
+      color: '#523D73',
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+      zIndex: 10,
+    });
+    currentY += compact ? 0.25 : 0.3;
+  }
+
+  // Extra spacing after date/record section
   if (pageContent.record || pageContent.dateOrYear) {
-    currentY += 0.15; // Small gap
-
-    if (pageContent.record) {
-      elements.push({
-        type: 'record',
-        text: pageContent.record,
-        x: startX,
-        y: currentY,
-        width: 1.2,
-        fontSize: compact ? 11 : 12,
-        fontFamily: 'Playfair Display',
-        fontWeight: '700',
-        color: '#FFFFFF',
-        backgroundColor: '#523D73',
-        zIndex: 10,
-      });
-    }
-
-    if (pageContent.dateOrYear) {
-      elements.push({
-        type: 'date',
-        text: pageContent.dateOrYear,
-        x: startX + (pageContent.record ? 1.4 : 0),
-        y: currentY,
-        width: 2,
-        fontSize: compact ? 11 : 12,
-        fontFamily: 'Playfair Display',
-        fontWeight: '700',
-        color: '#1A1A1A',
-        textTransform: 'uppercase',
-        zIndex: 10,
-      });
-    }
-    currentY += compact ? 0.4 : 0.5;
+    currentY += compact ? 0.15 : 0.2;
   }
 
   // Body copy
