@@ -159,22 +159,28 @@ function renderPhoto(el, photos, dpi) {
   const imgData = fs.readFileSync(photo.processedPath);
   const base64 = imgData.toString('base64');
 
-  // Caption styling - appears as overlay at bottom of photo
-  const captionFontSize = ptToPx(7, dpi);
-  const captionPadding = inToPx(0.08, dpi);
+  // Caption styling - appears BELOW the photo (not overlaid) for readability
+  // Caption sits outside the photo container
+  const captionFontSize = ptToPx(6.5, dpi);
+  const captionHeight = el.caption ? inToPx(0.25, dpi) : 0;  // Reserve space for caption
+  const photoHeight = h - captionHeight;  // Reduce photo height to make room
+
   const captionHtml = el.caption ? `
     <div style="
       position: absolute;
       bottom: 0;
       left: 0;
       right: 0;
-      background: linear-gradient(transparent, rgba(0,0,0,0.7));
-      padding: ${captionPadding * 2}px ${captionPadding}px ${captionPadding}px;
-      color: #ffffff;
+      height: ${captionHeight}px;
+      padding-top: ${inToPx(0.04, dpi)}px;
+      color: #333333;
       font-family: 'Source Sans Pro', sans-serif;
       font-size: ${captionFontSize}px;
-      line-height: 1.3;
-      text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+      font-style: italic;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     ">${escapeHtml(el.caption)}</div>
   ` : '';
 
@@ -182,16 +188,21 @@ function renderPhoto(el, photos, dpi) {
     left: ${x}px; top: ${y}px;
     width: ${w}px; height: ${h}px;
     transform: rotate(${rotation}deg);
-    border-radius: ${borderRadius}px;
     opacity: ${opacity};
     z-index: ${zIndex};
-    overflow: hidden;
     ${shadow}
-    ${border}
   ">
-    <img src="data:image/jpeg;base64,${base64}"
-         style="width: 100%; height: 100%; object-fit: ${el.cropFit || 'cover'}; object-position: ${objectPosition}; ${bwFilter}"
-         alt="Photo ${el.photoIndex}">
+    <div style="
+      width: 100%;
+      height: ${photoHeight}px;
+      border-radius: ${borderRadius}px;
+      overflow: hidden;
+      ${border}
+    ">
+      <img src="data:image/jpeg;base64,${base64}"
+           style="width: 100%; height: 100%; object-fit: ${el.cropFit || 'cover'}; object-position: ${objectPosition}; ${bwFilter}"
+           alt="Photo ${el.photoIndex}">
+    </div>
     ${captionHtml}
   </div>`;
 }
