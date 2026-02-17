@@ -204,6 +204,9 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
   const pageHeight = PAGE.HEIGHT_IN;
   const photoCount = photos.length;
 
+  // Get photo captions from pageContent
+  const photoCaptions = pageContent.photoCaptions || [];
+
   const elements = [];
   const MARGIN = 0.375;
   const GUTTER = isSpread ? pageWidth / 2 : 0;
@@ -224,7 +227,8 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
     const bounds = {
       leftPageStart, leftPageEnd, leftPageWidth,
       rightPageStart, rightPageEnd, rightPageWidth,
-      pageHeight, pageWidth, MARGIN, GAP
+      pageHeight, pageWidth, MARGIN, GAP,
+      photoCaptions  // Pass captions to layout builders
     };
 
     switch (layoutType) {
@@ -244,7 +248,8 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
   } else {
     // Single page layout
     buildSinglePageLayout(elements, photos, pageContent, {
-      pageWidth, pageHeight, MARGIN, GAP
+      pageWidth, pageHeight, MARGIN, GAP,
+      photoCaptions
     });
   }
 
@@ -281,7 +286,7 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
 function buildPhotosLeftLayout(elements, photos, pageContent, bounds) {
   const { leftPageStart, leftPageEnd, leftPageWidth,
           rightPageStart, rightPageEnd, rightPageWidth,
-          pageHeight, MARGIN, GAP } = bounds;
+          pageHeight, MARGIN, GAP, photoCaptions = [] } = bounds;
 
   const photoCount = photos.length;
 
@@ -299,7 +304,7 @@ function buildPhotosLeftLayout(elements, photos, pageContent, bounds) {
     maxX: leftPageEnd,
     maxY: pageHeight - MARGIN,
     GAP
-  }, 0);
+  }, 0, photoCaptions);
   elements.push(...leftPhotoElements);
 
   // RIGHT PAGE: Text content in upper portion (more compact)
@@ -319,7 +324,7 @@ function buildPhotosLeftLayout(elements, photos, pageContent, bounds) {
     maxX: rightPageEnd,
     maxY: pageHeight - MARGIN,
     GAP
-  }, leftPagePhotoCount);
+  }, leftPagePhotoCount, photoCaptions);
   elements.push(...rightPhotoElements);
 }
 
@@ -329,7 +334,7 @@ function buildPhotosLeftLayout(elements, photos, pageContent, bounds) {
 function buildPhotosRightLayout(elements, photos, pageContent, bounds) {
   const { leftPageStart, leftPageEnd, leftPageWidth,
           rightPageStart, rightPageEnd, rightPageWidth,
-          pageHeight, MARGIN, GAP } = bounds;
+          pageHeight, MARGIN, GAP, photoCaptions = [] } = bounds;
 
   const photoCount = photos.length;
 
@@ -358,7 +363,7 @@ function buildPhotosRightLayout(elements, photos, pageContent, bounds) {
     maxX: leftPageEnd,
     maxY: pageHeight - MARGIN,
     GAP
-  }, 0);
+  }, 0, photoCaptions);
   elements.push(...leftPhotoElements);
 
   // RIGHT PAGE: Main photos (full page)
@@ -368,7 +373,7 @@ function buildPhotosRightLayout(elements, photos, pageContent, bounds) {
     maxX: rightPageEnd,
     maxY: pageHeight - MARGIN,
     GAP
-  }, leftPagePhotoCount);
+  }, leftPagePhotoCount, photoCaptions);
   elements.push(...rightPhotoElements);
 }
 
@@ -378,7 +383,7 @@ function buildPhotosRightLayout(elements, photos, pageContent, bounds) {
 function buildPhotosBalancedLayout(elements, photos, pageContent, bounds) {
   const { leftPageStart, leftPageEnd, leftPageWidth,
           rightPageStart, rightPageEnd, rightPageWidth,
-          pageHeight, MARGIN, GAP } = bounds;
+          pageHeight, MARGIN, GAP, photoCaptions = [] } = bounds;
 
   const photoCount = photos.length;
   const leftPhotoCount = Math.ceil(photoCount / 2);
@@ -396,7 +401,7 @@ function buildPhotosBalancedLayout(elements, photos, pageContent, bounds) {
     maxX: leftPageEnd,
     maxY: MARGIN + leftPhotoHeight,
     GAP
-  }, 0);
+  }, 0, photoCaptions);
   elements.push(...leftPhotoElements);
 
   // LEFT PAGE: Section header and school name at bottom
@@ -458,7 +463,7 @@ function buildPhotosBalancedLayout(elements, photos, pageContent, bounds) {
     maxX: rightPageEnd,
     maxY: MARGIN + rightPhotoHeight,
     GAP
-  }, leftPhotoCount);
+  }, leftPhotoCount, photoCaptions);
   elements.push(...rightPhotoElements);
 
   // RIGHT PAGE: Body copy and roster at bottom
@@ -504,9 +509,22 @@ function buildPhotosBalancedLayout(elements, photos, pageContent, bounds) {
 function buildPhotosDominantLayout(elements, photos, pageContent, bounds) {
   const { leftPageStart, leftPageEnd, leftPageWidth,
           rightPageStart, rightPageEnd, rightPageWidth,
-          pageHeight, pageWidth, MARGIN, GAP } = bounds;
+          pageHeight, pageWidth, MARGIN, GAP, photoCaptions = [] } = bounds;
 
   const photoCount = photos.length;
+
+  // Helper to get caption for a photo
+  const getCaption = (index) => {
+    const caption = photoCaptions.find(c => c.photoIndex === index) || photoCaptions[index];
+    if (caption) {
+      let text = '';
+      if (caption.people) text += caption.people;
+      if (caption.people && caption.caption) text += ' — ';
+      if (caption.caption) text += caption.caption;
+      return text || null;
+    }
+    return null;
+  };
 
   // Dominant photo spans most of the spread (avoiding gutter for faces)
   elements.push({
@@ -521,6 +539,7 @@ function buildPhotosDominantLayout(elements, photos, pageContent, bounds) {
     blackAndWhite: true,
     zIndex: 1,
     cropFit: 'cover',
+    caption: getCaption(0),
   });
 
   // Text content overlaid on bottom right
@@ -596,6 +615,7 @@ function buildPhotosDominantLayout(elements, photos, pageContent, bounds) {
         blackAndWhite: false,
         zIndex: 2,
         cropFit: 'cover',
+        caption: getCaption(i + 1),
       });
     }
   }
@@ -801,7 +821,7 @@ function addTextContent(elements, pageContent, options) {
 // =============================================================================
 // HELPER: Build photo grid for a given area
 // =============================================================================
-function buildPhotoGrid(photos, bounds, startIndex = 0) {
+function buildPhotoGrid(photos, bounds, startIndex = 0, photoCaptions = []) {
   const elements = [];
   const photoCount = photos.length;
   if (photoCount === 0) return elements;
@@ -813,6 +833,20 @@ function buildPhotoGrid(photos, bounds, startIndex = 0) {
   const dominantIdx = photos.findIndex(p => p.isPrimary);
   const primaryIdx = dominantIdx >= 0 ? dominantIdx : 0;
 
+  // Helper to get caption for a photo
+  const getCaption = (index) => {
+    const caption = photoCaptions.find(c => c.photoIndex === index) || photoCaptions[index];
+    if (caption) {
+      // Build caption text: "Person Name - doing something" or just the caption
+      let text = '';
+      if (caption.people) text += caption.people;
+      if (caption.people && caption.caption) text += ' — ';
+      if (caption.caption) text += caption.caption;
+      return text || null;
+    }
+    return null;
+  };
+
   if (photoCount === 1) {
     elements.push({
       type: 'photo', photoIndex: startIndex,
@@ -820,6 +854,7 @@ function buildPhotoGrid(photos, bounds, startIndex = 0) {
       width: availableWidth, height: availableHeight - 0.6,
       borderRadius: 0, shadow: false, blackAndWhite: true,
       zIndex: 1, cropFit: 'cover',
+      caption: getCaption(startIndex),
     });
   } else if (photoCount === 2) {
     const w1 = availableWidth * 0.6;
@@ -967,14 +1002,20 @@ function buildPhotoGrid(photos, bounds, startIndex = 0) {
     }
   }
 
-  return elements;
+  // Add captions to all photo elements
+  return elements.map(el => {
+    if (el.type === 'photo' && !el.caption) {
+      el.caption = getCaption(el.photoIndex);
+    }
+    return el;
+  });
 }
 
 // =============================================================================
 // SINGLE PAGE LAYOUT
 // =============================================================================
 function buildSinglePageLayout(elements, photos, pageContent, options) {
-  const { pageWidth, pageHeight, MARGIN, GAP } = options;
+  const { pageWidth, pageHeight, MARGIN, GAP, photoCaptions = [] } = options;
   const contentWidth = pageWidth - 2 * MARGIN;
 
   // Section header
