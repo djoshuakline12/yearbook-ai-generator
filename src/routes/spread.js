@@ -296,6 +296,8 @@ function parsePageContent(body) {
     record: body.record || '',
     roster: parseArray(body.roster),
     rosterTitle: body.rosterTitle || '',
+    coaches: parseArray(body.coaches),
+    coachesTitle: body.coachesTitle || '',
     bodyCopy: body.bodyCopy || '',
     quotes: parseQuotes(body),
     highlights: parseArray(body.highlights),

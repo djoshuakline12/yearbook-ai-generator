@@ -833,9 +833,33 @@ function addTextContent(elements, pageContent, options) {
     currentY += compact ? 3.1 : 4.6;
   }
 
+  // Coaches section - separate from roster with bold styling
+  if (pageContent.coaches?.length > 0) {
+    currentY += 0.25;
+    elements.push({
+      type: 'roster',
+      title: pageContent.coachesTitle || 'Coaches:',
+      names: pageContent.coaches,
+      x: startX,
+      y: currentY,
+      width: width,
+      columns: 1,  // Coaches in single column for prominence
+      titleFontSize: compact ? 10 : 12,
+      nameFontSize: compact ? 8 : 9,  // Slightly larger than roster
+      fontFamily: 'Source Sans Pro',
+      titleColor: '#523D73',  // Purple for coaches title
+      nameColor: '#1A1A1A',   // Darker for coach names
+      fontWeight: '600',      // Semi-bold
+      zIndex: 10,
+    });
+    // Coaches take less space (fewer people, single column)
+    const coachesHeight = 0.3 + (pageContent.coaches.length * 0.16);
+    currentY += Math.min(coachesHeight, compact ? 0.8 : 1.2);
+  }
+
   // Roster - larger to fill space
   if (pageContent.roster?.length > 0) {
-    currentY += 0.25;
+    currentY += 0.2;
     elements.push({
       type: 'roster',
       title: pageContent.rosterTitle || 'Team Roster:',

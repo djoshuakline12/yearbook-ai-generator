@@ -382,6 +382,7 @@ function renderRoster(el, dpi) {
   const titleFontSize = ptToPx(el.titleFontSize || 11, dpi);
   const nameFontSize = ptToPx(el.nameFontSize || 8, dpi);
   const columns = el.columns || 1;
+  const nameFontWeight = el.fontWeight || '400';
 
   const namesHtml = (el.names || []).map(name =>
     `<span style="display: inline;">${escapeHtml(name)}</span>`
@@ -402,7 +403,7 @@ function renderRoster(el, dpi) {
     <div style="
       font-family: '${el.fontFamily || 'Source Sans Pro'}', sans-serif;
       font-size: ${nameFontSize}px;
-      font-weight: 400;
+      font-weight: ${nameFontWeight};
       color: ${el.nameColor || '#333333'};
       line-height: 1.3;
       column-count: ${columns};
