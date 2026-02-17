@@ -94,7 +94,7 @@ YOUR TASKS:
    - Suggest which content elements should be visually prominent
 
 3. **YEARBOOK BEST PRACTICES**
-   - Section headers should be lowercase or stylized (e.g., "mens soccer" not "MENS SOCCER")
+   - PRESERVE the user's section name capitalization EXACTLY as they typed it (e.g., "Boy's Soccer" stays "Boy's Soccer", NOT "boys soccer")
    - School name should be abbreviated if common (Douglas County → DCHS)
    - Dates should be consistent format
    - Roster names should be formatted consistently (First Last)
@@ -152,6 +152,7 @@ Return ONLY valid JSON in this exact format:
 
 IMPORTANT:
 - Preserve the user's voice and intent - polish, don't rewrite completely
+- NEVER change the capitalization of the section name - use it EXACTLY as provided
 - Don't invent facts, names, or statistics not provided
 - If something is clearly wrong (misspelled name, wrong date), fix it
 - Mark uncertain content with [VERIFY] or [NEEDS INFO]
