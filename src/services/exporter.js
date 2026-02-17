@@ -43,8 +43,8 @@ async function exportToFile(html, format = 'pdf', pageType = 'page') {
     });
 
     await page.setContent(html, {
-      waitUntil: 'networkidle0',
-      timeout: 60000, // Longer timeout for spreads with many photos
+      waitUntil: 'networkidle2',  // Less strict - don't wait for all network to be idle
+      timeout: 90000, // Longer timeout for spreads with many photos at high DPI
     });
 
     // Wait for fonts to load
