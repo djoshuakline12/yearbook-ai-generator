@@ -54,17 +54,17 @@ async function exportToFile(html, format = 'pdf', pageType = 'page') {
 
     await page.setContent(html, {
       waitUntil: 'domcontentloaded',  // Fastest - just wait for DOM, images are base64 embedded
-      timeout: 60000,  // Increased for higher DPI rendering
+      timeout: 90000,  // Increased for 400 DPI rendering
     });
 
     // Wait for fonts to load (with timeout)
     await Promise.race([
       page.evaluate(() => document.fonts.ready),
-      new Promise(r => setTimeout(r, 5000))  // 5s max for fonts
+      new Promise(r => setTimeout(r, 8000))  // 8s max for fonts at high DPI
     ]);
 
     // Brief delay for final rendering
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, 1000));
 
     if (format === 'png') {
       // Use JPEG for faster encoding at high DPI, with high quality

@@ -3,7 +3,7 @@ const PAGE = {
   WIDTH_IN: 8.0,
   HEIGHT_IN: 10.5,
   SPREAD_WIDTH_IN: 16.0,
-  DPI: 350,  // Higher quality for scaling in yearbook editor
+  DPI: 400,  // High quality for scaling in yearbook editor (6400x4200 spread)
   BLEED_IN: 0.125,
   SAFE_MARGIN_IN: 0.75,  // Increased for more print safety (keeps content well away from bleed)
   GUTTER_MARGIN_IN: 0.75,  // Extra space near binding

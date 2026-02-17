@@ -725,6 +725,7 @@ function addTextContent(elements, pageContent, options) {
       fontWeight: '900',
       color: '#1A1A1A',
       textAlign: 'left',
+      textTransform: 'none',  // Preserve user's capitalization
       zIndex: 10,
     });
     currentY += compact ? 0.7 : 0.85;
@@ -810,31 +811,31 @@ function addTextContent(elements, pageContent, options) {
     currentY += compact ? 0.15 : 0.2;
   }
 
-  // Body copy
+  // Body copy - use larger font and more height to fill space
   if (pageContent.bodyCopy) {
-    currentY += 0.15; // Gap before body
+    currentY += 0.2; // Gap before body
     elements.push({
       type: 'bodyCopy',
       text: pageContent.bodyCopy,
       x: startX,
       y: currentY,
       width: width,
-      height: compact ? 2.5 : 4.0,
-      fontSize: compact ? 8 : 9,
+      height: compact ? 3.0 : 4.5,  // Increased height
+      fontSize: compact ? 9 : 10,    // Slightly larger font
       fontFamily: 'Source Sans Pro',
       fontWeight: '400',
       color: '#1A1A1A',
-      lineHeight: 1.4,
+      lineHeight: 1.5,              // More line spacing
       columns: 2,
       textAlign: 'justify',
       zIndex: 10,
     });
-    currentY += compact ? 2.6 : 4.1;
+    currentY += compact ? 3.1 : 4.6;
   }
 
-  // Roster - add if there's room (check if we have space before photos start)
+  // Roster - larger to fill space
   if (pageContent.roster?.length > 0) {
-    currentY += 0.15;
+    currentY += 0.25;
     elements.push({
       type: 'roster',
       title: pageContent.rosterTitle || 'Team Roster:',
@@ -842,18 +843,18 @@ function addTextContent(elements, pageContent, options) {
       x: startX,
       y: currentY,
       width: width,
-      columns: compact ? 3 : 2,
-      titleFontSize: compact ? 9 : 11,
-      nameFontSize: compact ? 6 : 7,
+      columns: compact ? 4 : 3,     // More columns to spread out
+      titleFontSize: compact ? 10 : 12,  // Larger title
+      nameFontSize: compact ? 7 : 8,     // Larger names
       fontFamily: 'Source Sans Pro',
       titleColor: '#1A1A1A',
       nameColor: '#333333',
       zIndex: 10,
     });
     // Estimate roster height based on number of names
-    const namesPerColumn = Math.ceil(pageContent.roster.length / (compact ? 3 : 2));
-    const rosterHeight = 0.25 + (namesPerColumn * 0.12); // title + names
-    currentY += Math.min(rosterHeight, compact ? 1.5 : 2.5);
+    const namesPerColumn = Math.ceil(pageContent.roster.length / (compact ? 4 : 3));
+    const rosterHeight = 0.3 + (namesPerColumn * 0.14); // title + names
+    currentY += Math.min(rosterHeight, compact ? 2.0 : 3.0);
   }
 
   // Return the Y position where text content ends (for photo placement)
