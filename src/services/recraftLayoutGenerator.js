@@ -536,15 +536,31 @@ function buildPhotosDominantLayout(elements, photos, pageContent, bounds) {
 
   const photoCount = photos.length;
 
-  // Helper to get caption for a photo
+  // Helper to get caption for a photo (skip placeholders)
   const getCaption = (index) => {
     const caption = photoCaptions.find(c => c.photoIndex === index) || photoCaptions[index];
     if (caption) {
       let text = '';
-      if (caption.people) text += caption.people;
-      if (caption.people && caption.caption) text += ' — ';
-      if (caption.caption) text += caption.caption;
-      return text || null;
+      const people = caption.people || '';
+      const captionText = caption.caption || '';
+
+      const isPlaceholder = (str) => {
+        if (!str) return true;
+        const lower = str.toLowerCase();
+        return lower.includes('needs info') ||
+               lower.includes('names needed') ||
+               lower.includes('[') ||
+               lower.includes('tbd') ||
+               lower.includes('placeholder') ||
+               lower.includes('error') ||
+               str.trim() === '';
+      };
+
+      if (!isPlaceholder(people)) text += people;
+      if (text && !isPlaceholder(captionText)) text += ' — ';
+      if (!isPlaceholder(captionText)) text += captionText;
+
+      return text.trim() || null;
     }
     return null;
   };
@@ -836,45 +852,126 @@ function buildPhotoGrid(photos, bounds, startIndex = 0, photoCaptions = []) {
     if (caption) {
       // Build caption text: "Person Name - doing something" or just the caption
       let text = '';
-      if (caption.people) text += caption.people;
-      if (caption.people && caption.caption) text += ' — ';
-      if (caption.caption) text += caption.caption;
-      return text || null;
+
+      // Skip placeholder/empty captions
+      const people = caption.people || '';
+      const captionText = caption.caption || '';
+
+      // Check if it's a real caption (not placeholder text)
+      const isPlaceholder = (str) => {
+        if (!str) return true;
+        const lower = str.toLowerCase();
+        return lower.includes('needs info') ||
+               lower.includes('names needed') ||
+               lower.includes('[') ||
+               lower.includes('tbd') ||
+               lower.includes('placeholder') ||
+               str.trim() === '';
+      };
+
+      if (!isPlaceholder(people)) text += people;
+      if (text && !isPlaceholder(captionText)) text += ' — ';
+      if (!isPlaceholder(captionText)) text += captionText;
+
+      return text.trim() || null;
     }
     return null;
   };
 
   if (photoCount === 1) {
+    // Single photo fills the entire space
     elements.push({
       type: 'photo', photoIndex: startIndex,
-      x: startX, y: startY + 0.3,
-      width: availableWidth, height: availableHeight - 0.6,
+      x: startX, y: startY,
+      width: availableWidth, height: availableHeight,
       borderRadius: 0, shadow: false, blackAndWhite: true,
       zIndex: 1, cropFit: 'cover',
       caption: getCaption(startIndex),
     });
   } else if (photoCount === 2) {
-    const w1 = availableWidth * 0.6;
+    // Two photos: large one on top, smaller below (fills full height)
+    const topH = availableHeight * 0.65;
+    const botH = availableHeight - topH - GAP;
     elements.push({
       type: 'photo', photoIndex: startIndex + primaryIdx,
       x: startX, y: startY,
-      width: w1, height: availableHeight * 0.75,
+      width: availableWidth, height: topH,
       borderRadius: 0, shadow: false, blackAndWhite: true,
       zIndex: 1, cropFit: 'cover',
     });
     elements.push({
       type: 'photo', photoIndex: startIndex + (primaryIdx === 0 ? 1 : 0),
-      x: startX + w1 + GAP, y: startY,
-      width: availableWidth - w1 - GAP, height: availableHeight * 0.5,
+      x: startX, y: startY + topH + GAP,
+      width: availableWidth, height: botH,
       borderRadius: 0, shadow: false, blackAndWhite: false,
       zIndex: 2, cropFit: 'cover',
     });
-  } else if (photoCount <= 4) {
-    // Dominant + 2 side + 1 bottom
+  } else if (photoCount === 3) {
+    // Three photos: large one on top, two smaller below (fills full height)
+    const topH = availableHeight * 0.6;
+    const botH = availableHeight - topH - GAP;
+    const botW = (availableWidth - GAP) / 2;
+    elements.push({
+      type: 'photo', photoIndex: startIndex,
+      x: startX, y: startY,
+      width: availableWidth, height: topH,
+      borderRadius: 0, shadow: false, blackAndWhite: true,
+      zIndex: 1, cropFit: 'cover',
+    });
+    elements.push({
+      type: 'photo', photoIndex: startIndex + 1,
+      x: startX, y: startY + topH + GAP,
+      width: botW, height: botH,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 2, cropFit: 'cover',
+    });
+    elements.push({
+      type: 'photo', photoIndex: startIndex + 2,
+      x: startX + botW + GAP, y: startY + topH + GAP,
+      width: botW, height: botH,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 2, cropFit: 'cover',
+    });
+  } else if (photoCount === 4) {
+    // 4 photos: 2x2 grid filling full space
+    const cellW = (availableWidth - GAP) / 2;
+    const cellH = (availableHeight - GAP) / 2;
+
+    elements.push({
+      type: 'photo', photoIndex: startIndex,
+      x: startX, y: startY,
+      width: cellW, height: cellH,
+      borderRadius: 0, shadow: false, blackAndWhite: true,
+      zIndex: 1, cropFit: 'cover',
+    });
+    elements.push({
+      type: 'photo', photoIndex: startIndex + 1,
+      x: startX + cellW + GAP, y: startY,
+      width: cellW, height: cellH,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 1, cropFit: 'cover',
+    });
+    elements.push({
+      type: 'photo', photoIndex: startIndex + 2,
+      x: startX, y: startY + cellH + GAP,
+      width: cellW, height: cellH,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 1, cropFit: 'cover',
+    });
+    elements.push({
+      type: 'photo', photoIndex: startIndex + 3,
+      x: startX + cellW + GAP, y: startY + cellH + GAP,
+      width: cellW, height: cellH,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 1, cropFit: 'cover',
+    });
+  } else if (photoCount <= 6) {
+    // 5-6 photos: large on top left, others fill rest
     const domW = availableWidth * 0.6;
-    const domH = availableHeight * 0.65;
+    const domH = availableHeight * 0.6;
     const sideW = availableWidth - domW - GAP;
     const sideH = (domH - GAP) / 2;
+    const botH = availableHeight - domH - GAP;
 
     elements.push({
       type: 'photo', photoIndex: startIndex,
@@ -884,7 +981,8 @@ function buildPhotoGrid(photos, bounds, startIndex = 0, photoCaptions = []) {
       zIndex: 1, cropFit: 'cover',
     });
 
-    for (let i = 1; i < Math.min(photoCount, 3); i++) {
+    // Side photos (2)
+    for (let i = 1; i <= 2 && i < photoCount; i++) {
       elements.push({
         type: 'photo', photoIndex: startIndex + i,
         x: startX + domW + GAP, y: startY + (i - 1) * (sideH + GAP),
@@ -894,14 +992,19 @@ function buildPhotoGrid(photos, bounds, startIndex = 0, photoCaptions = []) {
       });
     }
 
-    if (photoCount === 4) {
-      elements.push({
-        type: 'photo', photoIndex: startIndex + 3,
-        x: startX, y: startY + domH + GAP,
-        width: availableWidth, height: availableHeight - domH - GAP,
-        borderRadius: 0, shadow: false, blackAndWhite: false,
-        zIndex: 1, cropFit: 'cover',
-      });
+    // Bottom row (up to 3)
+    const botCount = Math.min(photoCount - 3, 3);
+    if (botCount > 0) {
+      const botW = (availableWidth - (botCount - 1) * GAP) / botCount;
+      for (let i = 0; i < botCount; i++) {
+        elements.push({
+          type: 'photo', photoIndex: startIndex + 3 + i,
+          x: startX + i * (botW + GAP), y: startY + domH + GAP,
+          width: botW, height: botH,
+          borderRadius: 0, shadow: false, blackAndWhite: false,
+          zIndex: 1, cropFit: 'cover',
+        });
+      }
     }
   } else if (photoCount <= 8) {
     // Dominant + 3 side + bottom row
