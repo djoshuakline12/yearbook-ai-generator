@@ -3,7 +3,7 @@ const PAGE = {
   WIDTH_IN: 8.0,
   HEIGHT_IN: 10.5,
   SPREAD_WIDTH_IN: 16.0,
-  DPI: 350,  // High quality output (350 DPI) - balances sharpness with render speed
+  DPI: 300,  // Standard print quality - fast and reliable
   BLEED_IN: 0.125,
   SAFE_MARGIN_IN: 0.5,  // Increased from 0.375 for more safety
   GUTTER_MARGIN_IN: 0.625,  // Increased for binding

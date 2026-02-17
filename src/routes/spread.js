@@ -14,7 +14,7 @@ const fs = require('fs').promises;
 
 // Feature flags
 const USE_CONTENT_POLISHING = process.env.USE_CONTENT_POLISHING !== 'false'; // Default ON
-const USE_SMART_CROP = process.env.USE_SMART_CROP !== 'false'; // Default ON
+const USE_SMART_CROP = process.env.USE_SMART_CROP === 'true'; // Default OFF - too slow for production
 
 const router = express.Router();
 

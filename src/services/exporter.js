@@ -43,15 +43,18 @@ async function exportToFile(html, format = 'pdf', pageType = 'page') {
     });
 
     await page.setContent(html, {
-      waitUntil: 'networkidle2',  // Less strict - don't wait for all network to be idle
-      timeout: 90000, // Longer timeout for spreads with many photos at high DPI
+      waitUntil: 'domcontentloaded',  // Fastest - just wait for DOM, images are base64 embedded
+      timeout: 30000,
     });
 
-    // Wait for fonts to load
-    await page.evaluate(() => document.fonts.ready);
+    // Wait for fonts to load (with timeout)
+    await Promise.race([
+      page.evaluate(() => document.fonts.ready),
+      new Promise(r => setTimeout(r, 3000))  // 3s max for fonts
+    ]);
 
-    // Extra delay for rendering complex layouts
-    await new Promise(r => setTimeout(r, 1000));
+    // Brief delay for final rendering
+    await new Promise(r => setTimeout(r, 500));
 
     if (format === 'png') {
       const buffer = await page.screenshot({
