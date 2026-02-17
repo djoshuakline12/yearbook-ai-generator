@@ -147,9 +147,8 @@ function renderPhoto(el, photos, dpi) {
 
   // Smart crop - use focal point for object-position if available
   // This keeps the subject (face/person) in frame when cropping
-  // Default to center 25% (upper quarter) which works well for most yearbook photos with faces
-  // This helps avoid cutting off heads at top and keeps people's faces/upper bodies visible
-  let objectPosition = 'center 25%';
+  // Default to center 30% which balances keeping faces visible without extreme cropping
+  let objectPosition = 'center 30%';
   if (photo.focalPoint) {
     const focalX = Math.round(photo.focalPoint.focalX * 100);
     const focalY = Math.round(photo.focalPoint.focalY * 100);
@@ -217,15 +216,16 @@ function renderSectionHeader(el, dpi) {
   const w = inToPx(el.width, dpi);
   const fontSize = ptToPx(el.fontSize || 28, dpi);
   const letterSpacing = el.letterSpacing ? `${el.letterSpacing * (dpi / 96)}px` : '0';
+  const fontStyle = el.fontStyle || 'normal';  // Don't force italic
 
   return `<div class="element" style="
     left: ${x}px; top: ${y}px;
     width: ${w}px;
     font-family: '${el.fontFamily || 'Playfair Display'}', serif;
     font-size: ${fontSize}px;
-    font-weight: ${el.fontWeight || '300'};
-    font-style: italic;
-    color: ${el.color || '#666666'};
+    font-weight: ${el.fontWeight || '700'};
+    font-style: ${fontStyle};
+    color: ${el.color || '#1A1A1A'};
     text-transform: ${el.textTransform || 'none'};
     letter-spacing: ${letterSpacing};
     z-index: ${el.zIndex || 10};

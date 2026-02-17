@@ -301,7 +301,7 @@ function buildPhotosLeftLayout(elements, photos, pageContent, bounds) {
   });
 
   // Calculate available space for photos on right page
-  const photoStartY = textEndY + 0.2;  // 0.2" gap after text
+  const photoStartY = textEndY + 0.1;  // Small gap after text - let photos fill more space
   const rightPagePhotoSpace = pageHeight - MARGIN - photoStartY;
   const totalPhotoSpace = (pageHeight - 2 * MARGIN) + rightPagePhotoSpace;
 
@@ -362,7 +362,7 @@ function buildPhotosRightLayout(elements, photos, pageContent, bounds) {
   });
 
   // Calculate available space for photos on left page
-  const photoStartY = textEndY + 0.2;  // 0.2" gap after text
+  const photoStartY = textEndY + 0.1;  // Small gap after text - let photos fill more space
   const leftPagePhotoSpace = pageHeight - MARGIN - photoStartY;
   const totalPhotoSpace = leftPagePhotoSpace + (pageHeight - 2 * MARGIN);
 
@@ -833,13 +833,37 @@ function addTextContent(elements, pageContent, options) {
     currentY += compact ? 3.1 : 4.6;
   }
 
+  // Auto-extract coaches from roster if they have "(Coach)" in their name
+  let coaches = pageContent.coaches || [];
+  let rosterNames = pageContent.roster || [];
+
+  // If no explicit coaches list, extract from roster
+  if (coaches.length === 0 && rosterNames.length > 0) {
+    const extractedCoaches = [];
+    const filteredRoster = [];
+
+    for (const name of rosterNames) {
+      if (/\(coach\)/i.test(name)) {
+        // Remove "(Coach)" and clean up the name
+        extractedCoaches.push(name.replace(/\s*\(coach\)\s*/gi, '').trim());
+      } else {
+        filteredRoster.push(name);
+      }
+    }
+
+    if (extractedCoaches.length > 0) {
+      coaches = extractedCoaches;
+      rosterNames = filteredRoster;
+    }
+  }
+
   // Coaches section - separate from roster with bold styling
-  if (pageContent.coaches?.length > 0) {
+  if (coaches.length > 0) {
     currentY += 0.25;
     elements.push({
       type: 'roster',
       title: pageContent.coachesTitle || 'Coaches:',
-      names: pageContent.coaches,
+      names: coaches,
       x: startX,
       y: currentY,
       width: width,
@@ -853,17 +877,17 @@ function addTextContent(elements, pageContent, options) {
       zIndex: 10,
     });
     // Coaches take less space (fewer people, single column)
-    const coachesHeight = 0.3 + (pageContent.coaches.length * 0.16);
+    const coachesHeight = 0.3 + (coaches.length * 0.16);
     currentY += Math.min(coachesHeight, compact ? 0.8 : 1.2);
   }
 
   // Roster - larger to fill space
-  if (pageContent.roster?.length > 0) {
+  if (rosterNames.length > 0) {
     currentY += 0.2;
     elements.push({
       type: 'roster',
       title: pageContent.rosterTitle || 'Team Roster:',
-      names: pageContent.roster,
+      names: rosterNames,
       x: startX,
       y: currentY,
       width: width,
@@ -876,7 +900,7 @@ function addTextContent(elements, pageContent, options) {
       zIndex: 10,
     });
     // Estimate roster height based on number of names
-    const namesPerColumn = Math.ceil(pageContent.roster.length / (compact ? 4 : 3));
+    const namesPerColumn = Math.ceil(rosterNames.length / (compact ? 4 : 3));
     const rosterHeight = 0.3 + (namesPerColumn * 0.14); // title + names
     currentY += Math.min(rosterHeight, compact ? 2.0 : 3.0);
   }
