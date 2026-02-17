@@ -827,6 +827,30 @@ function addTextContent(elements, pageContent, options) {
     currentY += compact ? 2.6 : 4.1;
   }
 
+  // Roster - add if there's room (check if we have space before photos start)
+  if (pageContent.roster?.length > 0) {
+    currentY += 0.15;
+    elements.push({
+      type: 'roster',
+      title: pageContent.rosterTitle || 'Team Roster:',
+      names: pageContent.roster,
+      x: startX,
+      y: currentY,
+      width: width,
+      columns: compact ? 3 : 2,
+      titleFontSize: compact ? 9 : 11,
+      nameFontSize: compact ? 6 : 7,
+      fontFamily: 'Source Sans Pro',
+      titleColor: '#1A1A1A',
+      nameColor: '#333333',
+      zIndex: 10,
+    });
+    // Estimate roster height based on number of names
+    const namesPerColumn = Math.ceil(pageContent.roster.length / (compact ? 3 : 2));
+    const rosterHeight = 0.25 + (namesPerColumn * 0.12); // title + names
+    currentY += Math.min(rosterHeight, compact ? 1.5 : 2.5);
+  }
+
   // Return the Y position where text content ends (for photo placement)
   return currentY;
 }

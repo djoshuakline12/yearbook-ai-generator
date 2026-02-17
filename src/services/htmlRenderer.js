@@ -147,7 +147,8 @@ function renderPhoto(el, photos, dpi) {
 
   // Smart crop - use focal point for object-position if available
   // This keeps the subject (face/person) in frame when cropping
-  let objectPosition = 'center center';
+  // Default to center-top (35%) which works well for most yearbook photos with faces
+  let objectPosition = 'center 35%';
   if (photo.focalPoint) {
     const focalX = Math.round(photo.focalPoint.focalX * 100);
     const focalY = Math.round(photo.focalPoint.focalY * 100);
@@ -160,9 +161,10 @@ function renderPhoto(el, photos, dpi) {
   const base64 = imgData.toString('base64');
 
   // Caption styling - appears BELOW the photo (not overlaid) for readability
-  // Caption sits outside the photo container
+  // Allow up to 2 lines for captions
   const captionFontSize = ptToPx(6.5, dpi);
-  const captionHeight = el.caption ? inToPx(0.25, dpi) : 0;  // Reserve space for caption
+  const captionLineHeight = 1.3;
+  const captionHeight = el.caption ? inToPx(0.45, dpi) : 0;  // Space for ~2 lines of caption
   const photoHeight = h - captionHeight;  // Reduce photo height to make room
 
   const captionHtml = el.caption ? `
@@ -172,15 +174,16 @@ function renderPhoto(el, photos, dpi) {
       left: 0;
       right: 0;
       height: ${captionHeight}px;
-      padding-top: ${inToPx(0.04, dpi)}px;
+      padding-top: ${inToPx(0.05, dpi)}px;
       color: #333333;
       font-family: 'Source Sans Pro', sans-serif;
       font-size: ${captionFontSize}px;
       font-style: italic;
-      line-height: 1.2;
+      line-height: ${captionLineHeight};
       overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
     ">${escapeHtml(el.caption)}</div>
   ` : '';
 

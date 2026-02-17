@@ -82,10 +82,11 @@ Example: {"focalX": 0.5, "focalY": 0.3, "subjectType": "face"}`
     console.error('Smart crop analysis failed:', error.message);
   }
 
-  // Default to center if analysis fails
+  // Default to center-top if analysis fails
+  // Most yearbook photos have faces/subjects in the upper-center area
   return {
     focalX: 0.5,
-    focalY: 0.4, // Slightly above center (faces are usually in upper portion)
+    focalY: 0.35, // Upper third - keeps faces in frame for most photos
     subjectType: 'unknown',
     hasSubject: false,
   };
