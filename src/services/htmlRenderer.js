@@ -145,6 +145,17 @@ function renderPhoto(el, photos, dpi) {
   // Black and white filter for dramatic effect (DCHS style)
   const bwFilter = el.blackAndWhite ? 'filter: grayscale(100%) contrast(1.1);' : '';
 
+  // Smart crop - use focal point for object-position if available
+  // This keeps the subject (face/person) in frame when cropping
+  let objectPosition = 'center center';
+  if (photo.focalPoint) {
+    const focalX = Math.round(photo.focalPoint.focalX * 100);
+    const focalY = Math.round(photo.focalPoint.focalY * 100);
+    objectPosition = `${focalX}% ${focalY}%`;
+  } else if (photo.objectPosition) {
+    objectPosition = photo.objectPosition;
+  }
+
   const imgData = fs.readFileSync(photo.processedPath);
   const base64 = imgData.toString('base64');
 
@@ -160,7 +171,7 @@ function renderPhoto(el, photos, dpi) {
     ${border}
   ">
     <img src="data:image/jpeg;base64,${base64}"
-         style="width: 100%; height: 100%; object-fit: ${el.cropFit || 'cover'}; ${bwFilter}"
+         style="width: 100%; height: 100%; object-fit: ${el.cropFit || 'cover'}; object-position: ${objectPosition}; ${bwFilter}"
          alt="Photo ${el.photoIndex}">
   </div>`;
 }

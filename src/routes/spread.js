@@ -9,10 +9,12 @@ const { MAX_PHOTOS, MAX_FILE_SIZE } = require('../utils/constants');
 const { getTheme, getAllThemes } = require('../utils/themes');
 const { extractThemeFromImage } = require('../services/themeExtractor');
 const { polishContent, needsPolishing } = require('../services/contentPolisher');
+const { analyzePhotosForCropping } = require('../services/smartCrop');
 const fs = require('fs').promises;
 
-// Feature flag for content polishing
+// Feature flags
 const USE_CONTENT_POLISHING = process.env.USE_CONTENT_POLISHING !== 'false'; // Default ON
+const USE_SMART_CROP = process.env.USE_SMART_CROP !== 'false'; // Default ON
 
 const router = express.Router();
 
@@ -140,6 +142,13 @@ router.post('/generate-spread', uploadAny.any(), async (req, res) => {
 
     // 1. Process photos
     photoResults = await processPhotos(req.files);
+
+    // 1b. SMART CROP - Analyze photos for optimal focal points
+    if (USE_SMART_CROP) {
+      console.log('Smart Crop - Analyzing', photoResults.length, 'photos for focal points...');
+      photoResults = await analyzePhotosForCropping(photoResults);
+      console.log('Smart Crop - Analysis complete');
+    }
 
     // 2. CONTENT POLISHING - AI enhances all text before layout
     if (USE_CONTENT_POLISHING) {

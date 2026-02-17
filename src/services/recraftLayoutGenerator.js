@@ -285,14 +285,14 @@ function buildPhotosLeftLayout(elements, photos, pageContent, bounds) {
 
   const photoCount = photos.length;
 
-  // Always reserve at least 1-2 photos for the right page
-  const rightPagePhotoCount = Math.max(1, Math.min(Math.floor(photoCount * 0.25), 4));
+  // Reserve 30-40% of photos for the right page to fill white space
+  const rightPagePhotoCount = Math.max(2, Math.min(Math.ceil(photoCount * 0.35), 6));
   const leftPagePhotoCount = photoCount - rightPagePhotoCount;
 
   const leftPhotos = photos.slice(0, leftPagePhotoCount);
   const rightPhotos = photos.slice(leftPagePhotoCount);
 
-  // LEFT PAGE: Main photos (larger area)
+  // LEFT PAGE: Main photos (full page)
   const leftPhotoElements = buildPhotoGrid(leftPhotos, {
     startX: leftPageStart,
     startY: MARGIN,
@@ -302,22 +302,22 @@ function buildPhotosLeftLayout(elements, photos, pageContent, bounds) {
   }, 0);
   elements.push(...leftPhotoElements);
 
-  // RIGHT PAGE: Text content in upper portion
+  // RIGHT PAGE: Text content in upper portion (more compact)
   addTextContent(elements, pageContent, {
     startX: rightPageStart,
     endX: rightPageEnd,
     width: rightPageWidth,
     pageHeight,
     MARGIN,
-    compact: true  // Use compact text layout to leave room for photos
+    compact: true
   });
 
-  // RIGHT PAGE: Photos in bottom portion (always present)
+  // RIGHT PAGE: Photos filling the bottom half (more space allocated)
   const rightPhotoElements = buildPhotoGrid(rightPhotos, {
     startX: rightPageStart,
-    startY: 7.0,  // Below text content
+    startY: 6.0,  // Start higher to use more space
     maxX: rightPageEnd,
-    maxY: pageHeight - MARGIN - 0.5,
+    maxY: pageHeight - MARGIN,
     GAP
   }, leftPagePhotoCount);
   elements.push(...rightPhotoElements);
@@ -333,14 +333,14 @@ function buildPhotosRightLayout(elements, photos, pageContent, bounds) {
 
   const photoCount = photos.length;
 
-  // Always reserve at least 1-2 photos for the left page
-  const leftPagePhotoCount = Math.max(1, Math.min(Math.floor(photoCount * 0.25), 4));
+  // Reserve 30-40% of photos for the left page to fill white space
+  const leftPagePhotoCount = Math.max(2, Math.min(Math.ceil(photoCount * 0.35), 6));
   const rightPagePhotoCount = photoCount - leftPagePhotoCount;
 
   const leftPhotos = photos.slice(0, leftPagePhotoCount);
   const rightPhotos = photos.slice(leftPagePhotoCount);
 
-  // LEFT PAGE: Text content in upper portion
+  // LEFT PAGE: Text content in upper portion (more compact)
   addTextContent(elements, pageContent, {
     startX: leftPageStart,
     endX: leftPageEnd,
@@ -348,20 +348,20 @@ function buildPhotosRightLayout(elements, photos, pageContent, bounds) {
     pageHeight,
     MARGIN,
     flipped: true,
-    compact: true  // Use compact text layout to leave room for photos
+    compact: true
   });
 
-  // LEFT PAGE: Photos in bottom portion (always present)
+  // LEFT PAGE: Photos filling the bottom half (more space allocated)
   const leftPhotoElements = buildPhotoGrid(leftPhotos, {
     startX: leftPageStart,
-    startY: 7.0,  // Below text content
+    startY: 6.0,  // Start higher to use more space
     maxX: leftPageEnd,
-    maxY: pageHeight - MARGIN - 0.5,
+    maxY: pageHeight - MARGIN,
     GAP
   }, 0);
   elements.push(...leftPhotoElements);
 
-  // RIGHT PAGE: Main photos (larger area)
+  // RIGHT PAGE: Main photos (full page)
   const rightPhotoElements = buildPhotoGrid(rightPhotos, {
     startX: rightPageStart,
     startY: MARGIN,
@@ -644,12 +644,12 @@ function buildPhotosDominantLayout(elements, photos, pageContent, bounds) {
 function addTextContent(elements, pageContent, options) {
   const { startX, endX, width, pageHeight, MARGIN, flipped = false, compact = false } = options;
 
-  // In compact mode, we condense text to leave room for photos below
-  const schoolNameSize = compact ? 54 : 72;
-  const headlineY = compact ? 1.7 : 2.0;
-  const bodyY = compact ? 2.8 : 3.3;
-  const bodyHeight = compact ? 3.2 : 4.5;
-  const rosterY = compact ? 6.2 : 8.0;
+  // In compact mode, we condense text significantly to leave room for photos below
+  const schoolNameSize = compact ? 48 : 72;
+  const headlineY = compact ? 1.5 : 2.0;
+  const bodyY = compact ? 2.4 : 3.3;
+  const bodyHeight = compact ? 2.8 : 4.5;
+  const rosterY = compact ? 5.4 : 8.0;
 
   // Section header
   if (pageContent.section) {
