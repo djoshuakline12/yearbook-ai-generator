@@ -276,75 +276,100 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
 }
 
 // =============================================================================
-// LAYOUT: PHOTOS LEFT (Traditional - photos on left, text on right)
+// LAYOUT: PHOTOS LEFT (Photos primarily left, but ALWAYS some on right too)
 // =============================================================================
 function buildPhotosLeftLayout(elements, photos, pageContent, bounds) {
   const { leftPageStart, leftPageEnd, leftPageWidth,
           rightPageStart, rightPageEnd, rightPageWidth,
           pageHeight, MARGIN, GAP } = bounds;
 
-  // RIGHT PAGE: Text content
-  addTextContent(elements, pageContent, {
-    startX: rightPageStart,
-    endX: rightPageEnd,
-    width: rightPageWidth,
-    pageHeight,
-    MARGIN
-  });
+  const photoCount = photos.length;
 
-  // LEFT PAGE: Photos
-  const photoElements = buildPhotoGrid(photos, {
+  // Always reserve at least 1-2 photos for the right page
+  const rightPagePhotoCount = Math.max(1, Math.min(Math.floor(photoCount * 0.25), 4));
+  const leftPagePhotoCount = photoCount - rightPagePhotoCount;
+
+  const leftPhotos = photos.slice(0, leftPagePhotoCount);
+  const rightPhotos = photos.slice(leftPagePhotoCount);
+
+  // LEFT PAGE: Main photos (larger area)
+  const leftPhotoElements = buildPhotoGrid(leftPhotos, {
     startX: leftPageStart,
     startY: MARGIN,
     maxX: leftPageEnd,
     maxY: pageHeight - MARGIN,
     GAP
-  });
-  elements.push(...photoElements);
+  }, 0);
+  elements.push(...leftPhotoElements);
 
-  // Overflow photos to right page if needed
-  addOverflowPhotos(elements, photos, photoElements, pageContent, {
+  // RIGHT PAGE: Text content in upper portion
+  addTextContent(elements, pageContent, {
     startX: rightPageStart,
+    endX: rightPageEnd,
     width: rightPageWidth,
-    GAP
+    pageHeight,
+    MARGIN,
+    compact: true  // Use compact text layout to leave room for photos
   });
+
+  // RIGHT PAGE: Photos in bottom portion (always present)
+  const rightPhotoElements = buildPhotoGrid(rightPhotos, {
+    startX: rightPageStart,
+    startY: 7.0,  // Below text content
+    maxX: rightPageEnd,
+    maxY: pageHeight - MARGIN - 0.5,
+    GAP
+  }, leftPagePhotoCount);
+  elements.push(...rightPhotoElements);
 }
 
 // =============================================================================
-// LAYOUT: PHOTOS RIGHT (Flipped - text on left, photos on right)
+// LAYOUT: PHOTOS RIGHT (Photos primarily right, but ALWAYS some on left too)
 // =============================================================================
 function buildPhotosRightLayout(elements, photos, pageContent, bounds) {
   const { leftPageStart, leftPageEnd, leftPageWidth,
           rightPageStart, rightPageEnd, rightPageWidth,
           pageHeight, MARGIN, GAP } = bounds;
 
-  // LEFT PAGE: Text content
+  const photoCount = photos.length;
+
+  // Always reserve at least 1-2 photos for the left page
+  const leftPagePhotoCount = Math.max(1, Math.min(Math.floor(photoCount * 0.25), 4));
+  const rightPagePhotoCount = photoCount - leftPagePhotoCount;
+
+  const leftPhotos = photos.slice(0, leftPagePhotoCount);
+  const rightPhotos = photos.slice(leftPagePhotoCount);
+
+  // LEFT PAGE: Text content in upper portion
   addTextContent(elements, pageContent, {
     startX: leftPageStart,
     endX: leftPageEnd,
     width: leftPageWidth,
     pageHeight,
     MARGIN,
-    flipped: true
+    flipped: true,
+    compact: true  // Use compact text layout to leave room for photos
   });
 
-  // RIGHT PAGE: Photos
-  const photoElements = buildPhotoGrid(photos, {
+  // LEFT PAGE: Photos in bottom portion (always present)
+  const leftPhotoElements = buildPhotoGrid(leftPhotos, {
+    startX: leftPageStart,
+    startY: 7.0,  // Below text content
+    maxX: leftPageEnd,
+    maxY: pageHeight - MARGIN - 0.5,
+    GAP
+  }, 0);
+  elements.push(...leftPhotoElements);
+
+  // RIGHT PAGE: Main photos (larger area)
+  const rightPhotoElements = buildPhotoGrid(rightPhotos, {
     startX: rightPageStart,
     startY: MARGIN,
     maxX: rightPageEnd,
     maxY: pageHeight - MARGIN,
     GAP
-  });
-  elements.push(...photoElements);
-
-  // Overflow photos to left page if needed
-  addOverflowPhotos(elements, photos, photoElements, pageContent, {
-    startX: leftPageStart,
-    width: leftPageWidth,
-    GAP,
-    flipped: true
-  });
+  }, leftPagePhotoCount);
+  elements.push(...rightPhotoElements);
 }
 
 // =============================================================================
@@ -617,7 +642,14 @@ function buildPhotosDominantLayout(elements, photos, pageContent, bounds) {
 // HELPER: Add text content to a page
 // =============================================================================
 function addTextContent(elements, pageContent, options) {
-  const { startX, endX, width, pageHeight, MARGIN, flipped = false } = options;
+  const { startX, endX, width, pageHeight, MARGIN, flipped = false, compact = false } = options;
+
+  // In compact mode, we condense text to leave room for photos below
+  const schoolNameSize = compact ? 54 : 72;
+  const headlineY = compact ? 1.7 : 2.0;
+  const bodyY = compact ? 2.8 : 3.3;
+  const bodyHeight = compact ? 3.2 : 4.5;
+  const rosterY = compact ? 6.2 : 8.0;
 
   // Section header
   if (pageContent.section) {
@@ -627,7 +659,7 @@ function addTextContent(elements, pageContent, options) {
       x: flipped ? startX : endX - 2.5,
       y: 0.4,
       width: 2.3,
-      fontSize: 36,
+      fontSize: compact ? 28 : 36,
       fontFamily: 'Dancing Script',
       fontWeight: '400',
       fontStyle: 'italic',
@@ -644,9 +676,9 @@ function addTextContent(elements, pageContent, options) {
       type: 'schoolName',
       text: pageContent.schoolName,
       x: startX,
-      y: 1.0,
+      y: compact ? 0.9 : 1.0,
       width: 4,
-      fontSize: 72,
+      fontSize: schoolNameSize,
       fontFamily: 'Playfair Display',
       fontWeight: '900',
       color: '#1A1A1A',
@@ -661,9 +693,9 @@ function addTextContent(elements, pageContent, options) {
       type: 'headline',
       text: pageContent.headline,
       x: startX,
-      y: 2.0,
+      y: headlineY,
       width: width * 0.65,
-      fontSize: 18,
+      fontSize: compact ? 14 : 18,
       fontFamily: 'Playfair Display',
       fontWeight: '700',
       color: '#FFFFFF',
@@ -678,9 +710,9 @@ function addTextContent(elements, pageContent, options) {
       type: 'record',
       text: pageContent.record,
       x: startX,
-      y: 2.6,
+      y: headlineY + 0.6,
       width: 1.8,
-      fontSize: 14,
+      fontSize: compact ? 12 : 14,
       fontFamily: 'Playfair Display',
       fontWeight: '700',
       color: '#FFFFFF',
@@ -695,9 +727,9 @@ function addTextContent(elements, pageContent, options) {
       type: 'date',
       text: pageContent.dateOrYear,
       x: startX + 2.2,
-      y: 2.6,
+      y: headlineY + 0.6,
       width: 2,
-      fontSize: 14,
+      fontSize: compact ? 12 : 14,
       fontFamily: 'Playfair Display',
       fontWeight: '700',
       color: '#1A1A1A',
@@ -712,10 +744,10 @@ function addTextContent(elements, pageContent, options) {
       type: 'bodyCopy',
       text: pageContent.bodyCopy,
       x: startX,
-      y: 3.3,
+      y: bodyY,
       width: width,
-      height: 4.5,
-      fontSize: 9,
+      height: bodyHeight,
+      fontSize: compact ? 8 : 9,
       fontFamily: 'Source Sans Pro',
       fontWeight: '400',
       color: '#1A1A1A',
@@ -726,18 +758,18 @@ function addTextContent(elements, pageContent, options) {
     });
   }
 
-  // Roster
-  if (pageContent.roster?.length > 0) {
+  // Roster (only in non-compact mode, or if no body copy in compact mode)
+  if (pageContent.roster?.length > 0 && (!compact || !pageContent.bodyCopy)) {
     elements.push({
       type: 'roster',
       title: pageContent.rosterTitle || 'Team Roster:',
       names: pageContent.roster,
       x: startX,
-      y: 8.0,
+      y: rosterY,
       width: width,
-      columns: 2,
-      titleFontSize: 12,
-      nameFontSize: 7,
+      columns: compact ? 3 : 2,
+      titleFontSize: compact ? 10 : 12,
+      nameFontSize: compact ? 6 : 7,
       fontFamily: 'Source Sans Pro',
       titleColor: '#1A1A1A',
       nameColor: '#333333',
@@ -936,64 +968,6 @@ function buildPhotoGrid(photos, bounds, startIndex = 0) {
   }
 
   return elements;
-}
-
-// =============================================================================
-// HELPER: Add overflow photos to the opposite page
-// =============================================================================
-function addOverflowPhotos(elements, allPhotos, placedPhotoElements, pageContent, options) {
-  const { startX, width, GAP, flipped = false } = options;
-
-  const usedIndices = new Set(placedPhotoElements.map(e => e.photoIndex));
-  const remainingPhotos = allPhotos.filter((_, i) => !usedIndices.has(i));
-
-  if (remainingPhotos.length === 0) return;
-
-  const hasLongBody = pageContent.bodyCopy && pageContent.bodyCopy.length > 800;
-  let currentY = hasLongBody ? 7.8 : 7.2;
-
-  // Row 1
-  const row1Count = Math.min(remainingPhotos.length, 4);
-  const row1W = (width - (row1Count - 1) * GAP) / row1Count;
-  const row1H = 1.6;
-
-  for (let i = 0; i < row1Count; i++) {
-    const actualIdx = allPhotos.indexOf(remainingPhotos[i]);
-    elements.push({
-      type: 'photo', photoIndex: actualIdx,
-      x: startX + i * (row1W + GAP), y: currentY,
-      width: row1W, height: row1H,
-      borderRadius: 0, shadow: false, blackAndWhite: false,
-      zIndex: 1, cropFit: 'cover',
-    });
-  }
-  currentY += row1H + GAP;
-
-  // Row 2 if space
-  const row2Photos = remainingPhotos.slice(row1Count);
-  if (row2Photos.length > 0 && currentY < 9.5) {
-    const row2Count = Math.min(row2Photos.length, 4);
-    const row2W = (width - (row2Count - 1) * GAP) / row2Count;
-    const row2H = 1.4;
-
-    for (let i = 0; i < row2Count; i++) {
-      const actualIdx = allPhotos.indexOf(row2Photos[i]);
-      elements.push({
-        type: 'photo', photoIndex: actualIdx,
-        x: startX + i * (row2W + GAP), y: currentY,
-        width: row2W, height: row2H,
-        borderRadius: 0, shadow: false, blackAndWhite: false,
-        zIndex: 1, cropFit: 'cover',
-      });
-    }
-    currentY += row2H + GAP;
-  }
-
-  // Adjust roster if needed
-  const roster = elements.find(e => e.type === 'roster');
-  if (roster && currentY > roster.y - 0.3) {
-    roster.y = Math.min(currentY + 0.1, 9.8);
-  }
 }
 
 // =============================================================================
