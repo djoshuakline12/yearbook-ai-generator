@@ -208,10 +208,10 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
   const photoCaptions = pageContent.photoCaptions || [];
 
   const elements = [];
-  const MARGIN = 0.5;  // Increased margin for print safety (0.5" = 1/2 inch)
+  const MARGIN = 0.625;  // Increased margin for print safety - keeps content away from bleed zone
   const GUTTER = isSpread ? pageWidth / 2 : 0;
-  const GUTTER_MARGIN = 0.625;  // Extra space near gutter for binding
-  const GAP = 0.125;  // Slightly tighter gaps between photos
+  const GUTTER_MARGIN = 0.75;  // Extra space near gutter for binding
+  const GAP = 0.125;  // Gaps between photos
 
   if (isSpread) {
     const leftPageStart = MARGIN;
