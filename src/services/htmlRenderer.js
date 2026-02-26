@@ -3,13 +3,18 @@ const { PAGE } = require('../utils/constants');
 
 /**
  * Convert layout JSON + processed photos into an HTML string
- * suitable for Puppeteer rendering at 300 DPI.
+ * suitable for Puppeteer rendering.
+ *
+ * @param {object} layout - Layout JSON with elements array
+ * @param {array} photos - Photo objects (with processedPath or base64)
+ * @param {object} options - Optional overrides
+ * @param {number} options.dpi - DPI override (default: PAGE.DPI)
  */
-function renderLayoutToHtml(layout, photos) {
+function renderLayoutToHtml(layout, photos, { dpi: dpiOverride } = {}) {
   const isSpread = layout.pageType === 'spread';
-  const widthPx = isSpread ? PAGE.SPREAD_WIDTH_PX : PAGE.WIDTH_PX;
-  const heightPx = PAGE.HEIGHT_PX;
-  const dpi = PAGE.DPI;
+  const dpi = dpiOverride || PAGE.DPI;
+  const widthPx = Math.round((isSpread ? PAGE.SPREAD_WIDTH_IN : PAGE.WIDTH_IN) * dpi);
+  const heightPx = Math.round(PAGE.HEIGHT_IN * dpi);
 
   const backgroundCss = buildBackgroundCss(layout.background);
   const elementHtmls = layout.elements
@@ -157,8 +162,14 @@ function renderPhoto(el, photos, dpi) {
     objectPosition = photo.objectPosition;
   }
 
-  const imgData = fs.readFileSync(photo.processedPath);
-  const base64 = imgData.toString('base64');
+  // Support both file-based photos (processedPath) and session-stored photos (base64)
+  let base64;
+  if (photo.base64) {
+    base64 = photo.base64;
+  } else {
+    const imgData = fs.readFileSync(photo.processedPath);
+    base64 = imgData.toString('base64');
+  }
 
   // Caption styling - appears BELOW the photo (not overlaid) for readability
   // Allow up to 2 lines for captions

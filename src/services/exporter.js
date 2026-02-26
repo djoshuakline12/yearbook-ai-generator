@@ -2,17 +2,31 @@ const puppeteer = require('puppeteer');
 const { PAGE } = require('../utils/constants');
 
 /**
- * Render HTML to a 300 DPI PNG or PDF using Puppeteer.
+ * Render HTML to PNG/JPEG or PDF using Puppeteer.
+ *
  * @param {string} html - The HTML content to render
  * @param {string} format - 'pdf' or 'png'
  * @param {string} pageType - 'page' (single) or 'spread' (double)
+ * @param {object} options - Quality options
+ * @param {string} options.quality - 'standard' (fast JPEG) or 'final' (lossless PNG)
+ * @param {number} options.dpi - DPI override for pixel dimensions
  */
-async function exportToFile(html, format = 'pdf', pageType = 'page') {
+async function exportToFile(html, format = 'pdf', pageType = 'page', options = {}) {
+  const { quality = 'standard', dpi = PAGE.DPI } = options;
+  const isFinal = quality === 'final';
+
   const isSpread = pageType === 'spread';
-  const widthPx = isSpread ? PAGE.SPREAD_WIDTH_PX : PAGE.WIDTH_PX;
-  const heightPx = PAGE.HEIGHT_PX;
+  const widthPx = Math.round((isSpread ? PAGE.SPREAD_WIDTH_IN : PAGE.WIDTH_IN) * dpi);
+  const heightPx = Math.round(PAGE.HEIGHT_IN * dpi);
   const widthIn = isSpread ? PAGE.SPREAD_WIDTH_IN : PAGE.WIDTH_IN;
   const heightIn = PAGE.HEIGHT_IN;
+
+  const memoryMb = isFinal ? 2048 : 1024;
+  const contentTimeout = isFinal ? 300000 : 120000;  // 5 min for final, 2 min for standard
+  const fontTimeout = isFinal ? 15000 : 10000;
+  const renderDelay = isFinal ? 3000 : 1500;
+
+  console.log(`Export: ${quality} quality, ${dpi} DPI, ${widthPx}x${heightPx}px, format=${format}`);
 
   const launchOptions = {
     headless: 'new',
@@ -30,8 +44,7 @@ async function exportToFile(html, format = 'pdf', pageType = 'page') {
       '--mute-audio',
       '--no-first-run',
       '--safebrowsing-disable-auto-update',
-      // Memory allocation for large high-DPI renders
-      '--js-flags=--max-old-space-size=1024',
+      `--js-flags=--max-old-space-size=${memoryMb}`,
     ],
   };
 
@@ -53,31 +66,35 @@ async function exportToFile(html, format = 'pdf', pageType = 'page') {
     });
 
     await page.setContent(html, {
-      waitUntil: 'domcontentloaded',  // Fastest - just wait for DOM, images are base64 embedded
-      timeout: 120000,  // Increased for 450 DPI rendering
+      waitUntil: 'domcontentloaded',
+      timeout: contentTimeout,
     });
 
     // Wait for fonts to load (with timeout)
     await Promise.race([
       page.evaluate(() => document.fonts.ready),
-      new Promise(r => setTimeout(r, 10000))  // 10s max for fonts at high DPI
+      new Promise(r => setTimeout(r, fontTimeout))
     ]);
 
-    // Brief delay for final rendering
-    await new Promise(r => setTimeout(r, 1500));
+    // Delay for final rendering
+    await new Promise(r => setTimeout(r, renderDelay));
 
     if (format === 'png') {
-      // Use JPEG for faster encoding at high DPI, with high quality
-      // PNG is slow for large images; JPEG at 98% quality preserves text sharpness
+      if (isFinal) {
+        // Final quality: true lossless PNG
+        const buffer = await page.screenshot({
+          type: 'png',
+          clip: { x: 0, y: 0, width: widthPx, height: heightPx },
+          omitBackground: false,
+        });
+        return { buffer, mimeType: 'image/png', extension: 'png' };
+      }
+
+      // Standard quality: fast JPEG
       const buffer = await page.screenshot({
         type: 'jpeg',
         quality: 98,
-        clip: {
-          x: 0,
-          y: 0,
-          width: widthPx,
-          height: heightPx,
-        },
+        clip: { x: 0, y: 0, width: widthPx, height: heightPx },
         omitBackground: false,
       });
       return { buffer, mimeType: 'image/jpeg', extension: 'jpg' };

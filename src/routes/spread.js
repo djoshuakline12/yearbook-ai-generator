@@ -5,11 +5,13 @@ const { processPhotos, cleanupFiles } = require('../services/imageProcessor');
 const { generateLayout } = require('../services/layoutGenerator');
 const { renderLayoutToHtml } = require('../services/htmlRenderer');
 const { exportToFile } = require('../services/exporter');
-const { MAX_PHOTOS, MAX_FILE_SIZE } = require('../utils/constants');
+const { MAX_PHOTOS, MAX_FILE_SIZE, PAGE } = require('../utils/constants');
 const { getTheme, getAllThemes } = require('../utils/themes');
 const { extractThemeFromImage } = require('../services/themeExtractor');
 const { polishContent, needsPolishing } = require('../services/contentPolisher');
 const { analyzePhotosForCropping } = require('../services/smartCrop');
+const { createSession, getSession, updateLayout, getActiveCount } = require('../services/sessionStore');
+const { modifyLayout } = require('../services/layoutModifier');
 const fs = require('fs').promises;
 
 // Feature flags
@@ -190,18 +192,23 @@ router.post('/generate-spread', uploadAny.any(), async (req, res) => {
       pageType,
     });
 
-    // 3. Render to HTML
+    // 4. Create session (stores photos as base64 before cleanup)
+    const sessionId = createSession(photoResults, layout, pageContent, theme, pageType);
+
+    // 5. Render to HTML
     const html = renderLayoutToHtml(layout, photoResults);
 
-    // 4. Export to PDF/PNG
+    // 6. Export to PDF/PNG
     const result = await exportToFile(html, format, pageType);
 
-    // 5. Send the file
+    // 7. Send the file with session ID for chatbot modifications
     const filename = `${slugify(pageContent.section || pageContent.headline || 'yearbook')}-page.${result.extension}`;
     res.set({
       'Content-Type': result.mimeType,
       'Content-Disposition': `attachment; filename="${filename}"`,
       'Content-Length': result.buffer.length,
+      'X-Session-Id': sessionId,
+      'Access-Control-Expose-Headers': 'X-Session-Id',
     });
     res.send(result.buffer);
   } catch (err) {
@@ -454,5 +461,149 @@ function detectPageCategory(pageContent) {
   // Default
   return 'general';
 }
+
+// =============================================================================
+// CHATBOT: Modify layout via natural language
+// =============================================================================
+
+/**
+ * POST /api/modify-layout
+ * Modify an existing layout using natural language instructions.
+ *
+ * Request body (JSON):
+ * - sessionId: Session ID from generate-spread response header
+ * - message: Natural language modification (e.g., "make the title bigger")
+ * - format: "png" or "pdf" (default: "png")
+ */
+router.post('/modify-layout', express.json(), async (req, res) => {
+  try {
+    const { sessionId, message, format = 'png' } = req.body;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required.' });
+    }
+    if (!message) {
+      return res.status(400).json({ error: 'message is required.' });
+    }
+
+    // Load session
+    const session = getSession(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found or expired. Generate a new spread first.' });
+    }
+
+    console.log(`Modify layout [${sessionId}]: "${message}"`);
+
+    // Modify layout with AI
+    const modifiedLayout = await modifyLayout(
+      session.layout,
+      message,
+      session.theme,
+      session.pageType
+    );
+
+    // Update session with new layout
+    updateLayout(sessionId, modifiedLayout);
+
+    // Re-render with session photos
+    const html = renderLayoutToHtml(modifiedLayout, session.photos);
+    const result = await exportToFile(html, format, session.pageType);
+
+    // Return JSON with image data and updated layout
+    res.json({
+      sessionId,
+      layout: modifiedLayout,
+      imageBase64: result.buffer.toString('base64'),
+      mimeType: result.mimeType,
+      message: 'Layout modified successfully.',
+    });
+  } catch (err) {
+    console.error('Modify layout error:', err);
+    res.status(500).json({ error: 'Failed to modify layout.', details: err.message });
+  }
+});
+
+// =============================================================================
+// FINAL EXPORT: Ultra-high quality download
+// =============================================================================
+
+/**
+ * POST /api/export-final
+ * Export the current session layout at maximum quality.
+ *
+ * Request body (JSON):
+ * - sessionId: Session ID
+ * - format: "png" or "pdf" (default: "png")
+ * - dpi: DPI override (default: 600, max: 1200)
+ */
+router.post('/export-final', express.json(), async (req, res) => {
+  try {
+    const { sessionId, format = 'png', dpi: requestedDpi } = req.body;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required.' });
+    }
+
+    const session = getSession(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found or expired. Generate a new spread first.' });
+    }
+
+    // Validate and clamp DPI
+    const dpi = Math.min(
+      Math.max(requestedDpi || PAGE.FINAL_DPI, PAGE.DPI),
+      PAGE.MAX_DPI
+    );
+
+    console.log(`Final export [${sessionId}]: ${dpi} DPI, format=${format}`);
+
+    // Re-render HTML at final DPI
+    const html = renderLayoutToHtml(session.layout, session.photos, { dpi });
+
+    // Export at final quality (true PNG, higher DPI)
+    const result = await exportToFile(html, format, session.pageType, {
+      quality: 'final',
+      dpi,
+    });
+
+    // Send as file download
+    const section = session.pageContent?.section || session.pageContent?.headline || 'yearbook';
+    const filename = `${slugify(section)}-final.${result.extension}`;
+    res.set({
+      'Content-Type': result.mimeType,
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': result.buffer.length,
+    });
+    res.send(result.buffer);
+  } catch (err) {
+    console.error('Final export error:', err);
+    res.status(500).json({ error: 'Failed to export final quality.', details: err.message });
+  }
+});
+
+// =============================================================================
+// SESSION: Check session status
+// =============================================================================
+
+/**
+ * GET /api/session/:id
+ * Check if a session is still active and get its metadata.
+ */
+router.get('/session/:id', (req, res) => {
+  const session = getSession(req.params.id);
+  if (!session) {
+    return res.status(404).json({ error: 'Session not found or expired.' });
+  }
+
+  res.json({
+    sessionId: session.id,
+    createdAt: session.createdAt,
+    expiresAt: session.createdAt + 30 * 60 * 1000,
+    photoCount: session.photos.length,
+    pageType: session.pageType,
+    section: session.pageContent?.section || null,
+    activeSessions: getActiveCount(),
+  });
+});
 
 module.exports = router;
