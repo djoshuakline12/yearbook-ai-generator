@@ -759,7 +759,7 @@ function buildMixedLeftLayout(elements, photos, pageContent, bounds) {
       textTransform: 'none',
       zIndex: 10,
     });
-    leftY += 0.75;
+    leftY += 1.0;  // Extra space for large title text
   }
 
   // School name on left
@@ -969,7 +969,7 @@ function buildMagazineLayout(elements, photos, pageContent, bounds) {
       textTransform: 'none',
       zIndex: 10,
     });
-    leftY += 0.85;
+    leftY += 1.1;  // Extra space for large title text
   }
 
   if (pageContent.schoolName) {
@@ -1176,7 +1176,7 @@ function buildMixedRightLayout(elements, photos, pageContent, bounds) {
       fontSize: 48, fontFamily: 'Playfair Display', fontWeight: '900',
       color: '#1A1A1A', textAlign: 'right', textTransform: 'none', zIndex: 10,
     });
-    rightY += 0.75;
+    rightY += 1.0;  // Extra space for large title text
   }
   if (pageContent.schoolName) {
     elements.push({
@@ -1246,7 +1246,7 @@ function buildTopHeavyLayout(elements, photos, pageContent, bounds) {
       fontSize: 42, fontFamily: 'Playfair Display', fontWeight: '900',
       color: '#1A1A1A', textAlign: 'left', textTransform: 'none', zIndex: 10,
     });
-    leftY += 0.65;
+    leftY += 0.9;  // Extra space for large title text
   }
   if (pageContent.schoolName) {
     elements.push({
@@ -1475,7 +1475,7 @@ function buildStaggeredLayout(elements, photos, pageContent, bounds) {
       fontSize: 48, fontFamily: 'Playfair Display', fontWeight: '900',
       color: '#1A1A1A', textAlign: 'left', textTransform: 'none', zIndex: 10,
     });
-    rightY += 0.75;
+    rightY += 1.0;  // Extra space for large title text
   }
   if (pageContent.schoolName) {
     elements.push({
