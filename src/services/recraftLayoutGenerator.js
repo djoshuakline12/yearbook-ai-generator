@@ -146,48 +146,51 @@ async function generateHybridLayout({ photos, pageContent, theme, pageType = 'pa
 }
 
 /**
- * Choose a layout template based on content characteristics
+ * Choose a layout template based on content characteristics.
+ * Uses content hash for deterministic but varied selection.
  */
 function chooseLayoutTemplate(pageContent, photoCount) {
-  // Create a semi-random but deterministic choice based on content
+  // Hash includes all content for maximum variety between pages
   const contentHash = hashString(
     (pageContent.section || '') +
     (pageContent.headline || '') +
+    (pageContent.bodyCopy || '').slice(0, 50) +
+    (pageContent.schoolName || '') +
     photoCount
   );
 
-  // Different layouts work better for different scenarios
   const hasLongBody = pageContent.bodyCopy && pageContent.bodyCopy.length > 500;
-  const hasRoster = pageContent.roster && pageContent.roster.length > 10;
-  const manyPhotos = photoCount > 8;
   const fewPhotos = photoCount <= 4;
 
-  // Weight the options based on content — aim for variety
+  // Build list of ALL eligible templates for this content
   const options = [];
 
-  // Classic layouts
+  // These work for any content
   options.push('photos-left');
   options.push('photos-right');
-
-  // Mixed layout: title+photos on left, body+photos on right
   options.push('mixed-left');
+  options.push('mixed-right');
+  options.push('top-heavy');
+  options.push('sidebar-left');
+  options.push('sidebar-right');
 
-  // Magazine: hero photo with title overlay, text and photos mixed
+  // Need 3+ photos
   if (photoCount >= 3) {
     options.push('magazine');
+    options.push('L-shape');
+    options.push('staggered');
   }
 
-  // Balanced works when we have moderate photos and text
+  // Moderate photos
   if (!hasLongBody && photoCount >= 4 && photoCount <= 10) {
     options.push('photos-balanced');
   }
 
-  // Dominant works great for few photos
+  // Few photos - hero style
   if (fewPhotos && !hasLongBody) {
     options.push('photos-dominant');
   }
 
-  // Use content hash to pick from weighted options
   return options[contentHash % options.length];
 }
 
@@ -250,8 +253,26 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
       case 'mixed-left':
         buildMixedLeftLayout(elements, photos, pageContent, bounds);
         break;
+      case 'mixed-right':
+        buildMixedRightLayout(elements, photos, pageContent, bounds);
+        break;
       case 'magazine':
         buildMagazineLayout(elements, photos, pageContent, bounds);
+        break;
+      case 'top-heavy':
+        buildTopHeavyLayout(elements, photos, pageContent, bounds);
+        break;
+      case 'sidebar-left':
+        buildSidebarLayout(elements, photos, pageContent, bounds, 'left');
+        break;
+      case 'sidebar-right':
+        buildSidebarLayout(elements, photos, pageContent, bounds, 'right');
+        break;
+      case 'L-shape':
+        buildLShapeLayout(elements, photos, pageContent, bounds);
+        break;
+      case 'staggered':
+        buildStaggeredLayout(elements, photos, pageContent, bounds);
         break;
       default:
         buildPhotosLeftLayout(elements, photos, pageContent, bounds);
@@ -1090,6 +1111,511 @@ function buildMagazineLayout(elements, photos, pageContent, bounds) {
       nameColor: '#333333', zIndex: 10,
     });
   }
+}
+
+// =============================================================================
+// LAYOUT: MIXED RIGHT (Mirror of mixed-left: body+photos left, title+photos right)
+// =============================================================================
+function buildMixedRightLayout(elements, photos, pageContent, bounds) {
+  const { leftPageStart, leftPageEnd, leftPageWidth,
+          rightPageStart, rightPageEnd, rightPageWidth,
+          pageHeight, MARGIN, GAP, photoCaptions = [] } = bounds;
+
+  const photoCount = photos.length;
+
+  // LEFT PAGE: Photos on top, body copy + roster below
+  const leftPhotoCount = Math.ceil(photoCount * 0.5);
+  const leftPhotos = photos.slice(0, leftPhotoCount);
+  const leftPhotoHeight = (pageHeight - 2 * MARGIN) * 0.55;
+
+  if (leftPhotos.length > 0) {
+    const leftPhotoElements = buildPhotoGrid(leftPhotos, {
+      startX: leftPageStart, startY: MARGIN,
+      maxX: leftPageEnd, maxY: MARGIN + leftPhotoHeight, GAP
+    }, 0, photoCaptions);
+    elements.push(...leftPhotoElements);
+  }
+
+  let leftY = MARGIN + leftPhotoHeight + 0.2;
+  if (pageContent.bodyCopy) {
+    elements.push({
+      type: 'bodyCopy', text: pageContent.bodyCopy,
+      x: leftPageStart, y: leftY, width: leftPageWidth, height: 2.5,
+      fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#1A1A1A', lineHeight: 1.5, columns: 2, textAlign: 'justify', zIndex: 10,
+    });
+    leftY += 2.6;
+  }
+
+  const { coaches, rosterNames } = extractCoaches(pageContent);
+  if (coaches.length > 0) {
+    elements.push({
+      type: 'roster', title: pageContent.coachesTitle || 'Coaches:',
+      names: coaches, x: leftPageStart, y: leftY, width: leftPageWidth,
+      columns: 1, titleFontSize: 10, nameFontSize: 8,
+      fontFamily: 'Source Sans Pro', titleColor: '#523D73',
+      nameColor: '#1A1A1A', fontWeight: '600', zIndex: 10,
+    });
+    leftY += 0.3 + (coaches.length * 0.16);
+  }
+  if (rosterNames.length > 0) {
+    elements.push({
+      type: 'roster', title: pageContent.rosterTitle || 'Team Roster:',
+      names: rosterNames, x: leftPageStart, y: leftY, width: leftPageWidth,
+      columns: 4, titleFontSize: 10, nameFontSize: 7,
+      fontFamily: 'Source Sans Pro', titleColor: '#1A1A1A', nameColor: '#333333', zIndex: 10,
+    });
+  }
+
+  // RIGHT PAGE: Title block at top + photos below
+  let rightY = MARGIN;
+  if (pageContent.section) {
+    elements.push({
+      type: 'sectionHeader', text: pageContent.section,
+      x: rightPageStart, y: rightY, width: rightPageWidth,
+      fontSize: 48, fontFamily: 'Playfair Display', fontWeight: '900',
+      color: '#1A1A1A', textAlign: 'right', textTransform: 'none', zIndex: 10,
+    });
+    rightY += 0.75;
+  }
+  if (pageContent.schoolName) {
+    elements.push({
+      type: 'schoolName', text: pageContent.schoolName,
+      x: rightPageEnd - 3, y: rightY, width: 3,
+      fontSize: 30, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#1A1A1A', letterSpacing: 1, zIndex: 10,
+    });
+    rightY += 0.5;
+  }
+  if (pageContent.headline) {
+    elements.push({
+      type: 'headline', text: pageContent.headline,
+      x: rightPageStart + rightPageWidth * 0.3, y: rightY, width: rightPageWidth * 0.7,
+      fontSize: 13, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+    rightY += 0.4;
+  }
+  if (pageContent.record) {
+    elements.push({
+      type: 'record', text: pageContent.record,
+      x: rightPageEnd - 1.5, y: rightY, width: 1.5,
+      fontSize: 11, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+    rightY += 0.35;
+  }
+  if (pageContent.dateOrYear) {
+    elements.push({
+      type: 'date', text: pageContent.dateOrYear,
+      x: rightPageEnd - 2, y: rightY, width: 2,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '600',
+      color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
+    });
+    rightY += 0.3;
+  }
+  rightY += 0.15;
+
+  const rightPhotos = photos.slice(leftPhotoCount);
+  if (rightPhotos.length > 0) {
+    const rightPhotoElements = buildPhotoGrid(rightPhotos, {
+      startX: rightPageStart, startY: rightY,
+      maxX: rightPageEnd, maxY: pageHeight - MARGIN, GAP
+    }, leftPhotoCount, photoCaptions);
+    elements.push(...rightPhotoElements);
+  }
+}
+
+// =============================================================================
+// LAYOUT: TOP HEAVY (Title + big photos across top, text + small photos bottom)
+// =============================================================================
+function buildTopHeavyLayout(elements, photos, pageContent, bounds) {
+  const { leftPageStart, leftPageEnd, leftPageWidth,
+          rightPageStart, rightPageEnd, rightPageWidth,
+          pageHeight, pageWidth, MARGIN, GAP, photoCaptions = [] } = bounds;
+
+  const photoCount = photos.length;
+  const topHeight = (pageHeight - 2 * MARGIN) * 0.45;
+
+  // Title + school on left page top
+  let leftY = MARGIN;
+  if (pageContent.section) {
+    elements.push({
+      type: 'sectionHeader', text: pageContent.section,
+      x: leftPageStart, y: leftY, width: leftPageWidth,
+      fontSize: 42, fontFamily: 'Playfair Display', fontWeight: '900',
+      color: '#1A1A1A', textAlign: 'left', textTransform: 'none', zIndex: 10,
+    });
+    leftY += 0.65;
+  }
+  if (pageContent.schoolName) {
+    elements.push({
+      type: 'schoolName', text: pageContent.schoolName,
+      x: leftPageStart, y: leftY, width: 3,
+      fontSize: 24, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#1A1A1A', letterSpacing: 1, zIndex: 10,
+    });
+    leftY += 0.4;
+  }
+  if (pageContent.headline) {
+    elements.push({
+      type: 'headline', text: pageContent.headline,
+      x: leftPageStart, y: leftY, width: leftPageWidth * 0.65,
+      fontSize: 12, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+    leftY += 0.35;
+  }
+  if (pageContent.record) {
+    elements.push({
+      type: 'record', text: pageContent.record,
+      x: leftPageStart, y: leftY, width: 1.5,
+      fontSize: 11, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+    leftY += 0.3;
+  }
+  if (pageContent.dateOrYear) {
+    elements.push({
+      type: 'date', text: pageContent.dateOrYear,
+      x: leftPageStart, y: leftY, width: 2,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '600',
+      color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
+    });
+    leftY += 0.25;
+  }
+
+  // Big photos on right page top
+  const topPhotoCount = Math.min(Math.ceil(photoCount * 0.4), photoCount);
+  const topPhotos = photos.slice(0, topPhotoCount);
+  if (topPhotos.length > 0) {
+    const topElements = buildPhotoGrid(topPhotos, {
+      startX: rightPageStart, startY: MARGIN,
+      maxX: rightPageEnd, maxY: MARGIN + topHeight + 1.5, GAP
+    }, 0, photoCaptions);
+    elements.push(...topElements);
+  }
+
+  // Bottom half: body text on left, remaining photos on right
+  const bottomY = MARGIN + topHeight + 1.8;
+
+  if (pageContent.bodyCopy) {
+    elements.push({
+      type: 'bodyCopy', text: pageContent.bodyCopy,
+      x: leftPageStart, y: bottomY, width: leftPageWidth, height: 2.5,
+      fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#1A1A1A', lineHeight: 1.5, columns: 2, textAlign: 'justify', zIndex: 10,
+    });
+  }
+
+  // Remaining photos on bottom right
+  const bottomPhotos = photos.slice(topPhotoCount);
+  if (bottomPhotos.length > 0) {
+    const bottomElements = buildPhotoGrid(bottomPhotos, {
+      startX: rightPageStart, startY: bottomY,
+      maxX: rightPageEnd, maxY: pageHeight - MARGIN - 1.0, GAP
+    }, topPhotoCount, photoCaptions);
+    elements.push(...bottomElements);
+  }
+
+  // Roster at bottom spanning both pages
+  const { coaches, rosterNames } = extractCoaches(pageContent);
+  let rosterY = pageHeight - MARGIN - 1.0;
+  if (coaches.length > 0) {
+    elements.push({
+      type: 'roster', title: pageContent.coachesTitle || 'Coaches:',
+      names: coaches, x: leftPageStart, y: rosterY, width: leftPageWidth,
+      columns: 1, titleFontSize: 10, nameFontSize: 8,
+      fontFamily: 'Source Sans Pro', titleColor: '#523D73',
+      nameColor: '#1A1A1A', fontWeight: '600', zIndex: 10,
+    });
+    rosterY += 0.3 + (coaches.length * 0.14);
+  }
+  if (rosterNames.length > 0) {
+    elements.push({
+      type: 'roster', title: pageContent.rosterTitle || 'Team Roster:',
+      names: rosterNames, x: leftPageStart, y: rosterY, width: leftPageWidth,
+      columns: 4, titleFontSize: 10, nameFontSize: 7,
+      fontFamily: 'Source Sans Pro', titleColor: '#1A1A1A', nameColor: '#333333', zIndex: 10,
+    });
+  }
+}
+
+// =============================================================================
+// LAYOUT: SIDEBAR (Narrow photo strip on one side, main content + photos other)
+// =============================================================================
+function buildSidebarLayout(elements, photos, pageContent, bounds, side = 'left') {
+  const { leftPageStart, leftPageEnd, leftPageWidth,
+          rightPageStart, rightPageEnd, rightPageWidth,
+          pageHeight, MARGIN, GAP, photoCaptions = [] } = bounds;
+
+  const photoCount = photos.length;
+  const sidebarCount = Math.min(Math.ceil(photoCount * 0.35), 4);
+  const sidebarPhotos = photos.slice(0, sidebarCount);
+  const mainPhotos = photos.slice(sidebarCount);
+
+  if (side === 'left') {
+    // LEFT: Vertical strip of photos
+    const stripWidth = leftPageWidth * 0.4;
+    const photoH = (pageHeight - 2 * MARGIN - (sidebarCount - 1) * GAP) / sidebarCount;
+    for (let i = 0; i < sidebarPhotos.length; i++) {
+      elements.push({
+        type: 'photo', photoIndex: i,
+        x: leftPageStart, y: MARGIN + i * (photoH + GAP),
+        width: stripWidth, height: photoH,
+        borderRadius: 0, shadow: false, blackAndWhite: i === 0,
+        zIndex: 1, cropFit: 'cover',
+      });
+    }
+
+    // LEFT: Text next to photo strip
+    const textX = leftPageStart + stripWidth + GAP * 2;
+    const textW = leftPageEnd - textX;
+    addTextContent(elements, pageContent, {
+      startX: textX, endX: leftPageEnd, width: textW,
+      pageHeight, MARGIN, compact: true
+    });
+
+    // RIGHT: Main photo grid
+    if (mainPhotos.length > 0) {
+      const mainElements = buildPhotoGrid(mainPhotos, {
+        startX: rightPageStart, startY: MARGIN,
+        maxX: rightPageEnd, maxY: pageHeight - MARGIN, GAP
+      }, sidebarCount, photoCaptions);
+      elements.push(...mainElements);
+    }
+  } else {
+    // LEFT: Main photo grid
+    if (mainPhotos.length > 0) {
+      const mainElements = buildPhotoGrid(mainPhotos, {
+        startX: leftPageStart, startY: MARGIN,
+        maxX: leftPageEnd, maxY: pageHeight - MARGIN, GAP
+      }, sidebarCount, photoCaptions);
+      elements.push(...mainElements);
+    }
+
+    // RIGHT: Text with photo strip on far right
+    const stripWidth = rightPageWidth * 0.4;
+    const textW = rightPageWidth - stripWidth - GAP * 2;
+    addTextContent(elements, pageContent, {
+      startX: rightPageStart, endX: rightPageStart + textW, width: textW,
+      pageHeight, MARGIN, compact: true
+    });
+
+    // RIGHT: Vertical photo strip
+    const stripX = rightPageEnd - stripWidth;
+    const photoH = (pageHeight - 2 * MARGIN - (sidebarCount - 1) * GAP) / sidebarCount;
+    for (let i = 0; i < sidebarPhotos.length; i++) {
+      elements.push({
+        type: 'photo', photoIndex: i,
+        x: stripX, y: MARGIN + i * (photoH + GAP),
+        width: stripWidth, height: photoH,
+        borderRadius: 0, shadow: false, blackAndWhite: i === 0,
+        zIndex: 1, cropFit: 'cover',
+      });
+    }
+  }
+}
+
+// =============================================================================
+// LAYOUT: L-SHAPE (Photos in L along left+bottom, text in top-right)
+// =============================================================================
+function buildLShapeLayout(elements, photos, pageContent, bounds) {
+  const { leftPageStart, leftPageEnd, leftPageWidth,
+          rightPageStart, rightPageEnd, rightPageWidth,
+          pageHeight, MARGIN, GAP, photoCaptions = [] } = bounds;
+
+  const photoCount = photos.length;
+
+  // Left page: full column of photos
+  const leftPhotoCount = Math.min(Math.ceil(photoCount * 0.45), photoCount - 1);
+  const leftPhotos = photos.slice(0, leftPhotoCount);
+  if (leftPhotos.length > 0) {
+    const leftElements = buildPhotoGrid(leftPhotos, {
+      startX: leftPageStart, startY: MARGIN,
+      maxX: leftPageEnd, maxY: pageHeight - MARGIN, GAP
+    }, 0, photoCaptions);
+    elements.push(...leftElements);
+  }
+
+  // Right page top: text content
+  const textEndY = addTextContent(elements, pageContent, {
+    startX: rightPageStart, endX: rightPageEnd, width: rightPageWidth,
+    pageHeight, MARGIN, compact: true
+  });
+
+  // Right page bottom: horizontal strip of remaining photos (the "L" bottom)
+  const rightPhotos = photos.slice(leftPhotoCount);
+  const bottomY = Math.max(textEndY + 0.1, pageHeight - MARGIN - 3.0);
+  if (rightPhotos.length > 0) {
+    const bottomElements = buildPhotoGrid(rightPhotos, {
+      startX: rightPageStart, startY: bottomY,
+      maxX: rightPageEnd, maxY: pageHeight - MARGIN, GAP
+    }, leftPhotoCount, photoCaptions);
+    elements.push(...bottomElements);
+  }
+}
+
+// =============================================================================
+// LAYOUT: STAGGERED (Photos at varying heights for dynamic feel)
+// =============================================================================
+function buildStaggeredLayout(elements, photos, pageContent, bounds) {
+  const { leftPageStart, leftPageEnd, leftPageWidth,
+          rightPageStart, rightPageEnd, rightPageWidth,
+          pageHeight, MARGIN, GAP, photoCaptions = [] } = bounds;
+
+  const photoCount = photos.length;
+
+  // Title on right page (top)
+  let rightY = MARGIN;
+  if (pageContent.section) {
+    elements.push({
+      type: 'sectionHeader', text: pageContent.section,
+      x: rightPageStart, y: rightY, width: rightPageWidth,
+      fontSize: 48, fontFamily: 'Playfair Display', fontWeight: '900',
+      color: '#1A1A1A', textAlign: 'left', textTransform: 'none', zIndex: 10,
+    });
+    rightY += 0.75;
+  }
+  if (pageContent.schoolName) {
+    elements.push({
+      type: 'schoolName', text: pageContent.schoolName,
+      x: rightPageStart, y: rightY, width: 3,
+      fontSize: 28, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#1A1A1A', letterSpacing: 1, zIndex: 10,
+    });
+    rightY += 0.45;
+  }
+
+  // Left page: staggered columns of photos
+  const leftColW = (leftPageWidth - GAP) / 2;
+  const col1Photos = [];
+  const col2Photos = [];
+  for (let i = 0; i < Math.min(photoCount, 6); i++) {
+    if (i % 2 === 0) col1Photos.push(i);
+    else col2Photos.push(i);
+  }
+
+  // Column 1 starts at top
+  let col1Y = MARGIN;
+  for (const idx of col1Photos) {
+    const h = (pageHeight - 2 * MARGIN) / col1Photos.length - GAP;
+    elements.push({
+      type: 'photo', photoIndex: idx,
+      x: leftPageStart, y: col1Y, width: leftColW, height: h,
+      borderRadius: 0, shadow: false, blackAndWhite: idx === 0,
+      zIndex: 1, cropFit: 'cover',
+    });
+    col1Y += h + GAP;
+  }
+
+  // Column 2 starts offset (staggered)
+  let col2Y = MARGIN + 1.2;  // Offset for stagger effect
+  for (const idx of col2Photos) {
+    const h = (pageHeight - 2 * MARGIN - 1.2) / Math.max(col2Photos.length, 1) - GAP;
+    elements.push({
+      type: 'photo', photoIndex: idx,
+      x: leftPageStart + leftColW + GAP, y: col2Y, width: leftColW, height: h,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 1, cropFit: 'cover',
+    });
+    col2Y += h + GAP;
+  }
+
+  // Right page: headline, body, remaining photos
+  if (pageContent.headline) {
+    elements.push({
+      type: 'headline', text: pageContent.headline,
+      x: rightPageStart, y: rightY, width: rightPageWidth * 0.65,
+      fontSize: 13, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+    rightY += 0.4;
+  }
+  if (pageContent.record) {
+    elements.push({
+      type: 'record', text: pageContent.record,
+      x: rightPageStart, y: rightY, width: 1.5,
+      fontSize: 11, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+    rightY += 0.3;
+  }
+  if (pageContent.dateOrYear) {
+    elements.push({
+      type: 'date', text: pageContent.dateOrYear,
+      x: rightPageStart, y: rightY, width: 2,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '600',
+      color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
+    });
+    rightY += 0.3;
+  }
+
+  if (pageContent.bodyCopy) {
+    rightY += 0.15;
+    elements.push({
+      type: 'bodyCopy', text: pageContent.bodyCopy,
+      x: rightPageStart, y: rightY, width: rightPageWidth, height: 2.5,
+      fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#1A1A1A', lineHeight: 1.5, columns: 2, textAlign: 'justify', zIndex: 10,
+    });
+    rightY += 2.6;
+  }
+
+  // Remaining photos on right page
+  const remainingPhotos = photos.slice(Math.min(6, photoCount));
+  if (remainingPhotos.length > 0) {
+    const remElements = buildPhotoGrid(remainingPhotos, {
+      startX: rightPageStart, startY: rightY,
+      maxX: rightPageEnd, maxY: pageHeight - MARGIN - 1.0, GAP
+    }, Math.min(6, photoCount), photoCaptions);
+    elements.push(...remElements);
+  }
+
+  // Roster at bottom right
+  const { coaches, rosterNames } = extractCoaches(pageContent);
+  let rosterY = pageHeight - MARGIN - 0.9;
+  if (coaches.length > 0) {
+    elements.push({
+      type: 'roster', title: pageContent.coachesTitle || 'Coaches:',
+      names: coaches, x: rightPageStart, y: rosterY, width: rightPageWidth,
+      columns: 1, titleFontSize: 10, nameFontSize: 8,
+      fontFamily: 'Source Sans Pro', titleColor: '#523D73',
+      nameColor: '#1A1A1A', fontWeight: '600', zIndex: 10,
+    });
+    rosterY += 0.3 + (coaches.length * 0.14);
+  }
+  if (rosterNames.length > 0) {
+    elements.push({
+      type: 'roster', title: pageContent.rosterTitle || 'Team Roster:',
+      names: rosterNames, x: rightPageStart, y: rosterY, width: rightPageWidth,
+      columns: 4, titleFontSize: 10, nameFontSize: 7,
+      fontFamily: 'Source Sans Pro', titleColor: '#1A1A1A', nameColor: '#333333', zIndex: 10,
+    });
+  }
+}
+
+// =============================================================================
+// HELPER: Extract coaches from roster
+// =============================================================================
+function extractCoaches(pageContent) {
+  let coaches = pageContent.coaches || [];
+  let rosterNames = pageContent.roster || [];
+
+  if (coaches.length === 0 && rosterNames.length > 0) {
+    const extracted = [];
+    const filtered = [];
+    for (const name of rosterNames) {
+      if (/\(coach\)/i.test(name)) {
+        extracted.push(name.replace(/\s*\(coach\)\s*/gi, '').trim());
+      } else {
+        filtered.push(name);
+      }
+    }
+    if (extracted.length > 0) { coaches = extracted; rosterNames = filtered; }
+  }
+
+  return { coaches, rosterNames };
 }
 
 // =============================================================================
