@@ -3,148 +3,130 @@
  *
  * Uses Claude's vision capabilities to analyze photos and determine
  * optimal crop positions that keep subjects (especially faces) in frame.
+ *
+ * Sends ALL photos in a single API call for speed.
  */
 
 const Anthropic = require('@anthropic-ai/sdk');
+const fs = require('fs');
 
-const anthropic = new Anthropic();
+let client = null;
 
-/**
- * Analyze a photo and return the optimal focal point for cropping
- * @param {string} imageUrl - URL or base64 of the image
- * @returns {Object} - { focalX: 0-1, focalY: 0-1, hasSubject: boolean, subjectType: string }
- */
-async function analyzeFocalPoint(imageUrl) {
-  try {
-    // Determine if it's a URL or base64
-    const isBase64 = imageUrl.startsWith('data:') || !imageUrl.startsWith('http');
-
-    const imageContent = isBase64
-      ? {
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: imageUrl.startsWith('data:')
-              ? imageUrl.split(';')[0].split(':')[1]
-              : 'image/jpeg',
-            data: imageUrl.startsWith('data:')
-              ? imageUrl.split(',')[1]
-              : imageUrl,
-          }
-        }
-      : {
-          type: 'image',
-          source: {
-            type: 'url',
-            url: imageUrl,
-          }
-        };
-
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 200,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            imageContent,
-            {
-              type: 'text',
-              text: `Analyze this photo for cropping. Where is the main subject/focal point?
-
-Return ONLY a JSON object with these fields:
-- focalX: horizontal position 0.0 (left) to 1.0 (right) where the main subject is
-- focalY: vertical position 0.0 (top) to 1.0 (bottom) where the main subject is
-- subjectType: "face", "person", "group", "action", or "other"
-
-Focus on faces first, then people, then the main action/subject.
-
-Example: {"focalX": 0.5, "focalY": 0.3, "subjectType": "face"}`
-            }
-          ]
-        }
-      ]
-    });
-
-    const text = response.content[0].text.trim();
-    // Extract JSON from response
-    const jsonMatch = text.match(/\{[^}]+\}/);
-    if (jsonMatch) {
-      const result = JSON.parse(jsonMatch[0]);
-      return {
-        focalX: Math.max(0, Math.min(1, result.focalX || 0.5)),
-        focalY: Math.max(0, Math.min(1, result.focalY || 0.5)),
-        subjectType: result.subjectType || 'other',
-        hasSubject: true,
-      };
-    }
-  } catch (error) {
-    console.error('Smart crop analysis failed:', error.message);
+function getClient() {
+  if (!client) {
+    client = new Anthropic();
   }
-
-  // Default to center-top if analysis fails
-  // Most yearbook photos have faces/subjects in the upper-center area
-  return {
-    focalX: 0.5,
-    focalY: 0.35, // Upper third - keeps faces in frame for most photos
-    subjectType: 'unknown',
-    hasSubject: false,
-  };
+  return client;
 }
 
 /**
- * Batch analyze multiple photos for focal points
- * @param {Array} photos - Array of photo objects with url property
- * @returns {Array} - Photos with added focalPoint data
+ * Analyze all photos in a single API call and return focal points
+ * @param {Array} photos - Array of photo objects with processedPath
+ * @returns {Array} - Photos with added focalPoint and objectPosition data
  */
 async function analyzePhotosForCropping(photos) {
   if (!photos || photos.length === 0) return photos;
 
-  // Process in parallel with a concurrency limit
-  const BATCH_SIZE = 5;
-  const results = [];
+  try {
+    console.log(`Smart Crop - Analyzing ${photos.length} photos in single batch...`);
+    const startTime = Date.now();
 
-  for (let i = 0; i < photos.length; i += BATCH_SIZE) {
-    const batch = photos.slice(i, i + BATCH_SIZE);
-    const batchResults = await Promise.all(
-      batch.map(async (photo) => {
-        if (photo.focalPoint) {
-          // Already analyzed
-          return photo;
+    // Build image content blocks for all photos
+    const imageBlocks = [];
+    for (let i = 0; i < photos.length; i++) {
+      const photo = photos[i];
+      let base64;
+
+      if (photo.base64) {
+        base64 = photo.base64;
+      } else if (photo.processedPath) {
+        const imgData = fs.readFileSync(photo.processedPath);
+        base64 = imgData.toString('base64');
+      } else {
+        continue;
+      }
+
+      imageBlocks.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: 'image/jpeg',
+          data: base64,
         }
+      });
+      imageBlocks.push({
+        type: 'text',
+        text: `Photo ${i}:`
+      });
+    }
 
-        const focalPoint = await analyzeFocalPoint(photo.url || photo.src);
+    // Add the analysis prompt
+    imageBlocks.push({
+      type: 'text',
+      text: `For each photo above, identify where the main subject (face, person, group, or action) is located.
+
+Return ONLY a JSON array with one object per photo, in order:
+[
+  {"focalX": 0.5, "focalY": 0.3, "subject": "face"},
+  {"focalX": 0.4, "focalY": 0.4, "subject": "group"},
+  ...
+]
+
+- focalX: 0.0 (left edge) to 1.0 (right edge) — center of the main subject
+- focalY: 0.0 (top edge) to 1.0 (bottom edge) — center of the main subject
+- subject: "face", "person", "group", "action", or "scene"
+
+Focus on FACES first. If there are multiple people, target the center of the group.
+Be precise — this determines how the photo gets cropped.`
+    });
+
+    const response = await getClient().messages.create({
+      model: 'claude-haiku-4-5-20251001',  // Fast + cheap for vision analysis
+      max_tokens: 1024,
+      messages: [{
+        role: 'user',
+        content: imageBlocks,
+      }],
+    });
+
+    const text = response.content[0].text.trim();
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+
+    if (jsonMatch) {
+      const focalPoints = JSON.parse(jsonMatch[0]);
+
+      const elapsed = Date.now() - startTime;
+      console.log(`Smart Crop - Got ${focalPoints.length} focal points in ${elapsed}ms`);
+
+      // Apply focal points to photos
+      return photos.map((photo, i) => {
+        const fp = focalPoints[i];
+        if (!fp) return photo;
+
+        const focalX = Math.max(0, Math.min(1, fp.focalX || 0.5));
+        const focalY = Math.max(0, Math.min(1, fp.focalY || 0.35));
+
         return {
           ...photo,
-          focalPoint,
-          cropFit: 'cover',
-          objectPosition: `${focalPoint.focalX * 100}% ${focalPoint.focalY * 100}%`,
+          focalPoint: { focalX, focalY, subjectType: fp.subject || 'unknown' },
+          objectPosition: `${Math.round(focalX * 100)}% ${Math.round(focalY * 100)}%`,
         };
-      })
-    );
-    results.push(...batchResults);
+      });
+    }
+
+    console.log('Smart Crop - Failed to parse response, using defaults');
+  } catch (error) {
+    console.error('Smart Crop - Error:', error.message);
   }
 
-  return results;
-}
-
-/**
- * Quick focal point detection without AI (fallback)
- * Uses simple heuristics based on common photo compositions
- */
-function quickFocalPointEstimate(photo) {
-  // Default to rule of thirds, slightly above center
-  // Most portraits and action shots have subjects in upper third
-  return {
-    focalX: 0.5,
-    focalY: 0.35,
-    subjectType: 'estimated',
-    hasSubject: true,
-  };
+  // Return photos with default focal points if analysis fails
+  return photos.map(photo => ({
+    ...photo,
+    focalPoint: { focalX: 0.5, focalY: 0.35, subjectType: 'unknown' },
+    objectPosition: 'center 35%',
+  }));
 }
 
 module.exports = {
-  analyzeFocalPoint,
   analyzePhotosForCropping,
-  quickFocalPointEstimate,
 };
