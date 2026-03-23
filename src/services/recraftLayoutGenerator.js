@@ -1649,7 +1649,7 @@ function addTextContent(elements, pageContent, options) {
       textTransform: 'none',  // Preserve user's capitalization
       zIndex: 10,
     });
-    currentY += compact ? 0.7 : 0.85;
+    currentY += compact ? 0.9 : 1.05;  // Enough space for large title text
   }
 
   // School name - smaller, below section

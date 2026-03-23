@@ -441,7 +441,7 @@ function renderBodyCopy(el, dpi) {
   return `<div class="element" style="
     left: ${x}px; top: ${y}px;
     width: ${w}px;
-    ${typeof h === 'number' ? `height: ${h}px;` : ''}
+    ${typeof h === 'number' ? `height: ${h}px; overflow: hidden;` : ''}
     font-family: '${el.fontFamily || 'Source Sans Pro'}', sans-serif;
     font-size: ${fontSize}px;
     font-weight: ${el.fontWeight || '400'};
