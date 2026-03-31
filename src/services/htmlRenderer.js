@@ -152,11 +152,12 @@ function renderPhoto(el, photos, dpi) {
 
   // Smart crop - use focal point for object-position if available
   // This keeps the subject (face/person) in frame when cropping
-  // Default to center 30% which balances keeping faces visible without extreme cropping
+  // Clamp values to avoid extreme positioning that pushes subjects off-frame
   let objectPosition = 'center 30%';
   if (photo.focalPoint) {
-    const focalX = Math.round(photo.focalPoint.focalX * 100);
-    const focalY = Math.round(photo.focalPoint.focalY * 100);
+    // Clamp to 15%-85% range to avoid extreme edge positioning
+    const focalX = Math.min(85, Math.max(15, Math.round(photo.focalPoint.focalX * 100)));
+    const focalY = Math.min(85, Math.max(15, Math.round(photo.focalPoint.focalY * 100)));
     objectPosition = `${focalX}% ${focalY}%`;
   } else if (photo.objectPosition) {
     objectPosition = photo.objectPosition;

@@ -63,26 +63,37 @@ async function analyzePhotosForCropping(photos) {
     // Add the analysis prompt
     imageBlocks.push({
       type: 'text',
-      text: `For each photo above, identify where the main subject (face, person, group, or action) is located.
+      text: `For each photo above, identify WHERE THE PEOPLE ARE so we can crop without cutting them out.
+
+These photos will be displayed in rectangular containers using CSS object-fit: cover, which CROPS the photo to fill the container. The object-position value determines which part of the image stays visible.
+
+For each photo, tell me where to anchor the crop so ALL people/faces remain visible.
 
 Return ONLY a JSON array with one object per photo, in order:
 [
-  {"focalX": 0.5, "focalY": 0.3, "subject": "face"},
-  {"focalX": 0.4, "focalY": 0.4, "subject": "group"},
+  {"focalX": 0.5, "focalY": 0.3, "subject": "face", "safeZone": "top-half"},
+  {"focalX": 0.4, "focalY": 0.4, "subject": "group", "safeZone": "center"},
   ...
 ]
 
-- focalX: 0.0 (left edge) to 1.0 (right edge) — center of the main subject
-- focalY: 0.0 (top edge) to 1.0 (bottom edge) — center of the main subject
+- focalX: 0.0 (left edge) to 1.0 (right edge) — horizontal center of all subjects
+- focalY: 0.0 (top edge) to 1.0 (bottom edge) — vertical center of all subjects
 - subject: "face", "person", "group", "action", or "scene"
+- safeZone: where the subjects are concentrated: "top-third", "top-half", "center", "bottom-half", "full"
 
-Focus on FACES first. If there are multiple people, target the center of the group.
-Be precise — this determines how the photo gets cropped.`
+IMPORTANT RULES:
+- For photos with people: focalY should be at the CENTER of where their heads/faces are
+- If people are in the top portion, use focalY 0.15-0.3
+- If people are centered, use focalY 0.35-0.5
+- If people are at bottom, use focalY 0.6-0.8
+- For group photos with people spread across: use focalX 0.5 and appropriate focalY
+- NEVER default to 0.5/0.5 unless people truly are dead center
+- Be PRECISE — wrong values will cut people's heads off`
     });
 
     const response = await getClient().messages.create({
       model: 'claude-haiku-4-5-20251001',  // Fast + cheap for vision analysis
-      max_tokens: 1024,
+      max_tokens: 2048,
       messages: [{
         role: 'user',
         content: imageBlocks,
