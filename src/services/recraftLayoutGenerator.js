@@ -1635,26 +1635,7 @@ function addTextContent(elements, pageContent, options) {
 
   let currentY = compact ? 0.6 : 0.5;
 
-  // SECTION NAME - This is the BIG title (preserve user's capitalization)
-  if (pageContent.section) {
-    elements.push({
-      type: 'sectionHeader',
-      text: pageContent.section,
-      x: startX,
-      y: currentY,
-      width: width,
-      fontSize: compact ? 42 : 54,
-      fontFamily: 'Playfair Display',
-      fontWeight: '900',
-      color: '#1A1A1A',
-      textAlign: 'left',
-      textTransform: 'none',  // Preserve user's capitalization
-      zIndex: 10,
-    });
-    currentY += compact ? 0.9 : 1.05;  // Enough space for large title text
-  }
-
-  // PAGE TITLE - Themed title (e.g., "BUILDING A LEGACY")
+  // PAGE TITLE - Big themed title (e.g., "BUILDING A LEGACY") - this is the main eye-catcher
   if (pageContent.pageTitle) {
     elements.push({
       type: 'pageTitle',
@@ -1663,33 +1644,34 @@ function addTextContent(elements, pageContent, options) {
       x: startX,
       y: currentY,
       width: width,
-      fontSize: compact ? 14 : 16,
-      fontFamily: 'Source Sans Pro',
-      fontWeight: '700',
-      color: '#523D73',
-      letterSpacing: 3,
-      textTransform: 'uppercase',
+      fontSize: compact ? 48 : 60,
+      fontFamily: 'Playfair Display',
+      fontWeight: '900',
+      color: '#1A1A1A',
+      letterSpacing: 2,
       zIndex: 10,
     });
-    currentY += compact ? 0.3 : 0.35;
+    currentY += compact ? 1.0 : 1.2;
   }
 
-  // School name - smaller, below section
-  if (pageContent.schoolName) {
+  // SECTION NAME - Smaller subtitle (e.g., "Boy's Soccer")
+  if (pageContent.section) {
     elements.push({
-      type: 'schoolName',
-      text: pageContent.schoolName,
+      type: 'sectionHeader',
+      text: pageContent.section,
       x: startX,
       y: currentY,
-      width: 3,
-      fontSize: compact ? 28 : 36,
-      fontFamily: 'Playfair Display',
-      fontWeight: '700',
-      color: '#1A1A1A',
-      letterSpacing: 1,
+      width: width,
+      fontSize: compact ? 18 : 22,
+      fontFamily: 'Source Sans Pro',
+      fontWeight: '600',
+      color: '#523D73',
+      textAlign: 'left',
+      textTransform: 'uppercase',
+      letterSpacing: 3,
       zIndex: 10,
     });
-    currentY += compact ? 0.45 : 0.55;
+    currentY += compact ? 0.4 : 0.45;
   }
 
   // Headline with purple bar

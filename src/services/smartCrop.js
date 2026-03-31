@@ -92,7 +92,7 @@ IMPORTANT RULES:
     });
 
     const response = await getClient().messages.create({
-      model: 'claude-haiku-4-5-20251001',  // Fast + cheap for vision analysis
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 2048,
       messages: [{
         role: 'user',
@@ -101,6 +101,7 @@ IMPORTANT RULES:
     });
 
     const text = response.content[0].text.trim();
+    console.log('Smart Crop - Raw response:', text.substring(0, 200));
     const jsonMatch = text.match(/\[[\s\S]*\]/);
 
     if (jsonMatch) {
@@ -116,6 +117,8 @@ IMPORTANT RULES:
 
         const focalX = Math.max(0, Math.min(1, fp.focalX || 0.5));
         const focalY = Math.max(0, Math.min(1, fp.focalY || 0.35));
+
+        console.log(`Smart Crop - Photo ${i}: focal(${focalX.toFixed(2)}, ${focalY.toFixed(2)}) subject=${fp.subject}`);
 
         return {
           ...photo,

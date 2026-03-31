@@ -259,16 +259,16 @@ function renderPageTitle(el, dpi) {
   const x = inToPx(el.x, dpi);
   const y = inToPx(el.y, dpi);
   const w = inToPx(el.width, dpi);
-  const fontSize = ptToPx(el.fontSize || 16, dpi);
-  const letterSpacing = el.letterSpacing ? `${el.letterSpacing * (dpi / 96)}px` : `${3 * (dpi / 96)}px`;
+  const fontSize = ptToPx(el.fontSize || 60, dpi);
+  const letterSpacing = el.letterSpacing ? `${el.letterSpacing * (dpi / 96)}px` : '0';
 
   // Style the theme word differently (e.g., "BUILDING" in "BUILDING A LEGACY")
+  // Theme word gets italic styling to stand out
   let textHtml;
   if (el.themeWord && el.text) {
     const themeWord = escapeHtml(el.themeWord);
     const rest = escapeHtml(el.text.replace(new RegExp(el.themeWord, 'i'), '').trim());
-    // Theme word gets italic + slightly larger
-    textHtml = `<span style="font-style: italic; font-size: ${Math.round(fontSize * 1.15)}px; color: #523D73;">${themeWord}</span> <span style="color: #1A1A1A;">${rest}</span>`;
+    textHtml = `<span style="font-style: italic; color: #523D73;">${themeWord}</span> <span style="color: #1A1A1A;">${rest}</span>`;
   } else {
     textHtml = escapeHtml(el.text);
   }
@@ -276,11 +276,11 @@ function renderPageTitle(el, dpi) {
   return `<div class="element" style="
     left: ${x}px; top: ${y}px;
     width: ${w}px;
-    font-family: '${el.fontFamily || 'Source Sans Pro'}', sans-serif;
+    font-family: '${el.fontFamily || 'Playfair Display'}', serif;
     font-size: ${fontSize}px;
-    font-weight: ${el.fontWeight || '700'};
-    text-transform: ${el.textTransform || 'uppercase'};
+    font-weight: ${el.fontWeight || '900'};
     letter-spacing: ${letterSpacing};
+    line-height: 0.95;
     z-index: ${el.zIndex || 10};
   ">${textHtml}</div>`;
 }

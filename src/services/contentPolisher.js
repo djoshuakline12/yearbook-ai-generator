@@ -94,12 +94,14 @@ YOUR TASKS:
    - This is separate from the section name — the section name stays as-is (e.g., "Boy's Soccer")
 
 3. **CAPTION TITLES AND GRADES**
-   - Every photo caption MUST have a "captionTitle" — a short, bold, ALL-CAPS action title (2-4 words)
+   - Only add a "captionTitle" if the photo already has a caption or people identified — do NOT create captions for photos with no caption info
+   - captionTitle is a short, bold, ALL-CAPS action title (2-4 words)
    - Examples: "MAKING THE PASS", "BLOCKING THE SHOT", "SENIOR SPOTLIGHT", "GAME DAY ENERGY", "THE SAVE", "EYES ON THE BALL"
    - captionTitle should describe what's happening in the photo or highlight the moment
    - Include the player's grade in parentheses after their name: "Jay Parrish (11)" or "Blake Dale (10)"
-   - If grades aren't provided, use [GRADE] as placeholder
+   - If grades aren't provided, omit them (don't use placeholders)
    - For group photos use titles like "SENIOR SPOTLIGHT", "SQUAD GOALS", "TEAM HUDDLE"
+   - If a photo has NO caption and NO people info, set captionTitle to null and caption to null
 
 4. **SMART CURATION** - Decide what to emphasize
    - If body copy is too long (>300 words), trim to key moments
@@ -108,7 +110,7 @@ YOUR TASKS:
 
 5. **YEARBOOK BEST PRACTICES**
    - PRESERVE the user's section name capitalization EXACTLY as they typed it
-   - School name should be abbreviated if common (Douglas County → DCHS)
+   - Do NOT include schoolName in the output — it's not needed on the page
    - Dates should be consistent format
    - Roster names should be formatted consistently (First Last)
    - Stats/records should be formatted clearly (e.g., "12-5" or "Record: 12-5")
