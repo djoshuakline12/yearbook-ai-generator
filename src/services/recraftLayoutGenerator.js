@@ -338,12 +338,12 @@ function buildPhotosLeftLayout(elements, photos, pageContent, bounds) {
   const rightPagePhotoSpace = pageHeight - MARGIN - photoStartY;
   const totalPhotoSpace = (pageHeight - 2 * MARGIN) + rightPagePhotoSpace;
 
-  // Distribute photos based on available space ratio
-  // Right page gets photos proportional to its available space
+  // Distribute photos - ensure at least 2 photos on the text page for balance
   const rightPageRatio = rightPagePhotoSpace / totalPhotoSpace;
-  const rightPagePhotoCount = Math.max(1, Math.min(
+  const minOnTextPage = Math.min(2, photoCount - 1);
+  const rightPagePhotoCount = Math.max(minOnTextPage, Math.min(
     Math.round(photoCount * rightPageRatio),
-    photoCount - 1  // Always leave at least 1 for left page
+    photoCount - 1
   ));
   const leftPagePhotoCount = photoCount - rightPagePhotoCount;
 
@@ -399,11 +399,12 @@ function buildPhotosRightLayout(elements, photos, pageContent, bounds) {
   const leftPagePhotoSpace = pageHeight - MARGIN - photoStartY;
   const totalPhotoSpace = leftPagePhotoSpace + (pageHeight - 2 * MARGIN);
 
-  // Distribute photos based on available space ratio
+  // Distribute photos - ensure at least 2 photos on the text page for balance
   const leftPageRatio = leftPagePhotoSpace / totalPhotoSpace;
-  const leftPagePhotoCount = Math.max(1, Math.min(
+  const minOnTextPage = Math.min(2, photoCount - 1);
+  const leftPagePhotoCount = Math.max(minOnTextPage, Math.min(
     Math.round(photoCount * leftPageRatio),
-    photoCount - 1  // Always leave at least 1 for right page
+    photoCount - 1
   ));
   const rightPagePhotoCount = photoCount - leftPagePhotoCount;
 
@@ -1454,20 +1455,26 @@ function addTitleBlock(elements, pageContent, { x, y, width, compact = false, al
 
   // PAGE TITLE - Big themed title (e.g., "BUILDING A LEGACY")
   if (pageContent.pageTitle) {
+    // Estimate if title will wrap based on character count vs available width
+    const titleLen = (pageContent.pageTitle || '').length;
+    const willWrap = titleLen > 15;  // Rough estimate for large font
+    const fontSize = compact ? 36 : 42;
+
     elements.push({
       type: 'pageTitle',
       text: pageContent.pageTitle,
       themeWord: pageContent.pageTitleThemeWord || null,
       x, y: currentY, width,
-      fontSize: compact ? 44 : 54,
+      fontSize,
       fontFamily: 'Playfair Display',
       fontWeight: '900',
       color: '#1A1A1A',
       textAlign: align,
-      letterSpacing: 2,
+      letterSpacing: 1,
       zIndex: 10,
     });
-    currentY += compact ? 0.9 : 1.1;
+    // More space if title wraps to multiple lines
+    currentY += willWrap ? (compact ? 1.0 : 1.2) : (compact ? 0.7 : 0.85);
   }
 
   // SECTION NAME - Smaller subtitle (e.g., "BOY'S SOCCER")
@@ -1476,7 +1483,7 @@ function addTitleBlock(elements, pageContent, { x, y, width, compact = false, al
       type: 'sectionHeader',
       text: pageContent.section,
       x, y: currentY, width,
-      fontSize: compact ? 16 : 20,
+      fontSize: compact ? 14 : 16,
       fontFamily: 'Source Sans Pro',
       fontWeight: '600',
       color: '#523D73',
@@ -1485,7 +1492,7 @@ function addTitleBlock(elements, pageContent, { x, y, width, compact = false, al
       letterSpacing: 3,
       zIndex: 10,
     });
-    currentY += compact ? 0.35 : 0.4;
+    currentY += compact ? 0.3 : 0.35;
   }
 
   return currentY;
@@ -1559,14 +1566,9 @@ function addTextContent(elements, pageContent, options) {
     currentY += compact ? 0.25 : 0.3;
   }
 
-  // Extra spacing after date/record section
-  if (pageContent.record || pageContent.dateOrYear) {
-    currentY += compact ? 0.15 : 0.2;
-  }
-
   // Body copy - use larger font and more height to fill space
   if (pageContent.bodyCopy) {
-    currentY += 0.2; // Gap before body
+    currentY += 0.15; // Small gap before body
     elements.push({
       type: 'bodyCopy',
       text: pageContent.bodyCopy,
