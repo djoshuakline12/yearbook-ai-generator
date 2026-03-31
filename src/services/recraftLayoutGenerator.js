@@ -460,39 +460,10 @@ function buildPhotosBalancedLayout(elements, photos, pageContent, bounds) {
   }, 0, photoCaptions);
   elements.push(...leftPhotoElements);
 
-  // LEFT PAGE: Section header and school name at bottom
-  if (pageContent.section) {
-    elements.push({
-      type: 'sectionHeader',
-      text: pageContent.section,
-      x: leftPageEnd - 2.5,
-      y: leftPhotoHeight + MARGIN + 0.3,
-      width: 2.3,
-      fontSize: 32,
-      fontFamily: 'Dancing Script',
-      fontWeight: '400',
-      fontStyle: 'italic',
-      color: '#1A1A1A',
-      textAlign: 'right',
-      textTransform: 'lowercase',
-      zIndex: 10,
-    });
-  }
-
-  if (pageContent.schoolName) {
-    elements.push({
-      type: 'schoolName',
-      text: pageContent.schoolName,
-      x: leftPageStart,
-      y: leftPhotoHeight + MARGIN + 0.8,
-      width: 4,
-      fontSize: 60,
-      fontFamily: 'Playfair Display',
-      fontWeight: '900',
-      color: '#1A1A1A',
-      zIndex: 10,
-    });
-  }
+  // LEFT PAGE: Title block at bottom of photos
+  addTitleBlock(elements, pageContent, {
+    x: leftPageStart, y: leftPhotoHeight + MARGIN + 0.3, width: leftPageWidth,
+  });
 
   // Add headline and body on left page bottom
   if (pageContent.headline) {
@@ -615,48 +586,19 @@ function buildPhotosDominantLayout(elements, photos, pageContent, bounds) {
     ...getDomCaptionData(0),
   });
 
-  // Text content overlaid on bottom right
+  // Text content on bottom right
   const textStartY = (pageHeight - 2 * MARGIN) * 0.65 + MARGIN + 0.3;
 
-  if (pageContent.section) {
-    elements.push({
-      type: 'sectionHeader',
-      text: pageContent.section,
-      x: rightPageEnd - 2.5,
-      y: textStartY - 0.8,
-      width: 2.3,
-      fontSize: 36,
-      fontFamily: 'Dancing Script',
-      fontWeight: '400',
-      fontStyle: 'italic',
-      color: '#1A1A1A',
-      textAlign: 'right',
-      textTransform: 'lowercase',
-      zIndex: 10,
-    });
-  }
-
-  if (pageContent.schoolName) {
-    elements.push({
-      type: 'schoolName',
-      text: pageContent.schoolName,
-      x: rightPageStart,
-      y: textStartY,
-      width: 4,
-      fontSize: 72,
-      fontFamily: 'Playfair Display',
-      fontWeight: '900',
-      color: '#1A1A1A',
-      zIndex: 10,
-    });
-  }
+  const afterTitle = addTitleBlock(elements, pageContent, {
+    x: rightPageStart, y: textStartY, width: rightPageWidth,
+  });
 
   if (pageContent.headline) {
     elements.push({
       type: 'headline',
       text: pageContent.headline,
       x: rightPageStart,
-      y: textStartY + 1.0,
+      y: afterTitle + 0.1,
       width: rightPageWidth * 0.65,
       fontSize: 18,
       fontFamily: 'Playfair Display',
@@ -742,44 +684,9 @@ function buildMixedLeftLayout(elements, photos, pageContent, bounds) {
   const photoCount = photos.length;
 
   // LEFT PAGE: Title block at top + photos below
-  let leftY = MARGIN;
-
-  // Section header on left page
-  if (pageContent.section) {
-    elements.push({
-      type: 'sectionHeader',
-      text: pageContent.section,
-      x: leftPageStart,
-      y: leftY,
-      width: leftPageWidth,
-      fontSize: 48,
-      fontFamily: 'Playfair Display',
-      fontWeight: '900',
-      color: '#1A1A1A',
-      textAlign: 'left',
-      textTransform: 'none',
-      zIndex: 10,
-    });
-    leftY += 1.0;  // Extra space for large title text
-  }
-
-  // School name on left
-  if (pageContent.schoolName) {
-    elements.push({
-      type: 'schoolName',
-      text: pageContent.schoolName,
-      x: leftPageStart,
-      y: leftY,
-      width: 3,
-      fontSize: 30,
-      fontFamily: 'Playfair Display',
-      fontWeight: '700',
-      color: '#1A1A1A',
-      letterSpacing: 1,
-      zIndex: 10,
-    });
-    leftY += 0.5;
-  }
+  let leftY = addTitleBlock(elements, pageContent, {
+    x: leftPageStart, y: MARGIN, width: leftPageWidth, compact: true,
+  });
 
   // Headline on left
   if (pageContent.headline) {
@@ -954,41 +861,9 @@ function buildMagazineLayout(elements, photos, pageContent, bounds) {
   }
 
   // Title overlapping bottom of hero photo (on left page)
-  let leftY = MARGIN + heroHeight - 0.3;
-  if (pageContent.section) {
-    elements.push({
-      type: 'sectionHeader',
-      text: pageContent.section,
-      x: leftPageStart,
-      y: leftY,
-      width: leftPageWidth,
-      fontSize: 54,
-      fontFamily: 'Playfair Display',
-      fontWeight: '900',
-      color: '#1A1A1A',
-      textAlign: 'left',
-      textTransform: 'none',
-      zIndex: 10,
-    });
-    leftY += 1.1;  // Extra space for large title text
-  }
-
-  if (pageContent.schoolName) {
-    elements.push({
-      type: 'schoolName',
-      text: pageContent.schoolName,
-      x: leftPageStart,
-      y: leftY,
-      width: 3,
-      fontSize: 28,
-      fontFamily: 'Playfair Display',
-      fontWeight: '700',
-      color: '#1A1A1A',
-      letterSpacing: 1,
-      zIndex: 10,
-    });
-    leftY += 0.45;
-  }
+  let leftY = addTitleBlock(elements, pageContent, {
+    x: leftPageStart, y: MARGIN + heroHeight - 0.3, width: leftPageWidth,
+  });
 
   // Headline + record on left below hero
   if (pageContent.headline) {
@@ -1169,25 +1044,9 @@ function buildMixedRightLayout(elements, photos, pageContent, bounds) {
   }
 
   // RIGHT PAGE: Title block at top + photos below
-  let rightY = MARGIN;
-  if (pageContent.section) {
-    elements.push({
-      type: 'sectionHeader', text: pageContent.section,
-      x: rightPageStart, y: rightY, width: rightPageWidth,
-      fontSize: 48, fontFamily: 'Playfair Display', fontWeight: '900',
-      color: '#1A1A1A', textAlign: 'right', textTransform: 'none', zIndex: 10,
-    });
-    rightY += 1.0;  // Extra space for large title text
-  }
-  if (pageContent.schoolName) {
-    elements.push({
-      type: 'schoolName', text: pageContent.schoolName,
-      x: rightPageEnd - 3, y: rightY, width: 3,
-      fontSize: 30, fontFamily: 'Playfair Display', fontWeight: '700',
-      color: '#1A1A1A', letterSpacing: 1, zIndex: 10,
-    });
-    rightY += 0.5;
-  }
+  let rightY = addTitleBlock(elements, pageContent, {
+    x: rightPageStart, y: MARGIN, width: rightPageWidth, align: 'right',
+  });
   if (pageContent.headline) {
     elements.push({
       type: 'headline', text: pageContent.headline,
@@ -1238,26 +1097,10 @@ function buildTopHeavyLayout(elements, photos, pageContent, bounds) {
   const photoCount = photos.length;
   const topHeight = (pageHeight - 2 * MARGIN) * 0.45;
 
-  // Title + school on left page top
-  let leftY = MARGIN;
-  if (pageContent.section) {
-    elements.push({
-      type: 'sectionHeader', text: pageContent.section,
-      x: leftPageStart, y: leftY, width: leftPageWidth,
-      fontSize: 42, fontFamily: 'Playfair Display', fontWeight: '900',
-      color: '#1A1A1A', textAlign: 'left', textTransform: 'none', zIndex: 10,
-    });
-    leftY += 0.9;  // Extra space for large title text
-  }
-  if (pageContent.schoolName) {
-    elements.push({
-      type: 'schoolName', text: pageContent.schoolName,
-      x: leftPageStart, y: leftY, width: 3,
-      fontSize: 24, fontFamily: 'Playfair Display', fontWeight: '700',
-      color: '#1A1A1A', letterSpacing: 1, zIndex: 10,
-    });
-    leftY += 0.4;
-  }
+  // Title block on left page top
+  let leftY = addTitleBlock(elements, pageContent, {
+    x: leftPageStart, y: MARGIN, width: leftPageWidth, compact: true,
+  });
   if (pageContent.headline) {
     elements.push({
       type: 'headline', text: pageContent.headline,
@@ -1468,25 +1311,9 @@ function buildStaggeredLayout(elements, photos, pageContent, bounds) {
   const photoCount = photos.length;
 
   // Title on right page (top)
-  let rightY = MARGIN;
-  if (pageContent.section) {
-    elements.push({
-      type: 'sectionHeader', text: pageContent.section,
-      x: rightPageStart, y: rightY, width: rightPageWidth,
-      fontSize: 48, fontFamily: 'Playfair Display', fontWeight: '900',
-      color: '#1A1A1A', textAlign: 'left', textTransform: 'none', zIndex: 10,
-    });
-    rightY += 1.0;  // Extra space for large title text
-  }
-  if (pageContent.schoolName) {
-    elements.push({
-      type: 'schoolName', text: pageContent.schoolName,
-      x: rightPageStart, y: rightY, width: 3,
-      fontSize: 28, fontFamily: 'Playfair Display', fontWeight: '700',
-      color: '#1A1A1A', letterSpacing: 1, zIndex: 10,
-    });
-    rightY += 0.45;
-  }
+  let rightY = addTitleBlock(elements, pageContent, {
+    x: rightPageStart, y: MARGIN, width: rightPageWidth,
+  });
 
   // Left page: staggered columns of photos
   const leftColW = (leftPageWidth - GAP) / 2;
@@ -1620,59 +1447,60 @@ function extractCoaches(pageContent) {
 }
 
 // =============================================================================
-// HELPER: Add text content to a page
+// HELPER: Add title block (pageTitle + section name) - used by ALL templates
 // =============================================================================
-function addTextContent(elements, pageContent, options) {
-  const { startX, endX, width, pageHeight, MARGIN, flipped = false, compact = false } = options;
+function addTitleBlock(elements, pageContent, { x, y, width, compact = false, align = 'left' }) {
+  let currentY = y;
 
-  // Typography hierarchy:
-  // 1. SECTION NAME (biggest) - "Boy's Soccer"
-  // 2. School name (smaller) - "DCHS"
-  // 3. Page title with theme - "BUILDING A LEGACY" (theme word styled differently)
-  // 4. Headline with purple bar
-  // 5. Record/Date
-  // 6. Body copy
-
-  let currentY = compact ? 0.6 : 0.5;
-
-  // PAGE TITLE - Big themed title (e.g., "BUILDING A LEGACY") - this is the main eye-catcher
+  // PAGE TITLE - Big themed title (e.g., "BUILDING A LEGACY")
   if (pageContent.pageTitle) {
     elements.push({
       type: 'pageTitle',
       text: pageContent.pageTitle,
       themeWord: pageContent.pageTitleThemeWord || null,
-      x: startX,
-      y: currentY,
-      width: width,
-      fontSize: compact ? 48 : 60,
+      x, y: currentY, width,
+      fontSize: compact ? 44 : 54,
       fontFamily: 'Playfair Display',
       fontWeight: '900',
       color: '#1A1A1A',
+      textAlign: align,
       letterSpacing: 2,
       zIndex: 10,
     });
-    currentY += compact ? 1.0 : 1.2;
+    currentY += compact ? 0.9 : 1.1;
   }
 
-  // SECTION NAME - Smaller subtitle (e.g., "Boy's Soccer")
+  // SECTION NAME - Smaller subtitle (e.g., "BOY'S SOCCER")
   if (pageContent.section) {
     elements.push({
       type: 'sectionHeader',
       text: pageContent.section,
-      x: startX,
-      y: currentY,
-      width: width,
-      fontSize: compact ? 18 : 22,
+      x, y: currentY, width,
+      fontSize: compact ? 16 : 20,
       fontFamily: 'Source Sans Pro',
       fontWeight: '600',
       color: '#523D73',
-      textAlign: 'left',
+      textAlign: align,
       textTransform: 'uppercase',
       letterSpacing: 3,
       zIndex: 10,
     });
-    currentY += compact ? 0.4 : 0.45;
+    currentY += compact ? 0.35 : 0.4;
   }
+
+  return currentY;
+}
+
+// =============================================================================
+// HELPER: Add text content to a page
+// =============================================================================
+function addTextContent(elements, pageContent, options) {
+  const { startX, endX, width, pageHeight, MARGIN, flipped = false, compact = false } = options;
+
+  // Use shared title block helper
+  let currentY = addTitleBlock(elements, pageContent, {
+    x: startX, y: compact ? 0.6 : 0.5, width, compact,
+  });
 
   // Headline with purple bar
   if (pageContent.headline) {
@@ -2121,39 +1949,10 @@ function buildSinglePageLayout(elements, photos, pageContent, options) {
   const { pageWidth, pageHeight, MARGIN, GAP, photoCaptions = [] } = options;
   const contentWidth = pageWidth - 2 * MARGIN;
 
-  // Section header
-  if (pageContent.section) {
-    elements.push({
-      type: 'sectionHeader',
-      text: pageContent.section,
-      x: pageWidth - MARGIN - 2.5,
-      y: 0.5,
-      width: 2.3,
-      fontSize: 28,
-      fontFamily: 'Dancing Script',
-      fontWeight: '400',
-      fontStyle: 'italic',
-      color: '#1A1A1A',
-      textAlign: 'right',
-      zIndex: 10,
-    });
-  }
-
-  // School name
-  if (pageContent.schoolName) {
-    elements.push({
-      type: 'schoolName',
-      text: pageContent.schoolName,
-      x: MARGIN,
-      y: 1.0,
-      width: 2.5,
-      fontSize: 48,
-      fontFamily: 'Playfair Display',
-      fontWeight: '900',
-      color: '#1A1A1A',
-      zIndex: 10,
-    });
-  }
+  // Title block
+  const titleEndY = addTitleBlock(elements, pageContent, {
+    x: MARGIN, y: 0.5, width: contentWidth,
+  });
 
   // Headline
   if (pageContent.headline) {
@@ -2161,7 +1960,7 @@ function buildSinglePageLayout(elements, photos, pageContent, options) {
       type: 'headline',
       text: pageContent.headline,
       x: MARGIN,
-      y: 1.8,
+      y: titleEndY + 0.1,
       width: contentWidth * 0.6,
       fontSize: 14,
       fontFamily: 'Playfair Display',
