@@ -82,33 +82,40 @@ ${JSON.stringify(rawContent, null, 2)}
 YOUR TASKS:
 
 1. **POLISH TEXT** - Fix grammar, spelling, punctuation. Improve clarity and flow.
-   - Headlines should be punchy and engaging (not generic)
    - Body copy should be well-written, appropriate length for yearbook
-   - Captions should identify people left-to-right when possible
    - Quotes should feel authentic but be grammatically correct
 
-2. **SMART CURATION** - Decide what to emphasize
+2. **PAGE TITLE (pageTitle)** - Create a creative themed title for the page
+   - The yearbook theme is "Building Our Futures"
+   - Create a short, impactful title that ties into this theme using words like: Building, Creating, Constructing, Forging, Crafting, Laying the Foundation, Blueprint, etc.
+   - Examples: "BUILDING A LEGACY" for a sports team, "CRAFTING HARMONY" for choir, "FORGING BONDS" for a club, "CONSTRUCTING VICTORY" for a championship
+   - The theme word (building, creating, etc.) should be the FIRST word
+   - Keep it 2-4 words max
+   - This is separate from the section name — the section name stays as-is (e.g., "Boy's Soccer")
+
+3. **CAPTION TITLES AND GRADES**
+   - Every photo caption MUST have a "captionTitle" — a short, bold, ALL-CAPS action title (2-4 words)
+   - Examples: "MAKING THE PASS", "BLOCKING THE SHOT", "SENIOR SPOTLIGHT", "GAME DAY ENERGY", "THE SAVE", "EYES ON THE BALL"
+   - captionTitle should describe what's happening in the photo or highlight the moment
+   - Include the player's grade in parentheses after their name: "Jay Parrish (11)" or "Blake Dale (10)"
+   - If grades aren't provided, use [GRADE] as placeholder
+   - For group photos use titles like "SENIOR SPOTLIGHT", "SQUAD GOALS", "TEAM HUDDLE"
+
+4. **SMART CURATION** - Decide what to emphasize
    - If body copy is too long (>300 words), trim to key moments
    - If body copy is too short or generic, expand with relevant details
    - Identify which photo should be the "dominant/primary" based on descriptions
-   - Suggest which content elements should be visually prominent
 
-3. **YEARBOOK BEST PRACTICES**
-   - PRESERVE the user's section name capitalization EXACTLY as they typed it (e.g., "Boy's Soccer" stays "Boy's Soccer", NOT "boys soccer")
+5. **YEARBOOK BEST PRACTICES**
+   - PRESERVE the user's section name capitalization EXACTLY as they typed it
    - School name should be abbreviated if common (Douglas County → DCHS)
    - Dates should be consistent format
    - Roster names should be formatted consistently (First Last)
    - Stats/records should be formatted clearly (e.g., "12-5" or "Record: 12-5")
 
-4. **CONTENT GAPS** - If critical content is missing:
+6. **CONTENT GAPS** - If critical content is missing:
    - Suggest what's missing (don't fabricate facts)
    - Provide placeholder text marked with [NEEDS INFO]
-
-5. **CAPTION INTELLIGENCE**
-   - Write better captions if they're weak or missing
-   - For group photos, suggest "[Names needed - left to right]" format
-   - Action shots should describe what's happening
-   - Include jersey numbers for sports if mentioned
 
 Return ONLY valid JSON in this exact format:
 
@@ -116,6 +123,8 @@ Return ONLY valid JSON in this exact format:
 {
   "content": {
     "section": "polished section name",
+    "pageTitle": "BUILDING A LEGACY",
+    "pageTitleThemeWord": "BUILDING",
     "schoolName": "ABBREVIATED",
     "headline": "Polished, Engaging Headline",
     "subheadline": "Optional polished subheadline or null",
@@ -129,22 +138,20 @@ Return ONLY valid JSON in this exact format:
     ],
     "highlights": ["Achievement 1", "Achievement 2"],
     "photoCaptions": [
-      {"photoIndex": 0, "caption": "Descriptive caption", "people": "Names left to right", "isPrimary": true},
-      {"photoIndex": 1, "caption": "Another caption", "people": "Names", "isPrimary": false}
+      {"photoIndex": 0, "captionTitle": "MAKING THE PASS", "caption": "Descriptive caption with Name (grade)", "people": "Jay Parrish (11)", "isPrimary": true},
+      {"photoIndex": 1, "captionTitle": "THE SAVE", "caption": "Another caption", "people": "Isaiah McCluskey (12)", "isPrimary": false}
     ],
     "folio": "page numbers or null",
     "pageCategory": "${pageCategory}"
   },
   "changesApplied": [
-    "Fixed spelling in headline",
-    "Expanded body copy with season highlights",
-    "Designated photo 0 as primary (action shot)",
-    "Added missing captain designation to roster"
+    "Generated themed page title: BUILDING A LEGACY",
+    "Added caption titles for all photos",
+    "Added grade numbers to player names"
   ],
   "suggestedEmphasis": [
-    {"element": "headline", "reason": "Strong hook for readers"},
-    {"element": "photo_0", "reason": "Best action shot, should be dominant"},
-    {"element": "quote_0", "reason": "Emotional impact, good pull quote"}
+    {"element": "pageTitle", "reason": "Themed title ties to yearbook theme"},
+    {"element": "photo_0", "reason": "Best action shot, should be dominant"}
   ],
   "contentQualityScore": 85
 }
@@ -154,6 +161,8 @@ IMPORTANT:
 - Preserve the user's voice and intent - polish, don't rewrite completely
 - NEVER change the capitalization of the section name - use it EXACTLY as provided
 - Don't invent facts, names, or statistics not provided
+- Every photo caption MUST have a captionTitle (ALL CAPS, 2-4 words)
+- The pageTitle MUST tie into the "Building Our Futures" theme
 - If something is clearly wrong (misspelled name, wrong date), fix it
 - Mark uncertain content with [VERIFY] or [NEEDS INFO]
 - The contentQualityScore is 0-100 based on completeness and quality`;

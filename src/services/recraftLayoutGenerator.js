@@ -569,13 +569,14 @@ function buildPhotosDominantLayout(elements, photos, pageContent, bounds) {
 
   const photoCount = photos.length;
 
-  // Helper to get caption for a photo (skip placeholders)
-  const getCaption = (index) => {
+  // Helper to get caption data for a photo (skip placeholders)
+  const getDomCaptionData = (index) => {
     const caption = photoCaptions.find(c => c.photoIndex === index) || photoCaptions[index];
     if (caption) {
       let text = '';
       const people = caption.people || '';
       const captionText = caption.caption || '';
+      const captionTitle = caption.captionTitle || null;
 
       const isPlaceholder = (str) => {
         if (!str) return true;
@@ -593,9 +594,9 @@ function buildPhotosDominantLayout(elements, photos, pageContent, bounds) {
       if (text && !isPlaceholder(captionText)) text += ' — ';
       if (!isPlaceholder(captionText)) text += captionText;
 
-      return text.trim() || null;
+      return { caption: text.trim() || null, captionTitle };
     }
-    return null;
+    return { caption: null, captionTitle: null };
   };
 
   // Dominant photo spans most of the spread (avoiding gutter for faces)
@@ -611,7 +612,7 @@ function buildPhotosDominantLayout(elements, photos, pageContent, bounds) {
     blackAndWhite: true,
     zIndex: 1,
     cropFit: 'cover',
-    caption: getCaption(0),
+    ...getDomCaptionData(0),
   });
 
   // Text content overlaid on bottom right
@@ -687,7 +688,7 @@ function buildPhotosDominantLayout(elements, photos, pageContent, bounds) {
         blackAndWhite: false,
         zIndex: 2,
         cropFit: 'cover',
-        caption: getCaption(i + 1),
+        ...getDomCaptionData(i + 1),
       });
     }
   }
@@ -1625,11 +1626,12 @@ function addTextContent(elements, pageContent, options) {
   const { startX, endX, width, pageHeight, MARGIN, flipped = false, compact = false } = options;
 
   // Typography hierarchy:
-  // 1. SECTION NAME (biggest) - "boys soccer" is the main title
+  // 1. SECTION NAME (biggest) - "Boy's Soccer"
   // 2. School name (smaller) - "DCHS"
-  // 3. Headline with purple bar
-  // 4. Record/Date on same line
-  // 5. Body copy
+  // 3. Page title with theme - "BUILDING A LEGACY" (theme word styled differently)
+  // 4. Headline with purple bar
+  // 5. Record/Date
+  // 6. Body copy
 
   let currentY = compact ? 0.6 : 0.5;
 
@@ -1650,6 +1652,26 @@ function addTextContent(elements, pageContent, options) {
       zIndex: 10,
     });
     currentY += compact ? 0.9 : 1.05;  // Enough space for large title text
+  }
+
+  // PAGE TITLE - Themed title (e.g., "BUILDING A LEGACY")
+  if (pageContent.pageTitle) {
+    elements.push({
+      type: 'pageTitle',
+      text: pageContent.pageTitle,
+      themeWord: pageContent.pageTitleThemeWord || null,
+      x: startX,
+      y: currentY,
+      width: width,
+      fontSize: compact ? 14 : 16,
+      fontFamily: 'Source Sans Pro',
+      fontWeight: '700',
+      color: '#523D73',
+      letterSpacing: 3,
+      textTransform: 'uppercase',
+      zIndex: 10,
+    });
+    currentY += compact ? 0.3 : 0.35;
   }
 
   // School name - smaller, below section
@@ -1846,17 +1868,14 @@ function buildPhotoGrid(photos, bounds, startIndex = 0, photoCaptions = []) {
   const primaryIdx = dominantIdx >= 0 ? dominantIdx : 0;
 
   // Helper to get caption for a photo
-  const getCaption = (index) => {
+  const getCaptionData = (index) => {
     const caption = photoCaptions.find(c => c.photoIndex === index) || photoCaptions[index];
     if (caption) {
-      // Build caption text: "Person Name - doing something" or just the caption
       let text = '';
-
-      // Skip placeholder/empty captions
       const people = caption.people || '';
       const captionText = caption.caption || '';
+      const captionTitle = caption.captionTitle || null;
 
-      // Check if it's a real caption (not placeholder text)
       const isPlaceholder = (str) => {
         if (!str) return true;
         const lower = str.toLowerCase();
@@ -1872,9 +1891,10 @@ function buildPhotoGrid(photos, bounds, startIndex = 0, photoCaptions = []) {
       if (text && !isPlaceholder(captionText)) text += ' — ';
       if (!isPlaceholder(captionText)) text += captionText;
 
-      return text.trim() || null;
+      const finalCaption = text.trim() || null;
+      return { caption: finalCaption, captionTitle: captionTitle || null };
     }
-    return null;
+    return { caption: null, captionTitle: null };
   };
 
   if (photoCount === 1) {
@@ -1885,7 +1905,7 @@ function buildPhotoGrid(photos, bounds, startIndex = 0, photoCaptions = []) {
       width: availableWidth, height: availableHeight,
       borderRadius: 0, shadow: false, blackAndWhite: true,
       zIndex: 1, cropFit: 'cover',
-      caption: getCaption(startIndex),
+      ...getCaptionData(startIndex),
     });
   } else if (photoCount === 2) {
     // Two photos: large one on top, smaller below (fills full height)
@@ -2103,8 +2123,10 @@ function buildPhotoGrid(photos, bounds, startIndex = 0, photoCaptions = []) {
 
   // Add captions to all photo elements
   return elements.map(el => {
-    if (el.type === 'photo' && !el.caption) {
-      el.caption = getCaption(el.photoIndex);
+    if (el.type === 'photo' && !el.caption && !el.captionTitle) {
+      const data = getCaptionData(el.photoIndex);
+      el.caption = data.caption;
+      el.captionTitle = data.captionTitle;
     }
     return el;
   });

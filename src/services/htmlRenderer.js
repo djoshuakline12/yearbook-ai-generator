@@ -93,6 +93,7 @@ function renderElement(el, photos, dpi) {
   switch (el.type) {
     case 'photo': return renderPhoto(el, photos, dpi);
     case 'sectionHeader': return renderSectionHeader(el, dpi);
+    case 'pageTitle': return renderPageTitle(el, dpi);
     case 'schoolName': return renderSchoolName(el, dpi);
     case 'headline': return renderHeadline(el, dpi);
     case 'subheadline': return renderSubheadline(el, dpi);
@@ -173,30 +174,40 @@ function renderPhoto(el, photos, dpi) {
   }
 
   // Caption styling - appears BELOW the photo (not overlaid) for readability
-  // Allow up to 2 lines for captions
-  const captionFontSize = ptToPx(6.5, dpi);
+  // Support bold caption title (e.g., "MAKING THE PASS") + descriptive text
+  const captionTitleFontSize = ptToPx(6, dpi);
+  const captionFontSize = ptToPx(5.5, dpi);
   const captionLineHeight = 1.3;
-  const captionHeight = el.caption ? inToPx(0.45, dpi) : 0;  // Space for ~2 lines of caption
+  const hasCaption = el.caption || el.captionTitle;
+  const captionHeight = hasCaption ? inToPx(0.55, dpi) : 0;  // Space for title + 2 lines
   const photoHeight = h - captionHeight;  // Reduce photo height to make room
 
-  const captionHtml = el.caption ? `
+  let captionInner = '';
+  if (el.captionTitle) {
+    captionInner += `<span style="font-weight: 700; font-style: normal; text-transform: uppercase; font-size: ${captionTitleFontSize}px; letter-spacing: 0.5px;">${escapeHtml(el.captionTitle)}</span>`;
+    if (el.caption) captionInner += ` — `;
+  }
+  if (el.caption) {
+    captionInner += `<span style="font-style: italic;">${escapeHtml(el.caption)}</span>`;
+  }
+
+  const captionHtml = hasCaption ? `
     <div style="
       position: absolute;
       bottom: 0;
       left: 0;
       right: 0;
       height: ${captionHeight}px;
-      padding-top: ${inToPx(0.05, dpi)}px;
+      padding-top: ${inToPx(0.04, dpi)}px;
       color: #333333;
       font-family: 'Source Sans Pro', sans-serif;
       font-size: ${captionFontSize}px;
-      font-style: italic;
       line-height: ${captionLineHeight};
       overflow: hidden;
       display: -webkit-box;
-      -webkit-line-clamp: 2;
+      -webkit-line-clamp: 3;
       -webkit-box-orient: vertical;
-    ">${escapeHtml(el.caption)}</div>
+    ">${captionInner}</div>
   ` : '';
 
   return `<div class="element photo-container" style="
@@ -242,6 +253,36 @@ function renderSectionHeader(el, dpi) {
     letter-spacing: ${letterSpacing};
     z-index: ${el.zIndex || 10};
   ">${escapeHtml(el.text)}</div>`;
+}
+
+function renderPageTitle(el, dpi) {
+  const x = inToPx(el.x, dpi);
+  const y = inToPx(el.y, dpi);
+  const w = inToPx(el.width, dpi);
+  const fontSize = ptToPx(el.fontSize || 16, dpi);
+  const letterSpacing = el.letterSpacing ? `${el.letterSpacing * (dpi / 96)}px` : `${3 * (dpi / 96)}px`;
+
+  // Style the theme word differently (e.g., "BUILDING" in "BUILDING A LEGACY")
+  let textHtml;
+  if (el.themeWord && el.text) {
+    const themeWord = escapeHtml(el.themeWord);
+    const rest = escapeHtml(el.text.replace(new RegExp(el.themeWord, 'i'), '').trim());
+    // Theme word gets italic + slightly larger
+    textHtml = `<span style="font-style: italic; font-size: ${Math.round(fontSize * 1.15)}px; color: #523D73;">${themeWord}</span> <span style="color: #1A1A1A;">${rest}</span>`;
+  } else {
+    textHtml = escapeHtml(el.text);
+  }
+
+  return `<div class="element" style="
+    left: ${x}px; top: ${y}px;
+    width: ${w}px;
+    font-family: '${el.fontFamily || 'Source Sans Pro'}', sans-serif;
+    font-size: ${fontSize}px;
+    font-weight: ${el.fontWeight || '700'};
+    text-transform: ${el.textTransform || 'uppercase'};
+    letter-spacing: ${letterSpacing};
+    z-index: ${el.zIndex || 10};
+  ">${textHtml}</div>`;
 }
 
 function renderSchoolName(el, dpi) {
