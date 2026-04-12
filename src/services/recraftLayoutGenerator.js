@@ -162,17 +162,13 @@ function chooseLayoutTemplate(pageContent, photoCount) {
   const hasLongBody = pageContent.bodyCopy && pageContent.bodyCopy.length > 500;
   const fewPhotos = photoCount <= 4;
 
-  // Build list of ALL eligible templates for this content
+  // Build list of ALL eligible templates — all use mixed text+photos on both pages
   const options = [];
 
-  // These work for any content
-  options.push('photos-left');
-  options.push('photos-right');
+  // Mixed layouts: text and photos on BOTH pages (no empty pages)
   options.push('mixed-left');
   options.push('mixed-right');
   options.push('top-heavy');
-  options.push('sidebar-left');
-  options.push('sidebar-right');
 
   // Need 3+ photos
   if (photoCount >= 3) {
@@ -1593,7 +1589,7 @@ function addTextContent(elements, pageContent, options) {
       textAlign: 'justify',
       zIndex: 10,
     });
-    currentY += compact ? 2.7 : 4.2;  // Body height + gap
+    currentY += compact ? 2.8 : 4.3;  // Body height + clear gap
   }
 
   // Auto-extract coaches from roster if they have "(Coach)" in their name
