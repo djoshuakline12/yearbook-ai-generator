@@ -217,8 +217,8 @@ ${isSpread ? `- CENTER GUTTER: Binding fold at x=${pageWidth/2}" (${PAGE.WIDTH_I
 
 CONTENT TO INCLUDE:
 
-SECTION HEADER: "${pageContent.section || ''}"
-${pageContent.schoolName ? `SCHOOL NAME: "${pageContent.schoolName}"` : ''}
+${pageContent.pageTitle ? `PAGE TITLE (BIG, themed): "${pageContent.pageTitle}" (theme word: "${pageContent.pageTitleThemeWord || ''}")` : ''}
+SECTION NAME (smaller subtitle): "${pageContent.section || ''}"
 ${pageContent.headline ? `HEADLINE: "${pageContent.headline}"` : ''}
 ${pageContent.subheadline ? `SUBHEADLINE: "${pageContent.subheadline}"` : ''}
 ${hasDate ? `DATE/YEAR: "${pageContent.dateOrYear}"` : ''}
@@ -261,8 +261,13 @@ YEARBOOK DESIGN PRINCIPLES:
 2. TEXT READABILITY: Body copy in 2.5-3.5" columns, 9-11pt font
 3. CAPTIONS: Near photos, 8-9pt, identify people left-to-right
 4. PULL QUOTES: Large, stylized, break up long text
-5. WHITE SPACE: Intentional breathing room
-6. FLOW: ${isSpread ? 'Content flows across both pages, respecting gutter' : 'Balanced visual weight'}
+5. PHOTO BALANCE: Photos MUST appear on BOTH pages — never leave an entire page without photos
+6. NO SCHOOL NAME: Do NOT include a schoolName element — it's already known
+7. PAGE TITLE: If pageTitle is provided, make it the BIGGEST text element (36-48pt). Section name should be smaller (14-20pt, uppercase, purple)
+8. SECTION NAME CAPITALIZATION: Preserve the section name EXACTLY as provided — never change its capitalization
+9. NO OVERLAP: Elements must NEVER overlap. Leave at least 0.1" gap between all elements
+10. FILL THE PAGE: Minimize white space — photos should fill available areas
+11. FLOW: ${isSpread ? 'Content flows across both pages, respecting gutter. BOTH pages must have visual content (photos).' : 'Balanced visual weight'}
 
 Return ONLY valid JSON:
 
@@ -289,25 +294,26 @@ Return ONLY valid JSON:
       "cropFit": "cover"
     },
     {
-      "type": "sectionHeader",
-      "text": "section name",
+      "type": "pageTitle",
+      "text": "PAGE TITLE TEXT",
+      "themeWord": "BUILDING",
       "x": number, "y": number, "width": number,
-      "fontSize": number (24-36pt),
-      "fontFamily": "from theme",
-      "fontWeight": "300" | "400" | "700",
-      "color": "#hex",
-      "textTransform": "lowercase" | "uppercase" | "none",
-      "letterSpacing": number,
+      "fontSize": number (36-48pt),
+      "fontFamily": "Playfair Display",
+      "fontWeight": "900",
+      "color": "#1A1A1A",
       "zIndex": number
     },
     {
-      "type": "schoolName",
-      "text": "SCHOOL",
+      "type": "sectionHeader",
+      "text": "section name - PRESERVE EXACT CAPITALIZATION",
       "x": number, "y": number, "width": number,
-      "fontSize": number (36-72pt),
-      "fontFamily": "from theme",
-      "fontWeight": "700" | "900",
-      "color": "#hex",
+      "fontSize": number (14-20pt),
+      "fontFamily": "Source Sans Pro",
+      "fontWeight": "600",
+      "color": "#523D73",
+      "textTransform": "uppercase",
+      "letterSpacing": 3,
       "zIndex": number
     },
     {
