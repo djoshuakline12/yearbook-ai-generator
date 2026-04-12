@@ -178,9 +178,9 @@ function renderPhoto(el, photos, dpi) {
   const captionFontSize = ptToPx(5.5, dpi);
   const captionLineHeight = 1.3;
   const hasCaption = el.caption || el.captionTitle;
-  // Only show caption if there's enough room (photo must be at least 1" tall after caption)
-  const minPhotoHeight = inToPx(1.0, dpi);
-  const wantsCaptionHeight = hasCaption ? inToPx(0.55, dpi) : 0;
+  // Only show caption if there's enough room (photo must be at least 0.5" tall after caption)
+  const minPhotoHeight = inToPx(0.5, dpi);
+  const wantsCaptionHeight = hasCaption ? inToPx(0.45, dpi) : 0;
   const canFitCaption = hasCaption && (h - wantsCaptionHeight) >= minPhotoHeight;
   const captionHeight = canFitCaption ? wantsCaptionHeight : 0;
   const photoHeight = h - captionHeight;  // Reduce photo height to make room
