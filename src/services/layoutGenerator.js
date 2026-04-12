@@ -47,33 +47,9 @@ async function generateLayout({ photos, pageContent, theme, pageType = 'page' })
   const pageCategory = detectPageCategory(pageContent);
 
   // ============================================================
-  // OPTION 1: Try Recraft hybrid layout (design-focused AI)
-  // ============================================================
-  if (USE_RECRAFT_LAYOUT && process.env.RECRAFT_API_KEY) {
-    console.log('Using Recraft hybrid layout generator...');
-    try {
-      const recraftLayout = await generateHybridLayout({
-        photos,
-        pageContent,
-        theme,
-        pageType,
-      });
-
-      if (recraftLayout) {
-        // Validate and correct for DCHS compliance
-        let layoutJson = validateAndCorrectLayout(recraftLayout, theme);
-        layoutJson.pageCategory = pageCategory;
-        layoutJson.generatedBy = 'recraft-hybrid';
-        console.log('Recraft layout generated successfully');
-        return layoutJson;
-      }
-    } catch (error) {
-      console.error('Recraft layout failed, falling back to Claude:', error.message);
-    }
-  }
-
-  // ============================================================
-  // OPTION 2: Fall back to Claude AI layout generation
+  // Use Claude AI for dynamic layout generation
+  // Claude handles photo balance, overlap prevention, and variety
+  // much better than hardcoded templates
   // ============================================================
   console.log('Using Claude AI layout generator...');
 
