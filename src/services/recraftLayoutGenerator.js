@@ -271,7 +271,7 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
         buildStaggeredLayout(elements, photos, pageContent, bounds);
         break;
       default:
-        buildPhotosLeftLayout(elements, photos, pageContent, bounds);
+        buildMixedLeftLayout(elements, photos, pageContent, bounds);
     }
 
   } else {
@@ -726,15 +726,21 @@ function buildMixedLeftLayout(elements, photos, pageContent, bounds) {
   const leftBodyHeight = pageContent.bodyCopy ? 2.8 : 0;
   const leftPhotoCount = Math.max(2, Math.ceil(photoCount * 0.4));
   const leftPhotos = photos.slice(0, Math.min(leftPhotoCount, photoCount - 1));
-  if (leftPhotos.length > 0) {
+  const leftPhotoStartY = leftY + 0.1;
+  const leftPhotoMaxY = pageHeight - MARGIN - leftBodyHeight;
+  console.log(`mixed-left: leftY=${leftY.toFixed(2)} photoStartY=${leftPhotoStartY.toFixed(2)} maxY=${leftPhotoMaxY.toFixed(2)} availH=${(leftPhotoMaxY - leftPhotoStartY).toFixed(2)} leftPhotos=${leftPhotos.length}`);
+  if (leftPhotos.length > 0 && leftPhotoMaxY > leftPhotoStartY + 1.0) {
     const leftPhotoElements = buildPhotoGrid(leftPhotos, {
       startX: leftPageStart,
-      startY: leftY + 0.1,
+      startY: leftPhotoStartY,
       maxX: leftPageEnd,
-      maxY: pageHeight - MARGIN - leftBodyHeight,
+      maxY: leftPhotoMaxY,
       GAP
     }, 0, photoCaptions);
+    console.log(`mixed-left: generated ${leftPhotoElements.length} left photo elements`);
     elements.push(...leftPhotoElements);
+  } else {
+    console.log('mixed-left: NOT ENOUGH SPACE for left photos!');
   }
 
   // LEFT PAGE: Body copy at bottom
