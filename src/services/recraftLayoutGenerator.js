@@ -562,9 +562,17 @@ function buildPhotosDominantLayout(elements, photos, pageContent, bounds) {
                str.trim() === '';
       };
 
-      if (!isPlaceholder(people)) text += people;
-      if (text && !isPlaceholder(captionText)) text += ' — ';
-      if (!isPlaceholder(captionText)) text += captionText;
+      // Avoid repeating name: if caption already starts with the person's name, just use caption
+      const captionStartsWithName = !isPlaceholder(people) && !isPlaceholder(captionText) &&
+        captionText.toLowerCase().startsWith(people.split(',')[0].trim().toLowerCase());
+
+      if (captionStartsWithName) {
+        text = captionText;
+      } else {
+        if (!isPlaceholder(people)) text += people;
+        if (text && !isPlaceholder(captionText)) text += ' — ';
+        if (!isPlaceholder(captionText)) text += captionText;
+      }
 
       return { caption: text.trim() || null, captionTitle };
     }
@@ -1575,17 +1583,17 @@ function addTextContent(elements, pageContent, options) {
       x: startX,
       y: currentY,
       width: width,
-      height: compact ? 3.0 : 4.5,  // Increased height
-      fontSize: compact ? 9 : 10,    // Slightly larger font
+      height: compact ? 2.5 : 4.0,  // Fixed height with overflow hidden
+      fontSize: compact ? 9 : 10,
       fontFamily: 'Source Sans Pro',
       fontWeight: '400',
       color: '#1A1A1A',
-      lineHeight: 1.5,              // More line spacing
+      lineHeight: 1.5,
       columns: 2,
       textAlign: 'justify',
       zIndex: 10,
     });
-    currentY += compact ? 3.1 : 4.6;
+    currentY += compact ? 2.7 : 4.2;  // Body height + gap
   }
 
   // Auto-extract coaches from roster if they have "(Coach)" in their name
@@ -1699,9 +1707,17 @@ function buildPhotoGrid(photos, bounds, startIndex = 0, photoCaptions = []) {
                str.trim() === '';
       };
 
-      if (!isPlaceholder(people)) text += people;
-      if (text && !isPlaceholder(captionText)) text += ' — ';
-      if (!isPlaceholder(captionText)) text += captionText;
+      // Avoid repeating name: if caption already starts with the person's name, just use caption
+      const captionStartsWithName = !isPlaceholder(people) && !isPlaceholder(captionText) &&
+        captionText.toLowerCase().startsWith(people.split(',')[0].trim().toLowerCase());
+
+      if (captionStartsWithName) {
+        text = captionText;
+      } else {
+        if (!isPlaceholder(people)) text += people;
+        if (text && !isPlaceholder(captionText)) text += ' — ';
+        if (!isPlaceholder(captionText)) text += captionText;
+      }
 
       const finalCaption = text.trim() || null;
       return { caption: finalCaption, captionTitle: captionTitle || null };
