@@ -970,90 +970,94 @@ function buildMixedRightLayout(elements, photos, pageContent, bounds) {
 
   const photoCount = photos.length;
 
-  // LEFT PAGE: Photos on top, body copy + roster below
-  const leftPhotoCount = Math.ceil(photoCount * 0.5);
-  const leftPhotos = photos.slice(0, leftPhotoCount);
-  const leftPhotoHeight = (pageHeight - 2 * MARGIN) * 0.55;
+  // FIXED ZONES — mirror of mixed-left
+  const rightTitleZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.30;
+  const rightPhotoZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.70;
+  const leftPhotoZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.75;
 
-  if (leftPhotos.length > 0) {
-    const leftPhotoElements = buildPhotoGrid(leftPhotos, {
-      startX: leftPageStart, startY: MARGIN,
-      maxX: leftPageEnd, maxY: MARGIN + leftPhotoHeight, GAP
-    }, 0, photoCaptions);
-    elements.push(...leftPhotoElements);
-  }
+  // Split photos: 40% left, 60% right (right has title taking space)
+  const leftPhotoCount = Math.max(2, Math.ceil(photoCount * 0.5));
+  const actualLeftCount = Math.min(leftPhotoCount, photoCount - 1);
 
-  let leftY = MARGIN + leftPhotoHeight + 0.2;
+  // === LEFT PAGE: Photos top, body+roster bottom ===
+  const leftPhotos = photos.slice(0, actualLeftCount);
+  const leftPhotoElements = buildPhotoGrid(leftPhotos, {
+    startX: leftPageStart, startY: MARGIN,
+    maxX: leftPageEnd, maxY: leftPhotoZoneEnd, GAP
+  }, 0, photoCaptions);
+  elements.push(...leftPhotoElements);
+
+  // Body copy below photos on left
   if (pageContent.bodyCopy) {
     elements.push({
       type: 'bodyCopy', text: pageContent.bodyCopy,
-      x: leftPageStart, y: leftY, width: leftPageWidth, height: 2.5,
+      x: leftPageStart, y: leftPhotoZoneEnd + 0.1,
+      width: leftPageWidth, height: pageHeight - MARGIN - leftPhotoZoneEnd - 0.2,
       fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
       color: '#1A1A1A', lineHeight: 1.5, columns: 2, textAlign: 'justify', zIndex: 10,
     });
-    leftY += 2.6;
   }
 
-  const { coaches, rosterNames } = extractCoaches(pageContent);
-  if (coaches.length > 0) {
-    elements.push({
-      type: 'roster', title: pageContent.coachesTitle || 'Coaches:',
-      names: coaches, x: leftPageStart, y: leftY, width: leftPageWidth,
-      columns: 1, titleFontSize: 10, nameFontSize: 8,
-      fontFamily: 'Source Sans Pro', titleColor: '#523D73',
-      nameColor: '#1A1A1A', fontWeight: '600', zIndex: 10,
-    });
-    leftY += 0.3 + (coaches.length * 0.16);
-  }
-  if (rosterNames.length > 0) {
-    elements.push({
-      type: 'roster', title: pageContent.rosterTitle || 'Team Roster:',
-      names: rosterNames, x: leftPageStart, y: leftY, width: leftPageWidth,
-      columns: 4, titleFontSize: 10, nameFontSize: 7,
-      fontFamily: 'Source Sans Pro', titleColor: '#1A1A1A', nameColor: '#333333', zIndex: 10,
-    });
-  }
-
-  // RIGHT PAGE: Title block at top + photos below
+  // === RIGHT PAGE TOP: Title block ===
   let rightY = addTitleBlock(elements, pageContent, {
     x: rightPageStart, y: MARGIN, width: rightPageWidth, align: 'right',
   });
+
   if (pageContent.headline) {
     elements.push({
       type: 'headline', text: pageContent.headline,
-      x: rightPageStart + rightPageWidth * 0.3, y: rightY, width: rightPageWidth * 0.7,
-      fontSize: 13, fontFamily: 'Playfair Display', fontWeight: '700',
-      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+      x: rightPageStart + rightPageWidth * 0.3, y: Math.min(rightY, rightTitleZoneEnd - 0.7),
+      width: rightPageWidth * 0.7, fontSize: 13, fontFamily: 'Playfair Display',
+      fontWeight: '700', color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
     });
-    rightY += 0.4;
   }
   if (pageContent.record) {
     elements.push({
       type: 'record', text: pageContent.record,
-      x: rightPageEnd - 1.5, y: rightY, width: 1.5,
-      fontSize: 11, fontFamily: 'Playfair Display', fontWeight: '700',
-      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+      x: rightPageEnd - 1.5, y: Math.min(rightY + 0.35, rightTitleZoneEnd - 0.35),
+      width: 1.5, fontSize: 11, fontFamily: 'Playfair Display',
+      fontWeight: '700', color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
     });
-    rightY += 0.35;
   }
   if (pageContent.dateOrYear) {
     elements.push({
       type: 'date', text: pageContent.dateOrYear,
-      x: rightPageEnd - 2, y: rightY, width: 2,
-      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '600',
-      color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
+      x: rightPageEnd - 2, y: Math.min(rightY + 0.65, rightTitleZoneEnd - 0.1),
+      width: 2, fontSize: 10, fontFamily: 'Source Sans Pro',
+      fontWeight: '600', color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
     });
-    rightY += 0.3;
   }
-  rightY += 0.15;
 
-  const rightPhotos = photos.slice(leftPhotoCount);
+  // === RIGHT PAGE MIDDLE: Photos (ALWAYS placed here) ===
+  const rightPhotos = photos.slice(actualLeftCount);
   if (rightPhotos.length > 0) {
     const rightPhotoElements = buildPhotoGrid(rightPhotos, {
-      startX: rightPageStart, startY: rightY,
-      maxX: rightPageEnd, maxY: pageHeight - MARGIN, GAP
-    }, leftPhotoCount, photoCaptions);
+      startX: rightPageStart, startY: rightTitleZoneEnd,
+      maxX: rightPageEnd, maxY: rightPhotoZoneEnd, GAP
+    }, actualLeftCount, photoCaptions);
     elements.push(...rightPhotoElements);
+  }
+
+  // === RIGHT PAGE BOTTOM: Roster ===
+  const { coaches, rosterNames } = extractCoaches(pageContent);
+  let rosterY = rightPhotoZoneEnd + 0.1;
+  if (coaches.length > 0) {
+    elements.push({
+      type: 'roster', title: pageContent.coachesTitle || 'Coaches:',
+      names: coaches, x: rightPageStart, y: rosterY, width: rightPageWidth,
+      columns: 1, titleFontSize: 10, nameFontSize: 8,
+      fontFamily: 'Source Sans Pro', titleColor: '#523D73',
+      nameColor: '#1A1A1A', fontWeight: '600', zIndex: 10,
+    });
+    rosterY += 0.3 + (coaches.length * 0.16);
+  }
+  if (rosterNames.length > 0) {
+    elements.push({
+      type: 'roster', title: pageContent.rosterTitle || 'Team Roster:',
+      names: rosterNames, x: rightPageStart, y: rosterY, width: rightPageWidth,
+      columns: 4, titleFontSize: 10, nameFontSize: 7,
+      fontFamily: 'Source Sans Pro', titleColor: '#1A1A1A', nameColor: '#333333', zIndex: 10,
+    });
   }
 }
 
