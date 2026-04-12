@@ -162,32 +162,30 @@ function chooseLayoutTemplate(pageContent, photoCount) {
   const hasLongBody = pageContent.bodyCopy && pageContent.bodyCopy.length > 500;
   const fewPhotos = photoCount <= 4;
 
-  // Build list of ALL eligible templates — all use mixed text+photos on both pages
-  const options = [];
+  // Generate layout parameters for infinite variety
+  // Each parameter is derived from the content hash for deterministic but varied results
+  const params = {
+    // Which page gets the title: 'left' or 'right'
+    titlePage: contentHash % 2 === 0 ? 'left' : 'right',
+    // Photo split: what fraction goes to the title page (0.3 to 0.5)
+    titlePagePhotoRatio: 0.3 + (contentHash % 3) * 0.1,
+    // Title zone size: how much of the page the title takes (0.18 to 0.28)
+    titleZoneSize: 0.18 + (contentHash % 4) * 0.03,
+    // Photo zone end on title page (0.65 to 0.80)
+    titlePagePhotoEnd: 0.65 + (contentHash % 5) * 0.03,
+    // Photo zone end on photo page (0.75 to 0.90)
+    photoPagePhotoEnd: 0.78 + (contentHash % 4) * 0.04,
+    // Stagger offset for column 2 (0 to 1.5")
+    staggerOffset: (contentHash % 6) * 0.3,
+    // Use staggered columns on photo page
+    useStaggeredColumns: contentHash % 3 === 0,
+    // Body copy position: 'bottom-title' or 'bottom-photo'
+    bodyPosition: contentHash % 3 === 0 ? 'bottom-photo' : 'bottom-title',
+  };
 
-  // Mixed layouts: text and photos on BOTH pages (no empty pages)
-  options.push('mixed-left');
-  options.push('mixed-right');
-  options.push('top-heavy');
+  console.log(`Layout params: title=${params.titlePage}, split=${params.titlePagePhotoRatio.toFixed(2)}, stagger=${params.useStaggeredColumns}`);
 
-  // Need 3+ photos
-  if (photoCount >= 3) {
-    options.push('magazine');
-    options.push('L-shape');
-    options.push('staggered');
-  }
-
-  // Moderate photos
-  if (!hasLongBody && photoCount >= 4 && photoCount <= 10) {
-    options.push('photos-balanced');
-  }
-
-  // Few photos - hero style
-  if (fewPhotos && !hasLongBody) {
-    options.push('photos-dominant');
-  }
-
-  return options[contentHash % options.length];
+  return params;
 }
 
 function hashString(str) {
@@ -226,53 +224,17 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
     const rightPageEnd = pageWidth - MARGIN;
     const rightPageWidth = rightPageEnd - rightPageStart;
 
-    const layoutType = chooseLayoutTemplate(pageContent, photoCount);
-    console.log(`Layout template: ${layoutType} (${photoCount} photos)`);
+    const layoutParams = chooseLayoutTemplate(pageContent, photoCount);
 
     const bounds = {
       leftPageStart, leftPageEnd, leftPageWidth,
       rightPageStart, rightPageEnd, rightPageWidth,
       pageHeight, pageWidth, MARGIN, GAP,
-      photoCaptions  // Pass captions to layout builders
+      photoCaptions
     };
 
-    switch (layoutType) {
-      case 'photos-right':
-        buildPhotosRightLayout(elements, photos, pageContent, bounds);
-        break;
-      case 'photos-balanced':
-        buildPhotosBalancedLayout(elements, photos, pageContent, bounds);
-        break;
-      case 'photos-dominant':
-        buildPhotosDominantLayout(elements, photos, pageContent, bounds);
-        break;
-      case 'mixed-left':
-        buildMixedLeftLayout(elements, photos, pageContent, bounds);
-        break;
-      case 'mixed-right':
-        buildMixedRightLayout(elements, photos, pageContent, bounds);
-        break;
-      case 'magazine':
-        buildMagazineLayout(elements, photos, pageContent, bounds);
-        break;
-      case 'top-heavy':
-        buildTopHeavyLayout(elements, photos, pageContent, bounds);
-        break;
-      case 'sidebar-left':
-        buildSidebarLayout(elements, photos, pageContent, bounds, 'left');
-        break;
-      case 'sidebar-right':
-        buildSidebarLayout(elements, photos, pageContent, bounds, 'right');
-        break;
-      case 'L-shape':
-        buildLShapeLayout(elements, photos, pageContent, bounds);
-        break;
-      case 'staggered':
-        buildStaggeredLayout(elements, photos, pageContent, bounds);
-        break;
-      default:
-        buildMixedLeftLayout(elements, photos, pageContent, bounds);
-    }
+    // Single parameterized builder — infinite variety from params
+    buildParameterizedLayout(elements, photos, pageContent, bounds, layoutParams);
 
   } else {
     // Single page layout
@@ -307,6 +269,173 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
       heightPx: PAGE.HEIGHT_PX,
     },
   };
+}
+
+// =============================================================================
+// PARAMETERIZED LAYOUT BUILDER — generates infinite variety from params
+// =============================================================================
+function buildParameterizedLayout(elements, photos, pageContent, bounds, params) {
+  const { leftPageStart, leftPageEnd, leftPageWidth,
+          rightPageStart, rightPageEnd, rightPageWidth,
+          pageHeight, MARGIN, GAP, photoCaptions = [] } = bounds;
+
+  const photoCount = photos.length;
+  const usableHeight = pageHeight - 2 * MARGIN;
+
+  // Determine which page is "title page" and which is "photo page"
+  const isLeftTitle = params.titlePage === 'left';
+  const titleX = isLeftTitle ? leftPageStart : rightPageStart;
+  const titleW = isLeftTitle ? leftPageWidth : rightPageWidth;
+  const titleEnd = isLeftTitle ? leftPageEnd : rightPageEnd;
+  const photoX = isLeftTitle ? rightPageStart : leftPageStart;
+  const photoW = isLeftTitle ? rightPageWidth : leftPageWidth;
+  const photoEnd = isLeftTitle ? rightPageEnd : leftPageEnd;
+
+  // Zone boundaries
+  const titleZoneEnd = MARGIN + usableHeight * params.titleZoneSize;
+  const titlePhotoEnd = MARGIN + usableHeight * params.titlePagePhotoEnd;
+  const photoPagePhotoEnd = MARGIN + usableHeight * params.photoPagePhotoEnd;
+
+  // === TITLE PAGE: Title at top ===
+  addTitleBlock(elements, pageContent, {
+    x: titleX, y: MARGIN, width: titleW, compact: true,
+    align: isLeftTitle ? 'left' : 'right',
+  });
+
+  // Headline + record + date in title zone
+  let metaY = titleZoneEnd - 0.6;
+  if (pageContent.headline) {
+    elements.push({
+      type: 'headline', text: pageContent.headline,
+      x: titleX, y: metaY, width: titleW * 0.65,
+      fontSize: 12, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+    metaY += 0.35;
+  }
+  if (pageContent.record) {
+    elements.push({
+      type: 'record', text: pageContent.record,
+      x: titleX, y: metaY, width: 1.5,
+      fontSize: 11, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+    metaY += 0.3;
+  }
+  if (pageContent.dateOrYear) {
+    elements.push({
+      type: 'date', text: pageContent.dateOrYear,
+      x: titleX, y: metaY, width: 2,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '600',
+      color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
+    });
+  }
+
+  // === SPLIT PHOTOS BETWEEN BOTH PAGES ===
+  // Always put photos on both pages, regardless of count
+  const titlePageCount = Math.max(1, Math.min(
+    Math.round(photoCount * params.titlePagePhotoRatio),
+    photoCount - 1  // Leave at least 1 for the other page
+  ));
+  const photoPageCount = photoCount - titlePageCount;
+
+  // Title page photos: between title zone and body zone
+  const titlePagePhotos = photos.slice(0, titlePageCount);
+  if (titlePagePhotos.length > 0) {
+    const tpElements = buildPhotoGrid(titlePagePhotos, {
+      startX: titleX, startY: titleZoneEnd,
+      maxX: titleEnd, maxY: titlePhotoEnd, GAP
+    }, 0, photoCaptions);
+    elements.push(...tpElements);
+  }
+
+  // Photo page photos: fill most of the page
+  const photoPagePhotos = photos.slice(titlePageCount);
+  if (photoPagePhotos.length > 0) {
+    if (params.useStaggeredColumns && photoPagePhotos.length >= 3) {
+      // Staggered columns for variety
+      const colW = (photoW - GAP) / 2;
+      const col1 = [], col2 = [];
+      photoPagePhotos.forEach((_, i) => (i % 2 === 0 ? col1 : col2).push(i));
+
+      let y1 = MARGIN;
+      for (const i of col1) {
+        const h = (photoPagePhotoEnd - MARGIN) / col1.length - GAP;
+        elements.push({
+          type: 'photo', photoIndex: titlePageCount + i,
+          x: photoX, y: y1, width: colW, height: h,
+          borderRadius: 0, shadow: false, blackAndWhite: i === 0,
+          zIndex: 1, cropFit: 'cover',
+        });
+        y1 += h + GAP;
+      }
+      let y2 = MARGIN + params.staggerOffset;
+      for (const i of col2) {
+        const h = (photoPagePhotoEnd - MARGIN - params.staggerOffset) / Math.max(col2.length, 1) - GAP;
+        elements.push({
+          type: 'photo', photoIndex: titlePageCount + i,
+          x: photoX + colW + GAP, y: y2, width: colW, height: h,
+          borderRadius: 0, shadow: false, blackAndWhite: false,
+          zIndex: 1, cropFit: 'cover',
+        });
+        y2 += h + GAP;
+      }
+    } else {
+      // Standard grid
+      const ppElements = buildPhotoGrid(photoPagePhotos, {
+        startX: photoX, startY: MARGIN,
+        maxX: photoEnd, maxY: photoPagePhotoEnd, GAP
+      }, titlePageCount, photoCaptions);
+      elements.push(...ppElements);
+    }
+  }
+
+  // === BODY COPY ===
+  if (pageContent.bodyCopy) {
+    const bodyOnTitlePage = params.bodyPosition === 'bottom-title';
+    const bodyX = bodyOnTitlePage ? titleX : photoX;
+    const bodyW = bodyOnTitlePage ? titleW : photoW;
+    const bodyY = bodyOnTitlePage ? titlePhotoEnd + 0.1 : photoPagePhotoEnd + 0.1;
+    const bodyMaxH = pageHeight - MARGIN - bodyY - 0.1;
+
+    if (bodyMaxH > 0.5) {
+      elements.push({
+        type: 'bodyCopy', text: pageContent.bodyCopy,
+        x: bodyX, y: bodyY, width: bodyW, height: Math.min(bodyMaxH, 2.8),
+        fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
+        color: '#1A1A1A', lineHeight: 1.5, columns: 2, textAlign: 'justify', zIndex: 10,
+      });
+    }
+  }
+
+  // === ROSTER — on whichever page has more room at bottom ===
+  const { coaches, rosterNames } = extractCoaches(pageContent);
+  const rosterOnTitlePage = params.bodyPosition !== 'bottom-title';
+  const rosterX = rosterOnTitlePage ? titleX : photoX;
+  const rosterW = rosterOnTitlePage ? titleW : photoW;
+  const rosterStartY = rosterOnTitlePage
+    ? titlePhotoEnd + 0.1
+    : photoPagePhotoEnd + 0.1;
+
+  let rosterY = rosterStartY;
+  if (coaches.length > 0) {
+    elements.push({
+      type: 'roster', title: pageContent.coachesTitle || 'Coaches:',
+      names: coaches, x: rosterX, y: rosterY, width: rosterW,
+      columns: 1, titleFontSize: 10, nameFontSize: 8,
+      fontFamily: 'Source Sans Pro', titleColor: '#523D73',
+      nameColor: '#1A1A1A', fontWeight: '600', zIndex: 10,
+    });
+    rosterY += 0.3 + (coaches.length * 0.14);
+  }
+  if (rosterNames.length > 0) {
+    elements.push({
+      type: 'roster', title: pageContent.rosterTitle || 'Team Roster:',
+      names: rosterNames, x: rosterX, y: rosterY, width: rosterW,
+      columns: 4, titleFontSize: 10, nameFontSize: 7,
+      fontFamily: 'Source Sans Pro', titleColor: '#1A1A1A', nameColor: '#333333', zIndex: 10,
+    });
+  }
 }
 
 // =============================================================================
