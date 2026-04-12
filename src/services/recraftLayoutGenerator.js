@@ -1090,7 +1090,7 @@ function buildTopHeavyLayout(elements, photos, pageContent, bounds) {
       fontSize: 12, fontFamily: 'Playfair Display', fontWeight: '700',
       color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
     });
-    metaY += 0.3;
+    metaY += 0.4;  // Gap so purple bars don't touch
   }
   if (pageContent.record) {
     elements.push({
@@ -1099,7 +1099,7 @@ function buildTopHeavyLayout(elements, photos, pageContent, bounds) {
       fontSize: 11, fontFamily: 'Playfair Display', fontWeight: '700',
       color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
     });
-    metaY += 0.25;
+    metaY += 0.35;
   }
   if (pageContent.dateOrYear) {
     elements.push({
