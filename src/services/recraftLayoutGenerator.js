@@ -1071,35 +1071,40 @@ function buildTopHeavyLayout(elements, photos, pageContent, bounds) {
 
   const photoCount = photos.length;
 
-  // FIXED ZONES — same approach as mixed-left/mixed-right
-  const leftTitleZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.30;
-  const leftPhotoZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.70;
-  const rightPhotoZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.80;
+  // FIXED ZONES
+  const leftTitleZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.22;
+  const leftPhotoZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.60;
+  const rightPhotoZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.82;
 
-  // === LEFT PAGE TOP: Title ===
-  let leftY = addTitleBlock(elements, pageContent, {
+  // === LEFT PAGE TOP: Title (compact) ===
+  addTitleBlock(elements, pageContent, {
     x: leftPageStart, y: MARGIN, width: leftPageWidth, compact: true,
   });
+
+  // Headline + record + date squeezed into title zone
+  let metaY = leftTitleZoneEnd - 0.6;
   if (pageContent.headline) {
     elements.push({
       type: 'headline', text: pageContent.headline,
-      x: leftPageStart, y: Math.min(leftY, leftTitleZoneEnd - 0.7), width: leftPageWidth * 0.65,
+      x: leftPageStart, y: metaY, width: leftPageWidth * 0.65,
       fontSize: 12, fontFamily: 'Playfair Display', fontWeight: '700',
       color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
     });
+    metaY += 0.3;
   }
   if (pageContent.record) {
     elements.push({
       type: 'record', text: pageContent.record,
-      x: leftPageStart, y: Math.min(leftY + 0.35, leftTitleZoneEnd - 0.35), width: 1.5,
+      x: leftPageStart, y: metaY, width: 1.5,
       fontSize: 11, fontFamily: 'Playfair Display', fontWeight: '700',
       color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
     });
+    metaY += 0.25;
   }
   if (pageContent.dateOrYear) {
     elements.push({
       type: 'date', text: pageContent.dateOrYear,
-      x: leftPageStart, y: Math.min(leftY + 0.65, leftTitleZoneEnd - 0.1), width: 2,
+      x: leftPageStart, y: metaY, width: 2,
       fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '600',
       color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
     });
@@ -1120,7 +1125,7 @@ function buildTopHeavyLayout(elements, photos, pageContent, bounds) {
     elements.push({
       type: 'bodyCopy', text: pageContent.bodyCopy,
       x: leftPageStart, y: leftPhotoZoneEnd + 0.1,
-      width: leftPageWidth, height: pageHeight - MARGIN - leftPhotoZoneEnd - 0.2,
+      width: leftPageWidth, height: pageHeight - MARGIN - leftPhotoZoneEnd - 0.15,
       fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
       color: '#1A1A1A', lineHeight: 1.5, columns: 2, textAlign: 'justify', zIndex: 10,
     });
@@ -1142,7 +1147,7 @@ function buildTopHeavyLayout(elements, photos, pageContent, bounds) {
   if (coaches.length > 0) {
     elements.push({
       type: 'roster', title: pageContent.coachesTitle || 'Coaches:',
-      names: coaches, x: leftPageStart, y: rosterY, width: leftPageWidth,
+      names: coaches, x: rightPageStart, y: rosterY, width: rightPageWidth,
       columns: 1, titleFontSize: 10, nameFontSize: 8,
       fontFamily: 'Source Sans Pro', titleColor: '#523D73',
       nameColor: '#1A1A1A', fontWeight: '600', zIndex: 10,
@@ -1152,7 +1157,7 @@ function buildTopHeavyLayout(elements, photos, pageContent, bounds) {
   if (rosterNames.length > 0) {
     elements.push({
       type: 'roster', title: pageContent.rosterTitle || 'Team Roster:',
-      names: rosterNames, x: leftPageStart, y: rosterY, width: leftPageWidth,
+      names: rosterNames, x: rightPageStart, y: rosterY, width: rightPageWidth,
       columns: 4, titleFontSize: 10, nameFontSize: 7,
       fontFamily: 'Source Sans Pro', titleColor: '#1A1A1A', nameColor: '#333333', zIndex: 10,
     });
