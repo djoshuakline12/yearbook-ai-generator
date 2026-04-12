@@ -1070,76 +1070,75 @@ function buildTopHeavyLayout(elements, photos, pageContent, bounds) {
           pageHeight, pageWidth, MARGIN, GAP, photoCaptions = [] } = bounds;
 
   const photoCount = photos.length;
-  const topHeight = (pageHeight - 2 * MARGIN) * 0.45;
 
-  // Title block on left page top
+  // FIXED ZONES — same approach as mixed-left/mixed-right
+  const leftTitleZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.30;
+  const leftPhotoZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.70;
+  const rightPhotoZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.80;
+
+  // === LEFT PAGE TOP: Title ===
   let leftY = addTitleBlock(elements, pageContent, {
     x: leftPageStart, y: MARGIN, width: leftPageWidth, compact: true,
   });
   if (pageContent.headline) {
     elements.push({
       type: 'headline', text: pageContent.headline,
-      x: leftPageStart, y: leftY, width: leftPageWidth * 0.65,
+      x: leftPageStart, y: Math.min(leftY, leftTitleZoneEnd - 0.7), width: leftPageWidth * 0.65,
       fontSize: 12, fontFamily: 'Playfair Display', fontWeight: '700',
       color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
     });
-    leftY += 0.35;
   }
   if (pageContent.record) {
     elements.push({
       type: 'record', text: pageContent.record,
-      x: leftPageStart, y: leftY, width: 1.5,
+      x: leftPageStart, y: Math.min(leftY + 0.35, leftTitleZoneEnd - 0.35), width: 1.5,
       fontSize: 11, fontFamily: 'Playfair Display', fontWeight: '700',
       color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
     });
-    leftY += 0.3;
   }
   if (pageContent.dateOrYear) {
     elements.push({
       type: 'date', text: pageContent.dateOrYear,
-      x: leftPageStart, y: leftY, width: 2,
+      x: leftPageStart, y: Math.min(leftY + 0.65, leftTitleZoneEnd - 0.1), width: 2,
       fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '600',
       color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
     });
-    leftY += 0.25;
   }
 
-  // Big photos on right page top
-  const topPhotoCount = Math.min(Math.ceil(photoCount * 0.4), photoCount);
-  const topPhotos = photos.slice(0, topPhotoCount);
-  if (topPhotos.length > 0) {
-    const topElements = buildPhotoGrid(topPhotos, {
-      startX: rightPageStart, startY: MARGIN,
-      maxX: rightPageEnd, maxY: MARGIN + topHeight + 1.5, GAP
-    }, 0, photoCaptions);
-    elements.push(...topElements);
-  }
+  // === LEFT PAGE MIDDLE: Photos ===
+  const leftPhotoCount = Math.max(2, Math.ceil(photoCount * 0.4));
+  const actualLeftCount = Math.min(leftPhotoCount, photoCount - 1);
+  const leftPhotos = photos.slice(0, actualLeftCount);
+  const leftPhotoElements = buildPhotoGrid(leftPhotos, {
+    startX: leftPageStart, startY: leftTitleZoneEnd,
+    maxX: leftPageEnd, maxY: leftPhotoZoneEnd, GAP
+  }, 0, photoCaptions);
+  elements.push(...leftPhotoElements);
 
-  // Bottom half: body text on left, remaining photos on right
-  const bottomY = MARGIN + topHeight + 1.8;
-
+  // === LEFT PAGE BOTTOM: Body copy ===
   if (pageContent.bodyCopy) {
     elements.push({
       type: 'bodyCopy', text: pageContent.bodyCopy,
-      x: leftPageStart, y: bottomY, width: leftPageWidth, height: 2.5,
+      x: leftPageStart, y: leftPhotoZoneEnd + 0.1,
+      width: leftPageWidth, height: pageHeight - MARGIN - leftPhotoZoneEnd - 0.2,
       fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
       color: '#1A1A1A', lineHeight: 1.5, columns: 2, textAlign: 'justify', zIndex: 10,
     });
   }
 
-  // Remaining photos on bottom right
-  const bottomPhotos = photos.slice(topPhotoCount);
-  if (bottomPhotos.length > 0) {
-    const bottomElements = buildPhotoGrid(bottomPhotos, {
-      startX: rightPageStart, startY: bottomY,
-      maxX: rightPageEnd, maxY: pageHeight - MARGIN - 1.0, GAP
-    }, topPhotoCount, photoCaptions);
-    elements.push(...bottomElements);
+  // === RIGHT PAGE: Photos filling most of the page ===
+  const rightPhotos = photos.slice(actualLeftCount);
+  if (rightPhotos.length > 0) {
+    const rightPhotoElements = buildPhotoGrid(rightPhotos, {
+      startX: rightPageStart, startY: MARGIN,
+      maxX: rightPageEnd, maxY: rightPhotoZoneEnd, GAP
+    }, actualLeftCount, photoCaptions);
+    elements.push(...rightPhotoElements);
   }
 
-  // Roster at bottom spanning both pages
+  // === RIGHT PAGE BOTTOM: Roster ===
   const { coaches, rosterNames } = extractCoaches(pageContent);
-  let rosterY = pageHeight - MARGIN - 1.0;
+  let rosterY = rightPhotoZoneEnd + 0.1;
   if (coaches.length > 0) {
     elements.push({
       type: 'roster', title: pageContent.coachesTitle || 'Coaches:',
