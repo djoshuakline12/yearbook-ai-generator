@@ -178,7 +178,11 @@ function renderPhoto(el, photos, dpi) {
   const captionFontSize = ptToPx(5.5, dpi);
   const captionLineHeight = 1.3;
   const hasCaption = el.caption || el.captionTitle;
-  const captionHeight = hasCaption ? inToPx(0.55, dpi) : 0;  // Space for title + 2 lines
+  // Only show caption if there's enough room (photo must be at least 1" tall after caption)
+  const minPhotoHeight = inToPx(1.0, dpi);
+  const wantsCaptionHeight = hasCaption ? inToPx(0.55, dpi) : 0;
+  const canFitCaption = hasCaption && (h - wantsCaptionHeight) >= minPhotoHeight;
+  const captionHeight = canFitCaption ? wantsCaptionHeight : 0;
   const photoHeight = h - captionHeight;  // Reduce photo height to make room
 
   let captionInner = '';
@@ -190,7 +194,7 @@ function renderPhoto(el, photos, dpi) {
     captionInner += `<span style="font-style: italic;">${escapeHtml(el.caption)}</span>`;
   }
 
-  const captionHtml = hasCaption ? `
+  const captionHtml = canFitCaption ? `
     <div style="
       position: absolute;
       bottom: 0;

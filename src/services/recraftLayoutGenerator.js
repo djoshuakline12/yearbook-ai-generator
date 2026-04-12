@@ -1856,11 +1856,11 @@ function buildPhotoGrid(photos, bounds, startIndex = 0, photoCaptions = []) {
       }
     }
   } else if (photoCount <= 8) {
-    // Dominant + 3 side + bottom row
+    // Dominant + 2 side + bottom row (reduced from 3 side to prevent thin strips)
     const domW = availableWidth * 0.55;
     const domH = availableHeight * 0.55;
     const sideW = availableWidth - domW - GAP;
-    const sideH = (domH - 2 * GAP) / 3;
+    const sideH = (domH - GAP) / 2;  // 2 side photos instead of 3
     const bottomH = availableHeight - domH - GAP;
 
     elements.push({
@@ -1871,7 +1871,7 @@ function buildPhotoGrid(photos, bounds, startIndex = 0, photoCaptions = []) {
       zIndex: 1, cropFit: 'cover',
     });
 
-    for (let i = 1; i <= 3 && i < photoCount; i++) {
+    for (let i = 1; i <= 2 && i < photoCount; i++) {
       elements.push({
         type: 'photo', photoIndex: startIndex + i,
         x: startX + domW + GAP, y: startY + (i - 1) * (sideH + GAP),
@@ -1881,12 +1881,12 @@ function buildPhotoGrid(photos, bounds, startIndex = 0, photoCaptions = []) {
       });
     }
 
-    const bottomCount = Math.min(photoCount - 4, 4);
+    const bottomCount = Math.min(photoCount - 3, 5);
     if (bottomCount > 0) {
       const bottomW = (availableWidth - (bottomCount - 1) * GAP) / bottomCount;
       for (let i = 0; i < bottomCount; i++) {
         elements.push({
-          type: 'photo', photoIndex: startIndex + 4 + i,
+          type: 'photo', photoIndex: startIndex + 3 + i,
           x: startX + i * (bottomW + GAP), y: startY + domH + GAP,
           width: bottomW, height: bottomH,
           borderRadius: 0, shadow: false, blackAndWhite: false,
