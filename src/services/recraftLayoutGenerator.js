@@ -1682,7 +1682,9 @@ function buildPhotoGrid(photos, bounds, startIndex = 0, photoCaptions = []) {
 
   const { startX, startY, maxX, maxY, GAP } = bounds;
   const availableWidth = maxX - startX;
-  const availableHeight = maxY - startY;
+  // Reserve space for captions below photos (0.55" per caption row)
+  const captionReserve = photoCaptions.length > 0 ? 0.55 : 0;
+  const availableHeight = maxY - startY - captionReserve;
 
   const dominantIdx = photos.findIndex(p => p.isPrimary);
   const primaryIdx = dominantIdx >= 0 ? dominantIdx : 0;

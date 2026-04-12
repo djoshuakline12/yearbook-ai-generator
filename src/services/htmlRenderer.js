@@ -152,14 +152,13 @@ function renderPhoto(el, photos, dpi) {
   const bwFilter = el.blackAndWhite ? 'filter: grayscale(100%) contrast(1.1);' : '';
 
   // Smart crop - use focal point for object-position if available
-  // This keeps the subject (face/person) in frame when cropping
-  // Clamp values to avoid extreme positioning that pushes subjects off-frame
-  let objectPosition = 'center 30%';
+  // object-position tells CSS where to anchor when object-fit: cover crops the image
+  let objectPosition = 'center 20%';  // Default: anchor toward top (keeps heads visible)
   if (photo.focalPoint) {
-    // Clamp to 15%-85% range to avoid extreme edge positioning
-    const focalX = Math.min(85, Math.max(15, Math.round(photo.focalPoint.focalX * 100)));
-    const focalY = Math.min(85, Math.max(15, Math.round(photo.focalPoint.focalY * 100)));
+    const focalX = Math.min(80, Math.max(20, Math.round(photo.focalPoint.focalX * 100)));
+    const focalY = Math.min(75, Math.max(15, Math.round(photo.focalPoint.focalY * 100)));
     objectPosition = `${focalX}% ${focalY}%`;
+    console.log(`Photo ${el.photoIndex}: focal(${focalX}%, ${focalY}%) subject=${photo.focalPoint.subjectType}`);
   } else if (photo.objectPosition) {
     objectPosition = photo.objectPosition;
   }
