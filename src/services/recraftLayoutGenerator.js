@@ -688,74 +688,72 @@ function buildMixedLeftLayout(elements, photos, pageContent, bounds) {
 
   const photoCount = photos.length;
 
-  // LEFT PAGE: Title at top, photos fill the rest
+  // FIXED ZONES - no dynamic calculations that can fail
+  // Left page: title zone (top 30%), photo zone (middle 40%), text zone (bottom 30%)
+  const leftTitleZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.30;
+  const leftPhotoZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.70;
+
+  // Right page: photo zone (top 70%), roster zone (bottom 30%)
+  const rightPhotoZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.75;
+
+  // === LEFT PAGE TOP: Title block ===
   let leftY = addTitleBlock(elements, pageContent, {
     x: leftPageStart, y: MARGIN, width: leftPageWidth, compact: true,
   });
 
-  // Headline + record compact on left
+  // Headline + record + date (compact)
   if (pageContent.headline) {
     elements.push({
       type: 'headline', text: pageContent.headline,
-      x: leftPageStart, y: leftY, width: leftPageWidth * 0.7,
+      x: leftPageStart, y: Math.min(leftY, leftTitleZoneEnd - 0.7), width: leftPageWidth * 0.7,
       fontSize: 13, fontFamily: 'Playfair Display', fontWeight: '700',
       color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
     });
-    leftY += 0.35;
   }
   if (pageContent.record) {
     elements.push({
       type: 'record', text: pageContent.record,
-      x: leftPageStart, y: leftY, width: 1.5,
+      x: leftPageStart, y: Math.min(leftY + 0.35, leftTitleZoneEnd - 0.35), width: 1.5,
       fontSize: 11, fontFamily: 'Playfair Display', fontWeight: '700',
       color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
     });
-    leftY += 0.3;
   }
   if (pageContent.dateOrYear) {
     elements.push({
       type: 'date', text: pageContent.dateOrYear,
-      x: leftPageStart, y: leftY, width: 2,
+      x: leftPageStart, y: Math.min(leftY + 0.65, leftTitleZoneEnd - 0.1), width: 2,
       fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '600',
       color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
     });
-    leftY += 0.25;
   }
 
-  // LEFT PAGE: Photos fill from after title to bottom (reserve space for body at bottom)
-  const leftBodyHeight = pageContent.bodyCopy ? 2.8 : 0;
+  // === LEFT PAGE MIDDLE: Photos (ALWAYS placed here) ===
   const leftPhotoCount = Math.max(2, Math.ceil(photoCount * 0.4));
-  const leftPhotos = photos.slice(0, Math.min(leftPhotoCount, photoCount - 1));
-  const leftPhotoStartY = leftY + 0.1;
-  const leftPhotoMaxY = pageHeight - MARGIN - leftBodyHeight;
-  console.log(`mixed-left: leftY=${leftY.toFixed(2)} photoStartY=${leftPhotoStartY.toFixed(2)} maxY=${leftPhotoMaxY.toFixed(2)} availH=${(leftPhotoMaxY - leftPhotoStartY).toFixed(2)} leftPhotos=${leftPhotos.length}`);
-  if (leftPhotos.length > 0 && leftPhotoMaxY > leftPhotoStartY + 1.0) {
-    const leftPhotoElements = buildPhotoGrid(leftPhotos, {
-      startX: leftPageStart,
-      startY: leftPhotoStartY,
-      maxX: leftPageEnd,
-      maxY: leftPhotoMaxY,
-      GAP
-    }, 0, photoCaptions);
-    console.log(`mixed-left: generated ${leftPhotoElements.length} left photo elements`);
-    elements.push(...leftPhotoElements);
-  } else {
-    console.log('mixed-left: NOT ENOUGH SPACE for left photos!');
-  }
+  const actualLeftCount = Math.min(leftPhotoCount, photoCount - 1);
+  const leftPhotos = photos.slice(0, actualLeftCount);
 
-  // LEFT PAGE: Body copy at bottom
+  const leftPhotoElements = buildPhotoGrid(leftPhotos, {
+    startX: leftPageStart,
+    startY: leftTitleZoneEnd,
+    maxX: leftPageEnd,
+    maxY: leftPhotoZoneEnd,
+    GAP
+  }, 0, photoCaptions);
+  elements.push(...leftPhotoElements);
+
+  // === LEFT PAGE BOTTOM: Body copy ===
   if (pageContent.bodyCopy) {
     elements.push({
       type: 'bodyCopy', text: pageContent.bodyCopy,
-      x: leftPageStart, y: pageHeight - MARGIN - leftBodyHeight + 0.15,
-      width: leftPageWidth, height: leftBodyHeight - 0.3,
+      x: leftPageStart, y: leftPhotoZoneEnd + 0.1,
+      width: leftPageWidth, height: pageHeight - MARGIN - leftPhotoZoneEnd - 0.2,
       fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
       color: '#1A1A1A', lineHeight: 1.5, columns: 2, textAlign: 'justify', zIndex: 10,
     });
   }
 
-  // RIGHT PAGE: Photos filling most of the page, roster at bottom
-  const rightPhotos = photos.slice(leftPhotos.length);
+  // === RIGHT PAGE: Photos filling most of the page ===
+  const rightPhotos = photos.slice(actualLeftCount);
   const rosterHeight = (pageContent.roster?.length > 0) ? 1.2 : 0;
 
   if (rightPhotos.length > 0) {
@@ -763,9 +761,9 @@ function buildMixedLeftLayout(elements, photos, pageContent, bounds) {
       startX: rightPageStart,
       startY: MARGIN,
       maxX: rightPageEnd,
-      maxY: pageHeight - MARGIN - rosterHeight,
+      maxY: rightPhotoZoneEnd - rosterHeight,
       GAP
-    }, leftPhotos.length, photoCaptions);
+    }, actualLeftCount, photoCaptions);
     elements.push(...rightPhotoElements);
   }
 
