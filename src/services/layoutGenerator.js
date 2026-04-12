@@ -47,11 +47,31 @@ async function generateLayout({ photos, pageContent, theme, pageType = 'page' })
   const pageCategory = detectPageCategory(pageContent);
 
   // ============================================================
-  // Use Claude AI for dynamic layout generation
-  // Claude handles photo balance, overlap prevention, and variety
-  // much better than hardcoded templates
+  // OPTION 1: Use Recraft hybrid layout (hardcoded templates)
   // ============================================================
-  console.log('Using Claude AI layout generator...');
+  console.log('Using Recraft template layout generator...');
+  try {
+    const recraftLayout = await generateHybridLayout({
+      photos,
+      pageContent,
+      theme,
+      pageType,
+    });
+
+    if (recraftLayout) {
+      let layoutJson = validateAndCorrectLayout(recraftLayout, theme);
+      layoutJson.pageCategory = pageCategory;
+      layoutJson.generatedBy = 'recraft-hybrid';
+      return layoutJson;
+    }
+  } catch (error) {
+    console.error('Recraft layout failed, falling back to Claude:', error.message);
+  }
+
+  // ============================================================
+  // OPTION 2: Fall back to Claude AI layout generation
+  // ============================================================
+  console.log('Falling back to Claude AI layout generator...');
 
   const photoDescriptions = photos.map((p, i) => {
     const captionInfo = (pageContent.photoCaptions || [])[i] || {};

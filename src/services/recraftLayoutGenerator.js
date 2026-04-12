@@ -1644,9 +1644,17 @@ function buildPhotoGrid(photos, bounds, startIndex = 0, photoCaptions = []) {
 
   const { startX, startY, maxX, maxY, GAP } = bounds;
   const availableWidth = maxX - startX;
-  // Reserve space for captions below photos (0.55" per caption row)
-  const captionReserve = photoCaptions.length > 0 ? 0.55 : 0;
+  // Reserve space for captions below photos
+  const captionReserve = photoCaptions.length > 0 ? 0.45 : 0;
   const availableHeight = maxY - startY - captionReserve;
+
+  console.log(`buildPhotoGrid: ${photoCount} photos, startIdx=${startIndex}, x=${startX.toFixed(2)}-${maxX.toFixed(2)}, y=${startY.toFixed(2)}-${maxY.toFixed(2)}, availW=${availableWidth.toFixed(2)}, availH=${availableHeight.toFixed(2)}`);
+
+  // Safety check — if available space is too small, skip
+  if (availableHeight < 0.5 || availableWidth < 0.5) {
+    console.log('buildPhotoGrid: SKIPPING — not enough space');
+    return elements;
+  }
 
   const dominantIdx = photos.findIndex(p => p.isPrimary);
   const primaryIdx = dominantIdx >= 0 ? dominantIdx : 0;
@@ -1913,15 +1921,25 @@ function buildPhotoGrid(photos, bounds, startIndex = 0, photoCaptions = []) {
     }
   }
 
-  // Add captions to all photo elements
-  return elements.map(el => {
-    if (el.type === 'photo' && !el.caption && !el.captionTitle) {
-      const data = getCaptionData(el.photoIndex);
-      el.caption = data.caption;
-      el.captionTitle = data.captionTitle;
-    }
-    return el;
-  });
+  // Add captions to all photo elements, filter out impossibly small photos
+  const MIN_PHOTO_HEIGHT = 1.0;  // Minimum 1" tall
+  const MIN_PHOTO_WIDTH = 1.0;   // Minimum 1" wide
+  return elements
+    .filter(el => {
+      if (el.type === 'photo' && (el.height < MIN_PHOTO_HEIGHT || el.width < MIN_PHOTO_WIDTH)) {
+        console.log(`buildPhotoGrid: REMOVING photo ${el.photoIndex} — too small (${el.width.toFixed(2)}"x${el.height.toFixed(2)}")`);
+        return false;
+      }
+      return true;
+    })
+    .map(el => {
+      if (el.type === 'photo' && !el.caption && !el.captionTitle) {
+        const data = getCaptionData(el.photoIndex);
+        el.caption = data.caption;
+        el.captionTitle = data.captionTitle;
+      }
+      return el;
+    });
 }
 
 // =============================================================================
