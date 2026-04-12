@@ -1071,9 +1071,9 @@ function buildTopHeavyLayout(elements, photos, pageContent, bounds) {
 
   const photoCount = photos.length;
 
-  // FIXED ZONES
+  // FIXED ZONES — maximize photo space
   const leftTitleZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.22;
-  const leftPhotoZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.60;
+  const leftPhotoZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.78;  // 56% for photos
   const rightPhotoZoneEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.82;
 
   // === LEFT PAGE TOP: Title (compact) ===
@@ -1716,46 +1716,46 @@ function buildPhotoGrid(photos, bounds, startIndex = 0, photoCaptions = []) {
       ...getCaptionData(startIndex),
     });
   } else if (photoCount === 2) {
-    // Two photos: large one on top, smaller below (fills full height)
-    const topH = availableHeight * 0.65;
-    const botH = availableHeight - topH - GAP;
+    // Two photos side by side (equal width)
+    const colW = (availableWidth - GAP) / 2;
     elements.push({
       type: 'photo', photoIndex: startIndex + primaryIdx,
       x: startX, y: startY,
-      width: availableWidth, height: topH,
+      width: colW, height: availableHeight,
       borderRadius: 0, shadow: false, blackAndWhite: true,
       zIndex: 1, cropFit: 'cover',
     });
     elements.push({
       type: 'photo', photoIndex: startIndex + (primaryIdx === 0 ? 1 : 0),
-      x: startX, y: startY + topH + GAP,
-      width: availableWidth, height: botH,
+      x: startX + colW + GAP, y: startY,
+      width: colW, height: availableHeight,
       borderRadius: 0, shadow: false, blackAndWhite: false,
       zIndex: 2, cropFit: 'cover',
     });
   } else if (photoCount === 3) {
-    // Three photos: large one on top, two smaller below (fills full height)
-    const topH = availableHeight * 0.6;
-    const botH = availableHeight - topH - GAP;
-    const botW = (availableWidth - GAP) / 2;
+    // Three photos: large left, two stacked right (50/50 split)
+    const leftW = availableWidth * 0.55;
+    const rightW = availableWidth - leftW - GAP;
+    const rightH = (availableHeight - GAP) / 2;
+    // Large photo on left, two stacked on right
     elements.push({
       type: 'photo', photoIndex: startIndex,
       x: startX, y: startY,
-      width: availableWidth, height: topH,
+      width: leftW, height: availableHeight,
       borderRadius: 0, shadow: false, blackAndWhite: true,
       zIndex: 1, cropFit: 'cover',
     });
     elements.push({
       type: 'photo', photoIndex: startIndex + 1,
-      x: startX, y: startY + topH + GAP,
-      width: botW, height: botH,
+      x: startX + leftW + GAP, y: startY,
+      width: rightW, height: rightH,
       borderRadius: 0, shadow: false, blackAndWhite: false,
       zIndex: 2, cropFit: 'cover',
     });
     elements.push({
       type: 'photo', photoIndex: startIndex + 2,
-      x: startX + botW + GAP, y: startY + topH + GAP,
-      width: botW, height: botH,
+      x: startX + leftW + GAP, y: startY + rightH + GAP,
+      width: rightW, height: rightH,
       borderRadius: 0, shadow: false, blackAndWhite: false,
       zIndex: 2, cropFit: 'cover',
     });
