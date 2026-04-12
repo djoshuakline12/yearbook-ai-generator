@@ -679,7 +679,7 @@ function buildPhotosDominantLayout(elements, photos, pageContent, bounds) {
 }
 
 // =============================================================================
-// LAYOUT: MIXED LEFT (Title+photos left, body+photos right)
+// LAYOUT: MIXED LEFT (Title top-left, photos fill both pages, text bottom)
 // =============================================================================
 function buildMixedLeftLayout(elements, photos, pageContent, bounds) {
   const { leftPageStart, leftPageEnd, leftPageWidth,
@@ -688,120 +688,82 @@ function buildMixedLeftLayout(elements, photos, pageContent, bounds) {
 
   const photoCount = photos.length;
 
-  // LEFT PAGE: Title block at top + photos below
+  // LEFT PAGE: Title at top, photos fill the rest
   let leftY = addTitleBlock(elements, pageContent, {
     x: leftPageStart, y: MARGIN, width: leftPageWidth, compact: true,
   });
 
-  // Headline on left
+  // Headline + record compact on left
   if (pageContent.headline) {
     elements.push({
-      type: 'headline',
-      text: pageContent.headline,
-      x: leftPageStart,
-      y: leftY,
-      width: leftPageWidth * 0.7,
-      fontSize: 13,
-      fontFamily: 'Playfair Display',
-      fontWeight: '700',
-      color: '#FFFFFF',
-      backgroundColor: '#523D73',
-      zIndex: 10,
-    });
-    leftY += 0.4;
-  }
-
-  // Record + date on left
-  if (pageContent.record) {
-    leftY += 0.1;
-    elements.push({
-      type: 'record',
-      text: pageContent.record,
-      x: leftPageStart,
-      y: leftY,
-      width: 1.5,
-      fontSize: 11,
-      fontFamily: 'Playfair Display',
-      fontWeight: '700',
-      color: '#FFFFFF',
-      backgroundColor: '#523D73',
-      zIndex: 10,
+      type: 'headline', text: pageContent.headline,
+      x: leftPageStart, y: leftY, width: leftPageWidth * 0.7,
+      fontSize: 13, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
     });
     leftY += 0.35;
   }
-
-  if (pageContent.dateOrYear) {
+  if (pageContent.record) {
     elements.push({
-      type: 'date',
-      text: pageContent.dateOrYear,
-      x: leftPageStart,
-      y: leftY,
-      width: 2,
-      fontSize: 10,
-      fontFamily: 'Source Sans Pro',
-      fontWeight: '600',
-      color: '#523D73',
-      textTransform: 'uppercase',
-      letterSpacing: 1,
-      zIndex: 10,
+      type: 'record', text: pageContent.record,
+      x: leftPageStart, y: leftY, width: 1.5,
+      fontSize: 11, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
     });
     leftY += 0.3;
   }
+  if (pageContent.dateOrYear) {
+    elements.push({
+      type: 'date', text: pageContent.dateOrYear,
+      x: leftPageStart, y: leftY, width: 2,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '600',
+      color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
+    });
+    leftY += 0.25;
+  }
 
-  leftY += 0.15;
-
-  // Left page photos: fill remaining space
-  const leftPhotoCount = Math.ceil(photoCount * 0.4);
-  const leftPhotos = photos.slice(0, leftPhotoCount);
+  // LEFT PAGE: Photos fill from after title to bottom (reserve space for body at bottom)
+  const leftBodyHeight = pageContent.bodyCopy ? 2.8 : 0;
+  const leftPhotoCount = Math.max(2, Math.ceil(photoCount * 0.4));
+  const leftPhotos = photos.slice(0, Math.min(leftPhotoCount, photoCount - 1));
   if (leftPhotos.length > 0) {
     const leftPhotoElements = buildPhotoGrid(leftPhotos, {
       startX: leftPageStart,
-      startY: leftY,
+      startY: leftY + 0.1,
       maxX: leftPageEnd,
-      maxY: pageHeight - MARGIN,
+      maxY: pageHeight - MARGIN - leftBodyHeight,
       GAP
     }, 0, photoCaptions);
     elements.push(...leftPhotoElements);
   }
 
-  // RIGHT PAGE: Photos on top, body copy + roster below
-  const rightPhotoCount = photoCount - leftPhotoCount;
-  const rightPhotos = photos.slice(leftPhotoCount);
+  // LEFT PAGE: Body copy at bottom
+  if (pageContent.bodyCopy) {
+    elements.push({
+      type: 'bodyCopy', text: pageContent.bodyCopy,
+      x: leftPageStart, y: pageHeight - MARGIN - leftBodyHeight + 0.15,
+      width: leftPageWidth, height: leftBodyHeight - 0.3,
+      fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#1A1A1A', lineHeight: 1.5, columns: 2, textAlign: 'justify', zIndex: 10,
+    });
+  }
 
-  // Right page photos take top 55%
-  const rightPhotoHeight = (pageHeight - 2 * MARGIN) * 0.55;
+  // RIGHT PAGE: Photos filling most of the page, roster at bottom
+  const rightPhotos = photos.slice(leftPhotos.length);
+  const rosterHeight = (pageContent.roster?.length > 0) ? 1.2 : 0;
+
   if (rightPhotos.length > 0) {
     const rightPhotoElements = buildPhotoGrid(rightPhotos, {
       startX: rightPageStart,
       startY: MARGIN,
       maxX: rightPageEnd,
-      maxY: MARGIN + rightPhotoHeight,
+      maxY: pageHeight - MARGIN - rosterHeight,
       GAP
-    }, leftPhotoCount, photoCaptions);
+    }, leftPhotos.length, photoCaptions);
     elements.push(...rightPhotoElements);
   }
 
-  // Body copy on right page below photos
-  let rightY = MARGIN + rightPhotoHeight + 0.2;
-  if (pageContent.bodyCopy) {
-    elements.push({
-      type: 'bodyCopy',
-      text: pageContent.bodyCopy,
-      x: rightPageStart,
-      y: rightY,
-      width: rightPageWidth,
-      height: 2.5,
-      fontSize: 9,
-      fontFamily: 'Source Sans Pro',
-      fontWeight: '400',
-      color: '#1A1A1A',
-      lineHeight: 1.5,
-      columns: 2,
-      textAlign: 'justify',
-      zIndex: 10,
-    });
-    rightY += 2.6;
-  }
+  let rightY = pageHeight - MARGIN - rosterHeight;
 
   // Coaches + Roster on right
   let coaches = pageContent.coaches || [];
