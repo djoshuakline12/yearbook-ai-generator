@@ -10,7 +10,7 @@ const { getTheme, getAllThemes } = require('../utils/themes');
 const { extractThemeFromImage } = require('../services/themeExtractor');
 const { polishContent, needsPolishing } = require('../services/contentPolisher');
 const { analyzePhotosForCropping } = require('../services/smartCrop');
-const { createSession, getSession, updateLayout, getActiveCount, getLayout, getPhotos, setLayout } = require('../services/sessionStore');
+const { createSession, getSession, updateLayout, getActiveCount, getLayout, getPhotos, setLayout, listSessions, deleteSession } = require('../services/sessionStore');
 const { modifyLayout } = require('../services/layoutModifier');
 const fs = require('fs').promises;
 
@@ -744,6 +744,23 @@ router.post('/session/:id/shuffle', express.json(), async (req, res) => {
     console.error('Shuffle layout error:', err);
     res.status(500).json({ error: 'Failed to shuffle layout.', details: err.message });
   }
+});
+
+/**
+ * GET /api/sessions
+ * List all active sessions (for "recent projects" UI).
+ */
+router.get('/sessions', (req, res) => {
+  res.json({ sessions: listSessions() });
+});
+
+/**
+ * DELETE /api/session/:id
+ * Delete a session explicitly.
+ */
+router.delete('/session/:id', (req, res) => {
+  deleteSession(req.params.id);
+  res.json({ success: true });
 });
 
 module.exports = router;

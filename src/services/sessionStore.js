@@ -1,16 +1,108 @@
 /**
- * Session Store
+ * Session Store with Disk Persistence
  *
- * In-memory store for keeping photo data and layout state between requests.
- * Allows the chatbot to modify layouts without re-uploading photos.
- * Sessions auto-expire after 30 minutes.
+ * Saves each session as a JSON file on disk so they survive:
+ * - Browser refreshes
+ * - Server restarts
+ * - Deployments
+ *
+ * Sessions expire after 30 days (configurable via SESSION_TTL_DAYS env var).
  */
 
 const crypto = require('crypto');
 const fs = require('fs');
+const path = require('path');
 
-const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const SESSION_TTL_DAYS = parseInt(process.env.SESSION_TTL_DAYS || '30', 10);
+const SESSION_TTL_MS = SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
+
+// Sessions are saved to disk in this directory
+const SESSIONS_DIR = path.join(__dirname, '..', '..', 'sessions');
+
+// Ensure sessions directory exists
+if (!fs.existsSync(SESSIONS_DIR)) {
+  fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+}
+
+// In-memory cache for fast access (loaded from disk on startup)
 const sessions = new Map();
+
+/**
+ * Save a session to disk
+ */
+function saveToDisk(session) {
+  try {
+    const filePath = path.join(SESSIONS_DIR, `${session.id}.json`);
+    fs.writeFileSync(filePath, JSON.stringify(session));
+    return true;
+  } catch (err) {
+    console.error(`Session store - Failed to save ${session.id}:`, err.message);
+    return false;
+  }
+}
+
+/**
+ * Load a session from disk
+ */
+function loadFromDisk(sessionId) {
+  try {
+    const filePath = path.join(SESSIONS_DIR, `${sessionId}.json`);
+    if (!fs.existsSync(filePath)) return null;
+    const data = fs.readFileSync(filePath, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    console.error(`Session store - Failed to load ${sessionId}:`, err.message);
+    return null;
+  }
+}
+
+/**
+ * Remove a session file from disk
+ */
+function deleteFromDisk(sessionId) {
+  try {
+    const filePath = path.join(SESSIONS_DIR, `${sessionId}.json`);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (err) {
+    console.error(`Session store - Failed to delete ${sessionId}:`, err.message);
+  }
+}
+
+/**
+ * Load all non-expired sessions from disk on startup
+ */
+function loadAllSessionsFromDisk() {
+  try {
+    const files = fs.readdirSync(SESSIONS_DIR).filter(f => f.endsWith('.json'));
+    let loaded = 0;
+    let expired = 0;
+
+    for (const file of files) {
+      const sessionId = file.replace('.json', '');
+      const session = loadFromDisk(sessionId);
+      if (!session) continue;
+
+      // Check TTL
+      if (Date.now() - session.createdAt > SESSION_TTL_MS) {
+        deleteFromDisk(sessionId);
+        expired++;
+        continue;
+      }
+
+      sessions.set(sessionId, session);
+      loaded++;
+    }
+
+    console.log(`Session store - Loaded ${loaded} sessions from disk (${expired} expired)`);
+  } catch (err) {
+    console.error('Session store - Failed to load sessions from disk:', err.message);
+  }
+}
+
+// Load sessions on module init
+loadAllSessionsFromDisk();
 
 /**
  * Create a new session from processed photo results and layout data
@@ -22,8 +114,15 @@ function createSession(photoResults, layout, pageContent, theme, pageType) {
   const photos = photoResults.map((photo, index) => {
     let base64;
     try {
-      const imgData = fs.readFileSync(photo.processedPath);
-      base64 = imgData.toString('base64');
+      // Photos in the session might already have base64 (from a previous session)
+      if (photo.base64) {
+        base64 = photo.base64;
+      } else if (photo.processedPath) {
+        const imgData = fs.readFileSync(photo.processedPath);
+        base64 = imgData.toString('base64');
+      } else {
+        base64 = null;
+      }
     } catch (err) {
       console.error(`Session store - Failed to read photo ${index}:`, err.message);
       base64 = null;
@@ -44,6 +143,7 @@ function createSession(photoResults, layout, pageContent, theme, pageType) {
   const session = {
     id: sessionId,
     createdAt: Date.now(),
+    updatedAt: Date.now(),
     photos,
     layout,
     pageContent,
@@ -55,21 +155,33 @@ function createSession(photoResults, layout, pageContent, theme, pageType) {
   cleanupExpired();
 
   sessions.set(sessionId, session);
-  console.log(`Session created: ${sessionId} (${photos.length} photos, expires in 30min)`);
+  saveToDisk(session);
+  console.log(`Session created: ${sessionId} (${photos.length} photos, expires in ${SESSION_TTL_DAYS} days)`);
 
   return sessionId;
 }
 
 /**
  * Get a session by ID, returns null if expired or not found
+ * Falls back to disk if not in memory (useful after server restart)
  */
 function getSession(sessionId) {
-  const session = sessions.get(sessionId);
+  let session = sessions.get(sessionId);
+
+  // If not in memory, try loading from disk
+  if (!session) {
+    session = loadFromDisk(sessionId);
+    if (session) {
+      sessions.set(sessionId, session);
+    }
+  }
+
   if (!session) return null;
 
   // Check TTL
   if (Date.now() - session.createdAt > SESSION_TTL_MS) {
     sessions.delete(sessionId);
+    deleteFromDisk(sessionId);
     console.log(`Session expired: ${sessionId}`);
     return null;
   }
@@ -78,24 +190,27 @@ function getSession(sessionId) {
 }
 
 /**
- * Update the layout in an existing session
+ * Update the layout in an existing session (persists to disk)
  */
 function updateLayout(sessionId, newLayout) {
   const session = getSession(sessionId);
   if (!session) return false;
 
   session.layout = newLayout;
+  session.updatedAt = Date.now();
+  saveToDisk(session);
   return true;
 }
 
 /**
- * Remove expired sessions
+ * Remove expired sessions from memory and disk
  */
 function cleanupExpired() {
   const now = Date.now();
   for (const [id, session] of sessions) {
     if (now - session.createdAt > SESSION_TTL_MS) {
       sessions.delete(id);
+      deleteFromDisk(id);
       console.log(`Session cleaned up: ${id}`);
     }
   }
@@ -132,12 +247,46 @@ function getPhotos(sessionId) {
 }
 
 /**
- * Replace the elements array in a session's layout
+ * Replace the elements array in a session's layout (persists to disk)
  */
 function setLayout(sessionId, elements) {
   const session = getSession(sessionId);
   if (!session) return false;
   session.layout.elements = elements;
+  session.updatedAt = Date.now();
+  saveToDisk(session);
+  return true;
+}
+
+/**
+ * List all active sessions with metadata (for "recent projects" UI)
+ */
+function listSessions() {
+  cleanupExpired();
+  const list = [];
+  for (const [id, session] of sessions) {
+    list.push({
+      sessionId: id,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt || session.createdAt,
+      expiresAt: session.createdAt + SESSION_TTL_MS,
+      photoCount: session.photos.length,
+      pageType: session.pageType,
+      section: session.pageContent?.section || null,
+      pageTitle: session.pageContent?.pageTitle || null,
+    });
+  }
+  // Sort by most recently updated
+  list.sort((a, b) => b.updatedAt - a.updatedAt);
+  return list;
+}
+
+/**
+ * Delete a session explicitly (for "delete project" UI)
+ */
+function deleteSession(sessionId) {
+  sessions.delete(sessionId);
+  deleteFromDisk(sessionId);
   return true;
 }
 
@@ -157,4 +306,6 @@ module.exports = {
   getLayout,
   getPhotos,
   setLayout,
+  listSessions,
+  deleteSession,
 };
