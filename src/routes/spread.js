@@ -640,7 +640,7 @@ router.get('/session/:id/photos', (req, res) => {
  */
 router.put('/session/:id/layout', express.json({ limit: '5mb' }), async (req, res) => {
   try {
-    const { elements } = req.body;
+    const { elements, quality = 'draft' } = req.body;
     if (!elements || !Array.isArray(elements)) {
       return res.status(400).json({ error: 'elements array is required.' });
     }
@@ -654,8 +654,11 @@ router.put('/session/:id/layout', express.json({ limit: '5mb' }), async (req, re
     setLayout(req.params.id, elements);
 
     // Re-render with updated layout
-    const html = renderLayoutToHtml(session.layout, session.photos);
-    const result = await exportToFile(html, 'png', session.pageType);
+    // Draft mode (default for editor): 150 DPI, fast (~1-2s)
+    // Standard mode: full 450 DPI (~5-10s)
+    const dpi = quality === 'draft' ? 150 : PAGE.DPI;
+    const html = renderLayoutToHtml(session.layout, session.photos, { dpi });
+    const result = await exportToFile(html, 'png', session.pageType, { quality });
 
     res.json({
       sessionId: req.params.id,
@@ -675,13 +678,16 @@ router.put('/session/:id/layout', express.json({ limit: '5mb' }), async (req, re
  */
 router.post('/session/:id/render-preview', express.json(), async (req, res) => {
   try {
+    const { quality = 'draft' } = req.body || {};
+
     const session = getSession(req.params.id);
     if (!session) {
       return res.status(404).json({ error: 'Session not found or expired.' });
     }
 
-    const html = renderLayoutToHtml(session.layout, session.photos);
-    const result = await exportToFile(html, 'png', session.pageType);
+    const dpi = quality === 'draft' ? 150 : PAGE.DPI;
+    const html = renderLayoutToHtml(session.layout, session.photos, { dpi });
+    const result = await exportToFile(html, 'png', session.pageType, { quality });
 
     res.json({
       sessionId: req.params.id,

@@ -12,21 +12,27 @@ const { PAGE } = require('../utils/constants');
  * @param {number} options.dpi - DPI override for pixel dimensions
  */
 async function exportToFile(html, format = 'pdf', pageType = 'page', options = {}) {
-  const { quality = 'standard', dpi = PAGE.DPI } = options;
+  const { quality = 'standard' } = options;
   const isFinal = quality === 'final';
+  const isDraft = quality === 'draft';
+
+  // Draft mode: low DPI for fast live preview (~1-2 seconds)
+  // Standard mode: full DPI for good quality (~5-10 seconds)
+  // Final mode: max DPI lossless PNG (~30-60 seconds)
+  const effectiveDpi = isDraft ? 150 : (isFinal ? (options.dpi || PAGE.FINAL_DPI) : PAGE.DPI);
 
   const isSpread = pageType === 'spread';
-  const widthPx = Math.round((isSpread ? PAGE.SPREAD_WIDTH_IN : PAGE.WIDTH_IN) * dpi);
-  const heightPx = Math.round(PAGE.HEIGHT_IN * dpi);
+  const widthPx = Math.round((isSpread ? PAGE.SPREAD_WIDTH_IN : PAGE.WIDTH_IN) * effectiveDpi);
+  const heightPx = Math.round(PAGE.HEIGHT_IN * effectiveDpi);
   const widthIn = isSpread ? PAGE.SPREAD_WIDTH_IN : PAGE.WIDTH_IN;
   const heightIn = PAGE.HEIGHT_IN;
 
-  const memoryMb = isFinal ? 2048 : 1024;
-  const contentTimeout = isFinal ? 300000 : 120000;  // 5 min for final, 2 min for standard
-  const fontTimeout = isFinal ? 15000 : 10000;
-  const renderDelay = isFinal ? 3000 : 1500;
+  const memoryMb = isFinal ? 2048 : (isDraft ? 512 : 1024);
+  const contentTimeout = isFinal ? 300000 : (isDraft ? 30000 : 120000);
+  const fontTimeout = isFinal ? 15000 : (isDraft ? 3000 : 10000);
+  const renderDelay = isFinal ? 3000 : (isDraft ? 300 : 1500);
 
-  console.log(`Export: ${quality} quality, ${dpi} DPI, ${widthPx}x${heightPx}px, format=${format}`);
+  console.log(`Export: ${quality} quality, ${effectiveDpi} DPI, ${widthPx}x${heightPx}px, format=${format}`);
 
   const launchOptions = {
     headless: 'new',
