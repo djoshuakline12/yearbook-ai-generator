@@ -163,28 +163,49 @@ function chooseLayoutTemplate(pageContent, photoCount) {
   const hasLongBody = pageContent.bodyCopy && pageContent.bodyCopy.length > 500;
   const fewPhotos = photoCount <= 4;
 
-  // Generate layout parameters for infinite variety
-  // Each parameter is derived from the content hash for deterministic but varied results
+  // Use multiple hash derivations for independent randomization of each parameter
+  // This vastly increases combinatorial variety (up to 30+ distinct styles)
+  const h1 = contentHash;
+  const h2 = hashString(contentHash.toString() + 'salt2');
+  const h3 = hashString(contentHash.toString() + 'salt3');
+  const h4 = hashString(contentHash.toString() + 'salt4');
+  const h5 = hashString(contentHash.toString() + 'salt5');
+  const h6 = hashString(contentHash.toString() + 'salt6');
+
   const params = {
     // Which page gets the title: 'left' or 'right'
-    titlePage: contentHash % 2 === 0 ? 'left' : 'right',
-    // Photo split: what fraction goes to the title page (0.3 to 0.5)
-    titlePagePhotoRatio: 0.3 + (contentHash % 3) * 0.1,
-    // Title zone size: how much of the page the title takes (0.18 to 0.28)
-    titleZoneSize: 0.18 + (contentHash % 4) * 0.03,
-    // Photo zone end on title page (0.65 to 0.80)
-    titlePagePhotoEnd: 0.65 + (contentHash % 5) * 0.03,
-    // Photo zone end on photo page (0.75 to 0.90)
-    photoPagePhotoEnd: 0.78 + (contentHash % 4) * 0.04,
-    // Stagger offset for column 2 (0 to 1.5")
-    staggerOffset: (contentHash % 6) * 0.3,
+    titlePage: h1 % 2 === 0 ? 'left' : 'right',
+    // Title alignment: 'left', 'center', 'right'
+    titleAlign: ['left', 'center', 'right'][h2 % 3],
+    // Photo split: fraction on title page (0.25 to 0.55 in 7 steps)
+    titlePagePhotoRatio: 0.25 + (h2 % 7) * 0.05,
+    // Title zone size: 0.15 to 0.32 in 6 steps
+    titleZoneSize: 0.15 + (h3 % 6) * 0.035,
+    // Photo zone end on title page: 0.60 to 0.85 in 6 steps
+    titlePagePhotoEnd: 0.60 + (h4 % 6) * 0.05,
+    // Photo zone end on photo page: 0.72 to 0.92 in 5 steps
+    photoPagePhotoEnd: 0.72 + (h5 % 5) * 0.05,
+    // Stagger offset for column 2: 0 to 2.1 in 8 steps
+    staggerOffset: (h6 % 8) * 0.3,
     // Use staggered columns on photo page
-    useStaggeredColumns: contentHash % 3 === 0,
-    // Body copy position: 'bottom-title' or 'bottom-photo'
-    bodyPosition: contentHash % 3 === 0 ? 'bottom-photo' : 'bottom-title',
+    useStaggeredColumns: h3 % 3 === 0,
+    // Body copy position: split across 4 options
+    bodyPosition: ['bottom-title', 'bottom-photo', 'bottom-title', 'split'][h4 % 4],
+    // Photo grid style: dominant left, dominant right, dominant top, balanced grid
+    photoGridStyle: ['dominant-left', 'dominant-right', 'dominant-top', 'balanced', 'mosaic'][h5 % 5],
+    // Title vertical position within title zone (top, middle, bottom)
+    titleVerticalPos: ['top', 'middle', 'bottom'][h6 % 3],
+    // Should the page use a horizontal hero band?
+    useHorizontalHero: h1 % 5 === 0,
+    // Hero band position (if enabled)
+    heroBandPosition: ['top', 'middle', 'bottom'][h2 % 3],
+    // Gap size between photos (tight, normal, loose)
+    gapStyle: ['tight', 'normal', 'loose'][h3 % 3],
+    // Whether to use asymmetric photo sizes
+    asymmetric: h4 % 2 === 0,
   };
 
-  console.log(`Layout params: title=${params.titlePage}, split=${params.titlePagePhotoRatio.toFixed(2)}, stagger=${params.useStaggeredColumns}`);
+  console.log(`Layout params: title=${params.titlePage}/${params.titleAlign}, split=${params.titlePagePhotoRatio.toFixed(2)}, gridStyle=${params.photoGridStyle}, hero=${params.useHorizontalHero}`);
 
   return params;
 }
@@ -278,10 +299,15 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
 function buildParameterizedLayout(elements, photos, pageContent, bounds, params) {
   const { leftPageStart, leftPageEnd, leftPageWidth,
           rightPageStart, rightPageEnd, rightPageWidth,
-          pageHeight, MARGIN, GAP, photoCaptions = [] } = bounds;
+          pageHeight, MARGIN, GAP: baseGap, photoCaptions = [] } = bounds;
 
   const photoCount = photos.length;
   const usableHeight = pageHeight - 2 * MARGIN;
+
+  // Apply gap style variation
+  const GAP = params.gapStyle === 'tight' ? baseGap * 0.5
+    : params.gapStyle === 'loose' ? baseGap * 2
+    : baseGap;
 
   // Determine which page is "title page" and which is "photo page"
   const isLeftTitle = params.titlePage === 'left';
@@ -297,10 +323,18 @@ function buildParameterizedLayout(elements, photos, pageContent, bounds, params)
   const titlePhotoEnd = MARGIN + usableHeight * params.titlePagePhotoEnd;
   const photoPagePhotoEnd = MARGIN + usableHeight * params.photoPagePhotoEnd;
 
+  // Title vertical position within title zone
+  let titleStartY = MARGIN;
+  if (params.titleVerticalPos === 'middle') {
+    titleStartY = MARGIN + (titleZoneEnd - MARGIN) * 0.3;
+  } else if (params.titleVerticalPos === 'bottom') {
+    titleStartY = MARGIN + (titleZoneEnd - MARGIN) * 0.5;
+  }
+
   // === TITLE PAGE: Title at top ===
   addTitleBlock(elements, pageContent, {
-    x: titleX, y: MARGIN, width: titleW, compact: true,
-    align: isLeftTitle ? 'left' : 'right',
+    x: titleX, y: titleStartY, width: titleW, compact: true,
+    align: params.titleAlign || (isLeftTitle ? 'left' : 'right'),
   });
 
   // Headline + record + date in title zone
