@@ -151,11 +151,12 @@ async function generateHybridLayout({ photos, pageContent, theme, pageType = 'pa
  */
 function chooseLayoutTemplate(pageContent, photoCount) {
   // Hash includes all content for maximum variety between pages
+  // _shuffleSalt changes on each shuffle to force different params
   const contentHash = hashString(
     (pageContent.section || '') +
     (pageContent.headline || '') +
     (pageContent.bodyCopy || '').slice(0, 50) +
-    (pageContent.schoolName || '') +
+    (pageContent._shuffleSalt || '') +
     photoCount
   );
 

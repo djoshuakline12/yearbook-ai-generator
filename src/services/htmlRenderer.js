@@ -151,14 +151,16 @@ function renderPhoto(el, photos, dpi) {
   // Black and white filter for dramatic effect (DCHS style)
   const bwFilter = el.blackAndWhite ? 'filter: grayscale(100%) contrast(1.1);' : '';
 
-  // Smart crop - use focal point for object-position if available
-  // object-position tells CSS where to anchor when object-fit: cover crops the image
-  let objectPosition = 'center 20%';  // Default: anchor toward top (keeps heads visible)
-  if (photo.focalPoint) {
+  // Crop position: element.cropX/cropY override > focalPoint > default
+  // cropX/cropY are 0-100 percentage values set by the editor's crop tool
+  let objectPosition = 'center 20%';
+  if (el.cropX != null && el.cropY != null) {
+    // Editor-set crop position takes priority
+    objectPosition = `${el.cropX}% ${el.cropY}%`;
+  } else if (photo.focalPoint) {
     const focalX = Math.min(80, Math.max(20, Math.round(photo.focalPoint.focalX * 100)));
     const focalY = Math.min(75, Math.max(15, Math.round(photo.focalPoint.focalY * 100)));
     objectPosition = `${focalX}% ${focalY}%`;
-    console.log(`Photo ${el.photoIndex}: focal(${focalX}%, ${focalY}%) subject=${photo.focalPoint.subjectType}`);
   } else if (photo.objectPosition) {
     objectPosition = photo.objectPosition;
   }

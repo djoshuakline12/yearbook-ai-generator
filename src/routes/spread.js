@@ -700,4 +700,50 @@ router.post('/session/:id/render-preview', express.json(), async (req, res) => {
   }
 });
 
+/**
+ * POST /api/session/:id/shuffle
+ * Re-generate layout with different random parameters (same content + photos).
+ */
+router.post('/session/:id/shuffle', express.json(), async (req, res) => {
+  try {
+    const session = getSession(req.params.id);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found or expired.' });
+    }
+
+    // Add random salt to force different layout params
+    const shuffledContent = {
+      ...session.pageContent,
+      _shuffleSalt: Date.now().toString() + Math.random().toString(),
+    };
+
+    // Re-generate layout with new params
+    const { generateLayout } = require('../services/layoutGenerator');
+    const layout = await generateLayout({
+      photos: session.photos,
+      pageContent: shuffledContent,
+      theme: session.theme,
+      pageType: session.pageType,
+    });
+
+    // Update session with new layout
+    session.layout = layout;
+
+    // Render draft preview
+    const dpi = 150;
+    const html = renderLayoutToHtml(layout, session.photos, { dpi });
+    const result = await exportToFile(html, 'png', session.pageType, { quality: 'draft' });
+
+    res.json({
+      sessionId: req.params.id,
+      layout,
+      imageBase64: result.buffer.toString('base64'),
+      mimeType: result.mimeType,
+    });
+  } catch (err) {
+    console.error('Shuffle layout error:', err);
+    res.status(500).json({ error: 'Failed to shuffle layout.', details: err.message });
+  }
+});
+
 module.exports = router;
