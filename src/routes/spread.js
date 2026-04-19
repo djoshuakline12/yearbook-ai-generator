@@ -10,7 +10,7 @@ const { getTheme, getAllThemes } = require('../utils/themes');
 const { extractThemeFromImage } = require('../services/themeExtractor');
 const { polishContent, needsPolishing } = require('../services/contentPolisher');
 const { analyzePhotosForCropping } = require('../services/smartCrop');
-const { createSession, getSession, updateLayout, getActiveCount } = require('../services/sessionStore');
+const { createSession, getSession, updateLayout, getActiveCount, getLayout, getPhotos, setLayout } = require('../services/sessionStore');
 const { modifyLayout } = require('../services/layoutModifier');
 const fs = require('fs').promises;
 
@@ -604,6 +604,94 @@ router.get('/session/:id', (req, res) => {
     section: session.pageContent?.section || null,
     activeSessions: getActiveCount(),
   });
+});
+
+// =============================================================================
+// EDITOR: Live editing API endpoints
+// =============================================================================
+
+/**
+ * GET /api/session/:id/layout
+ * Get the current layout JSON for the editor.
+ */
+router.get('/session/:id/layout', (req, res) => {
+  const data = getLayout(req.params.id);
+  if (!data) {
+    return res.status(404).json({ error: 'Session not found or expired.' });
+  }
+  res.json({ sessionId: req.params.id, ...data });
+});
+
+/**
+ * GET /api/session/:id/photos
+ * Get photo data for the editor (base64 + metadata).
+ */
+router.get('/session/:id/photos', (req, res) => {
+  const photos = getPhotos(req.params.id);
+  if (!photos) {
+    return res.status(404).json({ error: 'Session not found or expired.' });
+  }
+  res.json({ sessionId: req.params.id, photos });
+});
+
+/**
+ * PUT /api/session/:id/layout
+ * Replace the layout elements and get a re-rendered preview.
+ */
+router.put('/session/:id/layout', express.json({ limit: '5mb' }), async (req, res) => {
+  try {
+    const { elements } = req.body;
+    if (!elements || !Array.isArray(elements)) {
+      return res.status(400).json({ error: 'elements array is required.' });
+    }
+
+    const session = getSession(req.params.id);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found or expired.' });
+    }
+
+    // Update layout elements
+    setLayout(req.params.id, elements);
+
+    // Re-render with updated layout
+    const html = renderLayoutToHtml(session.layout, session.photos);
+    const result = await exportToFile(html, 'png', session.pageType);
+
+    res.json({
+      sessionId: req.params.id,
+      layout: session.layout,
+      imageBase64: result.buffer.toString('base64'),
+      mimeType: result.mimeType,
+    });
+  } catch (err) {
+    console.error('Update layout error:', err);
+    res.status(500).json({ error: 'Failed to update layout.', details: err.message });
+  }
+});
+
+/**
+ * POST /api/session/:id/render-preview
+ * Re-render the current layout without modifications.
+ */
+router.post('/session/:id/render-preview', express.json(), async (req, res) => {
+  try {
+    const session = getSession(req.params.id);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found or expired.' });
+    }
+
+    const html = renderLayoutToHtml(session.layout, session.photos);
+    const result = await exportToFile(html, 'png', session.pageType);
+
+    res.json({
+      sessionId: req.params.id,
+      imageBase64: result.buffer.toString('base64'),
+      mimeType: result.mimeType,
+    });
+  } catch (err) {
+    console.error('Render preview error:', err);
+    res.status(500).json({ error: 'Failed to render preview.', details: err.message });
+  }
 });
 
 module.exports = router;

@@ -102,6 +102,46 @@ function cleanupExpired() {
 }
 
 /**
+ * Get just the layout from a session
+ */
+function getLayout(sessionId) {
+  const session = getSession(sessionId);
+  if (!session) return null;
+  return {
+    layout: session.layout,
+    pageType: session.pageType,
+    photoCount: session.photos.length,
+  };
+}
+
+/**
+ * Get photo metadata and base64 data for the editor
+ */
+function getPhotos(sessionId) {
+  const session = getSession(sessionId);
+  if (!session) return null;
+  return session.photos.map(p => ({
+    index: p.index,
+    base64: p.base64,
+    width: p.width,
+    height: p.height,
+    aspectRatio: p.aspectRatio,
+    orientation: p.orientation,
+    focalPoint: p.focalPoint,
+  }));
+}
+
+/**
+ * Replace the elements array in a session's layout
+ */
+function setLayout(sessionId, elements) {
+  const session = getSession(sessionId);
+  if (!session) return false;
+  session.layout.elements = elements;
+  return true;
+}
+
+/**
  * Get active session count (for monitoring)
  */
 function getActiveCount() {
@@ -114,4 +154,7 @@ module.exports = {
   getSession,
   updateLayout,
   getActiveCount,
+  getLayout,
+  getPhotos,
+  setLayout,
 };
