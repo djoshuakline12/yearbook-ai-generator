@@ -125,35 +125,39 @@ router.post('/generate-spread', uploadAny.any(), async (req, res) => {
   let photoResults = [];
 
   try {
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ error: 'At least one photo is required.' });
-    }
-
     const { pageType = 'page', format = 'pdf' } = req.body;
 
     // Parse page content
     let pageContent = parsePageContent(req.body);
+    const category = pageContent.pageCategory || 'activity';
+    const photosRequired = category !== 'divider' && category !== 'index';
+
+    if (photosRequired && (!req.files || req.files.length === 0)) {
+      return res.status(400).json({ error: 'At least one photo is required.' });
+    }
 
     // Validate minimum content
-    if (!pageContent.section && !pageContent.headline) {
-      return res.status(400).json({ error: 'Section name or headline is required.' });
+    if (!pageContent.section && !pageContent.headline && !pageContent.pageTitle) {
+      return res.status(400).json({ error: 'Section name, headline, or page title is required.' });
     }
 
     // Parse theme
     const theme = parseTheme(req.body);
 
-    // 1. Process photos
-    photoResults = await processPhotos(req.files);
+    // 1. Process photos (if any)
+    photoResults = (req.files && req.files.length > 0) ? await processPhotos(req.files) : [];
 
     // 1b. SMART CROP - Analyze photos for optimal focal points
-    if (USE_SMART_CROP) {
+    // Skip for divider/index pages that don't use photos
+    if (USE_SMART_CROP && photoResults.length > 0 && category !== 'divider' && category !== 'index') {
       console.log('Smart Crop - Analyzing', photoResults.length, 'photos for focal points...');
       photoResults = await analyzePhotosForCropping(photoResults);
       console.log('Smart Crop - Analysis complete');
     }
 
     // 2. CONTENT POLISHING - AI enhances all text before layout
-    if (USE_CONTENT_POLISHING) {
+    // Skip for index pages that just have topic/page lists
+    if (USE_CONTENT_POLISHING && category !== 'index') {
       console.log('Content Polishing - Starting...');
       const polishCheck = needsPolishing(pageContent);
       console.log('Content Polishing - Needs polish:', polishCheck.needsPolishing, polishCheck.issues);
@@ -311,7 +315,31 @@ function parsePageContent(body) {
     photoCaptions: parsePhotoCaptions(body),
     folio: body.folio || '',
     pageCategory: body.pageCategory || '',
+    indexEntries: parseIndexEntries(body),
+    pageTitle: body.pageTitle || '',
+    pageTitleThemeWord: body.pageTitleThemeWord || '',
   };
+}
+
+/**
+ * Parse index entries — accepts JSON array or newline-separated "Topic ... pages"
+ */
+function parseIndexEntries(body) {
+  if (!body.indexEntries) return [];
+  if (Array.isArray(body.indexEntries)) return body.indexEntries;
+  if (typeof body.indexEntries === 'string') {
+    try {
+      const parsed = JSON.parse(body.indexEntries);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {}
+    // Parse newline-separated format: "Soccer ... 45, 67"
+    return body.indexEntries.split('\n').filter(l => l.trim()).map(line => {
+      const match = line.match(/^(.+?)\s*[\.…]+\s*(.+)$/);
+      if (match) return { topic: match[1].trim(), pages: match[2].trim() };
+      return { topic: line.trim(), pages: '' };
+    });
+  }
+  return [];
 }
 
 /**

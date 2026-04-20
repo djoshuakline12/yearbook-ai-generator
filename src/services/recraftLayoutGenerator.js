@@ -246,8 +246,6 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
     const rightPageEnd = pageWidth - MARGIN;
     const rightPageWidth = rightPageEnd - rightPageStart;
 
-    const layoutParams = chooseLayoutTemplate(pageContent, photoCount);
-
     const bounds = {
       leftPageStart, leftPageEnd, leftPageWidth,
       rightPageStart, rightPageEnd, rightPageWidth,
@@ -255,8 +253,20 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
       photoCaptions
     };
 
-    // Single parameterized builder — infinite variety from params
-    buildParameterizedLayout(elements, photos, pageContent, bounds, layoutParams);
+    // Dispatch based on pageCategory (activity is default)
+    const category = pageContent.pageCategory || 'activity';
+
+    if (category === 'collage') {
+      buildCollageLayout(elements, photos, pageContent, bounds);
+    } else if (category === 'divider') {
+      buildDividerLayout(elements, photos, pageContent, bounds);
+    } else if (category === 'index') {
+      buildIndexLayout(elements, photos, pageContent, bounds);
+    } else {
+      // Default: activity spread with parameterized variety
+      const layoutParams = chooseLayoutTemplate(pageContent, photoCount);
+      buildParameterizedLayout(elements, photos, pageContent, bounds, layoutParams);
+    }
 
   } else {
     // Single page layout
@@ -470,6 +480,369 @@ function buildParameterizedLayout(elements, photos, pageContent, bounds, params)
       columns: 4, titleFontSize: 10, nameFontSize: 7,
       fontFamily: 'Source Sans Pro', titleColor: '#1A1A1A', nameColor: '#333333', zIndex: 10,
     });
+  }
+}
+
+// =============================================================================
+// LAYOUT: COLLAGE (Many photos, no hero, organic arrangement)
+// =============================================================================
+function buildCollageLayout(elements, photos, pageContent, bounds) {
+  const { leftPageStart, leftPageEnd, leftPageWidth,
+          rightPageStart, rightPageEnd, rightPageWidth,
+          pageHeight, MARGIN, GAP, photoCaptions = [] } = bounds;
+
+  const photoCount = photos.length;
+
+  // Small title strip at top spanning both pages
+  const titleHeight = 0.9;
+  if (pageContent.pageTitle) {
+    elements.push({
+      type: 'pageTitle',
+      text: pageContent.pageTitle,
+      themeWord: pageContent.pageTitleThemeWord || null,
+      x: leftPageStart, y: MARGIN, width: 16 - 2 * MARGIN,
+      fontSize: 36, fontFamily: 'Playfair Display', fontWeight: '900',
+      color: '#1A1A1A', letterSpacing: 1, zIndex: 10,
+    });
+  }
+  if (pageContent.section) {
+    elements.push({
+      type: 'sectionHeader', text: pageContent.section,
+      x: leftPageStart, y: MARGIN + 0.65, width: 16 - 2 * MARGIN,
+      fontSize: 14, fontFamily: 'Source Sans Pro', fontWeight: '600',
+      color: '#523D73', textTransform: 'uppercase', letterSpacing: 3, zIndex: 10,
+    });
+  }
+
+  // Photos fill both pages below title — mixed sizes for organic feel
+  const photoZoneStart = MARGIN + titleHeight + 0.3;
+  const photoZoneEnd = pageHeight - MARGIN;
+
+  // Split photos ~50/50 between pages
+  const leftCount = Math.ceil(photoCount / 2);
+  const leftPhotos = photos.slice(0, leftCount);
+  const rightPhotos = photos.slice(leftCount);
+
+  // Use varied grid on each page with small-font captions
+  const leftElements = buildCollageGrid(leftPhotos, {
+    startX: leftPageStart, startY: photoZoneStart,
+    maxX: leftPageEnd, maxY: photoZoneEnd, GAP
+  }, 0, photoCaptions);
+  elements.push(...leftElements);
+
+  if (rightPhotos.length > 0) {
+    const rightElements = buildCollageGrid(rightPhotos, {
+      startX: rightPageStart, startY: photoZoneStart,
+      maxX: rightPageEnd, maxY: photoZoneEnd, GAP
+    }, leftCount, photoCaptions);
+    elements.push(...rightElements);
+  }
+}
+
+/**
+ * Collage grid: asymmetric mix of sizes, more photos packed in
+ */
+function buildCollageGrid(photos, bounds, startIndex, photoCaptions) {
+  const elements = [];
+  const { startX, startY, maxX, maxY, GAP } = bounds;
+  const W = maxX - startX;
+  const H = maxY - startY;
+  const n = photos.length;
+
+  if (n === 0) return elements;
+
+  // Different arrangements based on count
+  if (n <= 2) {
+    // 2 photos stacked or side by side
+    const isWide = W > H;
+    photos.forEach((_, i) => {
+      elements.push({
+        type: 'photo', photoIndex: startIndex + i,
+        x: isWide ? startX + i * (W / 2 + GAP / 2) : startX,
+        y: isWide ? startY : startY + i * (H / 2 + GAP / 2),
+        width: isWide ? (W - GAP) / 2 : W,
+        height: isWide ? H : (H - GAP) / 2,
+        borderRadius: 0, shadow: false, blackAndWhite: false,
+        zIndex: 1, cropFit: 'cover',
+      });
+    });
+  } else if (n <= 4) {
+    // 2x2 grid with varied sizes (one dominant)
+    const bigW = W * 0.6, bigH = H * 0.55;
+    elements.push({
+      type: 'photo', photoIndex: startIndex,
+      x: startX, y: startY, width: bigW, height: bigH,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 1, cropFit: 'cover',
+    });
+    // 3 small photos
+    const smW = W - bigW - GAP;
+    const smH1 = (bigH - GAP) / 2;
+    for (let i = 1; i < Math.min(n, 3); i++) {
+      elements.push({
+        type: 'photo', photoIndex: startIndex + i,
+        x: startX + bigW + GAP,
+        y: startY + (i - 1) * (smH1 + GAP),
+        width: smW, height: smH1,
+        borderRadius: 0, shadow: false, blackAndWhite: false,
+        zIndex: 1, cropFit: 'cover',
+      });
+    }
+    // 4th photo along bottom
+    if (n >= 4) {
+      elements.push({
+        type: 'photo', photoIndex: startIndex + 3,
+        x: startX, y: startY + bigH + GAP,
+        width: W, height: H - bigH - GAP,
+        borderRadius: 0, shadow: false, blackAndWhite: false,
+        zIndex: 1, cropFit: 'cover',
+      });
+    }
+  } else {
+    // 5+ photos: mosaic arrangement
+    // Row-based with varying row heights
+    const rows = Math.ceil(n / 3);
+    const rowH = (H - (rows - 1) * GAP) / rows;
+    let placedIdx = 0;
+
+    for (let r = 0; r < rows && placedIdx < n; r++) {
+      const remaining = n - placedIdx;
+      const photosInRow = Math.min(3, remaining);
+
+      // Vary widths in row for visual interest (odd rows = wide-narrow-narrow, even = narrow-wide-narrow)
+      let widths;
+      if (photosInRow === 3) {
+        widths = (r % 2 === 0) ? [0.5, 0.25, 0.25] : [0.25, 0.5, 0.25];
+      } else if (photosInRow === 2) {
+        widths = [0.6, 0.4];
+      } else {
+        widths = [1];
+      }
+
+      let x = startX;
+      for (let c = 0; c < photosInRow; c++) {
+        const w = widths[c] * W - (c === photosInRow - 1 ? 0 : GAP * widths[c]);
+        elements.push({
+          type: 'photo', photoIndex: startIndex + placedIdx,
+          x, y: startY + r * (rowH + GAP),
+          width: w, height: rowH,
+          borderRadius: 0, shadow: false, blackAndWhite: r === 0 && c === 0,
+          zIndex: 1, cropFit: 'cover',
+        });
+        x += w + GAP;
+        placedIdx++;
+      }
+    }
+  }
+
+  // Add captions (short ones only for collage — just names)
+  return elements.map(el => {
+    if (el.type === 'photo') {
+      const cap = photoCaptions.find(c => c.photoIndex === el.photoIndex) || photoCaptions[el.photoIndex];
+      if (cap && cap.people && !cap.people.includes('[')) {
+        el.caption = cap.people.trim();
+      }
+    }
+    return el;
+  });
+}
+
+// =============================================================================
+// LAYOUT: CHAPTER DIVIDER (Minimal text-only section divider)
+// =============================================================================
+function buildDividerLayout(elements, photos, pageContent, bounds) {
+  const { leftPageStart, rightPageEnd, pageHeight, pageWidth, MARGIN } = bounds;
+
+  // Full width for the spread
+  const contentWidth = (rightPageEnd - leftPageStart);
+  const centerX = (leftPageStart + rightPageEnd) / 2;
+  const centerY = pageHeight / 2;
+
+  // Main chapter title — VERY BIG, centered
+  if (pageContent.pageTitle) {
+    elements.push({
+      type: 'pageTitle',
+      text: pageContent.pageTitle,
+      themeWord: pageContent.pageTitleThemeWord || null,
+      x: leftPageStart, y: centerY - 1.2, width: contentWidth,
+      fontSize: 96,
+      fontFamily: 'Playfair Display', fontWeight: '900',
+      color: '#1A1A1A',
+      textAlign: 'center',
+      letterSpacing: 2,
+      zIndex: 10,
+    });
+  }
+
+  // Subtitle / section description
+  if (pageContent.section) {
+    elements.push({
+      type: 'sectionHeader', text: pageContent.section,
+      x: leftPageStart, y: centerY + 0.5, width: contentWidth,
+      fontSize: 18, fontFamily: 'Source Sans Pro', fontWeight: '600',
+      color: '#523D73', textAlign: 'center',
+      textTransform: 'uppercase', letterSpacing: 6,
+      zIndex: 10,
+    });
+  }
+
+  // Optional intro paragraph (bodyCopy)
+  if (pageContent.bodyCopy) {
+    elements.push({
+      type: 'bodyCopy', text: pageContent.bodyCopy,
+      x: leftPageStart + contentWidth * 0.25,
+      y: centerY + 1.3,
+      width: contentWidth * 0.5,
+      height: 2.0,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#333333', lineHeight: 1.6,
+      columns: 1, textAlign: 'center', zIndex: 10,
+    });
+  }
+
+  // Decorative horizontal line above and below title
+  elements.push({
+    type: 'decorative', shape: 'line',
+    x: centerX - 1.5, y: centerY - 1.6,
+    width: 3.0, height: 0.02,
+    color: '#523D73', opacity: 1, zIndex: 5,
+  });
+  elements.push({
+    type: 'decorative', shape: 'line',
+    x: centerX - 1.5, y: centerY + 1.1,
+    width: 3.0, height: 0.02,
+    color: '#523D73', opacity: 1, zIndex: 5,
+  });
+}
+
+// =============================================================================
+// LAYOUT: BOOK INDEX (Alphabetical topic listing with page numbers)
+// =============================================================================
+function buildIndexLayout(elements, photos, pageContent, bounds) {
+  const { leftPageStart, leftPageEnd, leftPageWidth,
+          rightPageStart, rightPageEnd, rightPageWidth,
+          pageHeight, MARGIN } = bounds;
+
+  // Page title at top
+  if (pageContent.pageTitle) {
+    elements.push({
+      type: 'pageTitle', text: pageContent.pageTitle,
+      x: leftPageStart, y: MARGIN, width: 16 - 2 * MARGIN,
+      fontSize: 42, fontFamily: 'Playfair Display', fontWeight: '900',
+      color: '#1A1A1A', letterSpacing: 1, zIndex: 10,
+    });
+  }
+  const sectionText = pageContent.section || 'Index';
+  elements.push({
+    type: 'sectionHeader', text: sectionText,
+    x: leftPageStart, y: MARGIN + 0.85, width: 16 - 2 * MARGIN,
+    fontSize: 16, fontFamily: 'Source Sans Pro', fontWeight: '600',
+    color: '#523D73', textTransform: 'uppercase', letterSpacing: 3, zIndex: 10,
+  });
+
+  // Parse index entries — expected format in pageContent.indexEntries:
+  // [{ topic: "Soccer", pages: "45, 67" }, { topic: "Spanish Club", pages: "92" }]
+  // Or as a formatted string: "Soccer ... 45, 67\nSpanish Club ... 92"
+  let entries = pageContent.indexEntries || [];
+
+  // Fallback: parse from bodyCopy if no structured entries
+  if (entries.length === 0 && pageContent.bodyCopy) {
+    entries = pageContent.bodyCopy.split('\n').filter(l => l.trim()).map(line => {
+      const match = line.match(/^(.+?)\s*[\.…\s]+(.+)$/);
+      if (match) return { topic: match[1].trim(), pages: match[2].trim() };
+      return { topic: line.trim(), pages: '' };
+    });
+  }
+
+  // Sort alphabetically
+  entries.sort((a, b) => (a.topic || '').localeCompare(b.topic || ''));
+
+  // Group by first letter for section headers
+  const sections = {};
+  for (const entry of entries) {
+    const letter = (entry.topic || '?')[0].toUpperCase();
+    if (!sections[letter]) sections[letter] = [];
+    sections[letter].push(entry);
+  }
+
+  // Distribute alphabetically across 4 columns (2 per page)
+  const allLetters = Object.keys(sections).sort();
+  const totalEntries = entries.length;
+  const columnsPerPage = 2;
+  const entriesPerColumn = Math.ceil(totalEntries / (columnsPerPage * 2));
+
+  const columnWidth = (leftPageWidth - 0.3) / 2;
+  const startY = MARGIN + 1.6;
+  const maxY = pageHeight - MARGIN - 0.3;
+  const lineHeight = 0.2;
+  const sectionHeaderHeight = 0.35;
+
+  let currentCol = 0; // 0-3: left-page-left, left-page-right, right-page-left, right-page-right
+  let currentY = startY;
+
+  for (const letter of allLetters) {
+    const columnX = currentCol < 2
+      ? leftPageStart + currentCol * (columnWidth + 0.3)
+      : rightPageStart + (currentCol - 2) * (columnWidth + 0.3);
+
+    // Check if section header fits
+    if (currentY + sectionHeaderHeight + lineHeight > maxY) {
+      currentCol++;
+      currentY = startY;
+      if (currentCol > 3) break;
+    }
+
+    // Section letter header
+    elements.push({
+      type: 'sectionHeader', text: letter,
+      x: columnX, y: currentY, width: columnWidth,
+      fontSize: 18, fontFamily: 'Playfair Display', fontWeight: '900',
+      color: '#523D73', textTransform: 'none', letterSpacing: 0,
+      zIndex: 10,
+    });
+    currentY += sectionHeaderHeight;
+
+    // Entries under this letter
+    for (const entry of sections[letter]) {
+      if (currentY + lineHeight > maxY) {
+        currentCol++;
+        currentY = startY;
+        if (currentCol > 3) break;
+        // Re-calculate columnX
+        const newColX = currentCol < 2
+          ? leftPageStart + currentCol * (columnWidth + 0.3)
+          : rightPageStart + (currentCol - 2) * (columnWidth + 0.3);
+
+        // Repeat letter header at top of new column
+        elements.push({
+          type: 'sectionHeader', text: letter + ' (cont.)',
+          x: newColX, y: currentY, width: columnWidth,
+          fontSize: 12, fontFamily: 'Playfair Display', fontWeight: '700',
+          color: '#523D73', textTransform: 'none',
+          zIndex: 10,
+        });
+        currentY += sectionHeaderHeight;
+      }
+
+      const entryColX = currentCol < 2
+        ? leftPageStart + currentCol * (columnWidth + 0.3)
+        : rightPageStart + (currentCol - 2) * (columnWidth + 0.3);
+
+      // Topic text + dots + page number
+      const displayText = entry.pages
+        ? `${entry.topic} ........ ${entry.pages}`
+        : entry.topic;
+
+      elements.push({
+        type: 'bodyCopy', text: displayText,
+        x: entryColX, y: currentY, width: columnWidth,
+        fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
+        color: '#1A1A1A', lineHeight: 1.2, columns: 1,
+        textAlign: 'left', zIndex: 10,
+      });
+      currentY += lineHeight;
+    }
+    currentY += 0.15; // Gap after each letter section
   }
 }
 
