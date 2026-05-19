@@ -1,17 +1,91 @@
 const puppeteer = require('puppeteer');
 const { PAGE } = require('../utils/constants');
+const { logError, logInfo } = require('./errorLogger');
+
+// ============================================================================
+// CONCURRENCY QUEUE
+// Limits how many Puppeteer renders can run simultaneously.
+// Without this, 13 students clicking "Export" at once would spawn 13 Chrome
+// instances and crash the server with OOM.
+// ============================================================================
+
+const MAX_CONCURRENT_DRAFT = 4;     // Draft renders are cheap (~512MB each)
+const MAX_CONCURRENT_STANDARD = 3;  // Standard renders ~1GB each
+const MAX_CONCURRENT_FINAL = 1;     // Final renders ~2GB each — never run two at once
+
+const queues = {
+  draft: { running: 0, waiting: [], max: MAX_CONCURRENT_DRAFT },
+  standard: { running: 0, waiting: [], max: MAX_CONCURRENT_STANDARD },
+  final: { running: 0, waiting: [], max: MAX_CONCURRENT_FINAL },
+};
+
+function acquireSlot(quality) {
+  const queue = queues[quality] || queues.standard;
+  return new Promise((resolve) => {
+    if (queue.running < queue.max) {
+      queue.running++;
+      resolve();
+    } else {
+      logInfo(`Queue: waiting for ${quality} slot (${queue.waiting.length + 1} in queue)`);
+      queue.waiting.push(resolve);
+    }
+  });
+}
+
+function releaseSlot(quality) {
+  const queue = queues[quality] || queues.standard;
+  queue.running--;
+  if (queue.waiting.length > 0) {
+    const next = queue.waiting.shift();
+    queue.running++;
+    next();
+  }
+}
+
+/**
+ * Get current queue status (useful for monitoring)
+ */
+function getQueueStatus() {
+  return {
+    draft: { running: queues.draft.running, waiting: queues.draft.waiting.length },
+    standard: { running: queues.standard.running, waiting: queues.standard.waiting.length },
+    final: { running: queues.final.running, waiting: queues.final.waiting.length },
+  };
+}
 
 /**
  * Render HTML to PNG/JPEG or PDF using Puppeteer.
+ *
+ * Each render is queued to prevent OOM crashes under concurrent load.
  *
  * @param {string} html - The HTML content to render
  * @param {string} format - 'pdf' or 'png'
  * @param {string} pageType - 'page' (single) or 'spread' (double)
  * @param {object} options - Quality options
- * @param {string} options.quality - 'standard' (fast JPEG) or 'final' (lossless PNG)
+ * @param {string} options.quality - 'draft', 'standard', or 'final'
  * @param {number} options.dpi - DPI override for pixel dimensions
  */
 async function exportToFile(html, format = 'pdf', pageType = 'page', options = {}) {
+  const { quality = 'standard' } = options;
+  const queueKey = quality === 'draft' ? 'draft' : quality === 'final' ? 'final' : 'standard';
+
+  // Wait for an available render slot
+  await acquireSlot(queueKey);
+  const startTime = Date.now();
+
+  try {
+    return await doExport(html, format, pageType, options);
+  } catch (err) {
+    logError('Export failed', err, { quality, format, pageType });
+    throw err;
+  } finally {
+    releaseSlot(queueKey);
+    const duration = Date.now() - startTime;
+    logInfo(`Export complete: ${quality} ${format} took ${duration}ms`);
+  }
+}
+
+async function doExport(html, format, pageType, options) {
   const { quality = 'standard' } = options;
   const isFinal = quality === 'final';
   const isDraft = quality === 'draft';
@@ -121,4 +195,4 @@ async function exportToFile(html, format = 'pdf', pageType = 'page', options = {
   }
 }
 
-module.exports = { exportToFile };
+module.exports = { exportToFile, getQueueStatus };

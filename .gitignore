@@ -3,6 +3,7 @@ node_modules/
 uploads/*
 !uploads/.gitkeep
 sessions/
+logs/
 dist/
 *.log
 .DS_Store
