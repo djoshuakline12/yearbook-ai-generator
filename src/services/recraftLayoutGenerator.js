@@ -457,21 +457,29 @@ function buildParameterizedLayout(elements, photos, pageContent, bounds, params)
   const elementsToPlace = [];
 
   if (hasBody) {
-    // Body copy is flexible — can shrink to 1.2" or expand to 3.5"
-    elementsToPlace.push({ kind: 'bodyCopy', minHeight: 1.2, maxHeight: 3.5 });
+    // Body copy: estimate actual height needed based on word count
+    // 9pt font, 2 columns, ~3.5" wide column = ~65 chars/line, ~6 lines/inch
+    const bodyChars = (pageContent.bodyCopy || '').length;
+    const charsPerInch = 65 * 6 * 2;  // 2 columns × 65 chars × 6 lines/inch
+    const estimatedHeight = Math.ceil((bodyChars / charsPerInch) * 10) / 10;
+    elementsToPlace.push({
+      kind: 'bodyCopy',
+      minHeight: Math.max(1.2, estimatedHeight),  // Don't squash below what text needs
+      maxHeight: Math.max(2.5, estimatedHeight + 0.3),
+    });
   }
-  // EACH quote becomes its own item — height scales with text length
+  // EACH quote — height scales with actual text length, NEVER smaller than needed
   quotes.forEach((q, idx) => {
-    const charsPerLine = 48;
+    const charsPerLine = 46;  // Slightly more conservative
     const estLines = Math.ceil((q.text || '').length / charsPerLine);
-    const textHeight = estLines * 0.20;
-    const attrHeight = q.attribution ? 0.22 : 0;
+    const textHeight = estLines * 0.22;  // 0.22"/line at 11-12pt italic with line-height 1.3
+    const attrHeight = q.attribution ? 0.25 : 0;  // Attribution + margin
     const padding = 0.15;
     const naturalHeight = textHeight + attrHeight + padding;
     elementsToPlace.push({
       kind: 'quote',
-      minHeight: Math.max(0.65, naturalHeight * 0.85),
-      maxHeight: Math.max(1.0, naturalHeight + 0.15),
+      minHeight: naturalHeight,  // NEVER less than actual text needs
+      maxHeight: naturalHeight + 0.2,
       data: q,
       idx,
     });
@@ -678,14 +686,27 @@ function renderSecondarySlot(elements, items, slot, pageContent) {
     const h = heights[idx];
 
     switch (item.kind) {
-      case 'bodyCopy':
+      case 'bodyCopy': {
+        // Auto-shrink font size if space is tight to ensure text fits
+        const bodyChars = (pageContent.bodyCopy || '').length;
+        const charsPer9pt = 65 * 6 * 2;  // 2 cols × 65 chars × 6 lines/inch at 9pt
+        const heightNeededAt9pt = bodyChars / charsPer9pt;
+        let bodyFontSize = 9;
+        let bodyLineHeight = 1.5;
+        if (h < heightNeededAt9pt) {
+          // Text won't fit at 9pt — shrink font proportionally
+          const shrinkFactor = h / heightNeededAt9pt;
+          bodyFontSize = Math.max(7, Math.round(9 * Math.sqrt(shrinkFactor)));
+          bodyLineHeight = 1.35;
+        }
         elements.push({
           type: 'bodyCopy', text: pageContent.bodyCopy,
           x: slot.x, y, width: slot.width, height: h,
-          fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
-          color: '#1A1A1A', lineHeight: 1.5, columns: 2, textAlign: 'justify', zIndex: 10,
+          fontSize: bodyFontSize, fontFamily: 'Source Sans Pro', fontWeight: '400',
+          color: '#1A1A1A', lineHeight: bodyLineHeight, columns: 2, textAlign: 'justify', zIndex: 10,
         });
         break;
+      }
 
       case 'quote': {
         // Small purple vertical accent bar to the left of the quote
@@ -698,15 +719,33 @@ function renderSecondarySlot(elements, items, slot, pageContent) {
           opacity: 1,
           zIndex: 9,
         });
-        // Quote text — italic, dark, on white (no purple block)
-        // Smaller font when slot is tight; pass height to enforce clipping
-        const quoteFontSize = h < 1.0 ? 10 : (h < 1.4 ? 11 : 12);
+        // Quote text — auto-shrink font so all text fits without clipping
+        // Calculate actual lines needed at the available width
+        const quoteWidth = slot.width - 0.18;
+        const charsPerLine12pt = Math.floor(quoteWidth * 13);  // ~13 chars/inch at 12pt italic
+        const quoteLines = Math.ceil((item.data.text || '').length / charsPerLine12pt);
+        const attrSpace = item.data.attribution ? 0.25 : 0;
+        const padding = 0.1;
+        const heightNeededAt12pt = quoteLines * 0.22 + attrSpace + padding;
+
+        let quoteFontSize;
+        if (h >= heightNeededAt12pt) {
+          quoteFontSize = 12;
+        } else if (h >= heightNeededAt12pt * 0.85) {
+          quoteFontSize = 11;
+        } else if (h >= heightNeededAt12pt * 0.75) {
+          quoteFontSize = 10;
+        } else {
+          // Last resort — shrink further to fit
+          quoteFontSize = Math.max(8, Math.round(12 * (h / heightNeededAt12pt)));
+        }
+
         elements.push({
           type: 'quote',
           text: item.data.text,
           attribution: item.data.attribution || '',
-          x: slot.x + 0.18, y, width: slot.width - 0.18,
-          height: h,  // Pass height so renderer can clip overflow
+          x: slot.x + 0.18, y, width: quoteWidth,
+          height: h,
           fontSize: quoteFontSize,
           fontFamily: 'Playfair Display',
           fontStyle: 'italic',
