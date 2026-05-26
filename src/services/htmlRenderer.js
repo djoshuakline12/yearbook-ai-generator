@@ -526,6 +526,7 @@ function renderQuote(el, dpi) {
   const x = inToPx(el.x, dpi);
   const y = inToPx(el.y, dpi);
   const w = inToPx(el.width, dpi);
+  const h = el.height ? inToPx(el.height, dpi) : null;
   const fontSize = ptToPx(el.fontSize || 16, dpi);
 
   // DCHS Style: Purple background with white text
@@ -536,9 +537,13 @@ function renderQuote(el, dpi) {
   const textColor = hasBgColor ? (el.color || '#FFFFFF') : (el.color || '#1a1a1a');
   const quoteMarkColor = hasBgColor ? '#FFFFFF' : (el.accentColor || '#523D73');
 
+  // Fixed height with overflow hidden prevents quotes from bleeding into adjacent elements
+  const heightStyle = h ? `height: ${h}px; overflow: hidden;` : '';
+
   return `<div class="element" style="
     left: ${x}px; top: ${y}px;
     width: ${w}px;
+    ${heightStyle}
     z-index: ${el.zIndex || 10};
     ${bgStyle}
   ">
@@ -558,7 +563,7 @@ function renderQuote(el, dpi) {
       font-style: normal;
       font-weight: 700;
       color: ${textColor};
-      margin-top: ${inToPx(0.08, dpi)}px;
+      margin-top: ${inToPx(0.06, dpi)}px;
     ">— ${escapeHtml(el.attribution)}</div>` : ''}
   </div>`;
 }

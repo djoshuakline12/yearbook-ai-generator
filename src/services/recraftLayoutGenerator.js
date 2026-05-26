@@ -474,12 +474,20 @@ function buildParameterizedLayout(elements, photos, pageContent, bounds, params)
   if (hasBody) {
     elementsToPlace.push({ kind: 'bodyCopy', minHeight: 1.5, maxHeight: 3.0 });
   }
-  // EACH quote becomes its own item — we render ALL of them
+  // EACH quote becomes its own item — height scales with text length
+  // Rule of thumb: 4" wide quote box at 11pt fits ~50 chars per line
+  // Each line is about 0.22" tall plus attribution adds 0.25"
   quotes.forEach((q, idx) => {
+    const charsPerLine = 48;
+    const estLines = Math.ceil((q.text || '').length / charsPerLine);
+    const textHeight = estLines * 0.22;
+    const attrHeight = q.attribution ? 0.25 : 0;
+    const padding = 0.2;
+    const naturalHeight = textHeight + attrHeight + padding;
     elementsToPlace.push({
       kind: 'quote',
-      minHeight: 0.7,
-      maxHeight: 1.3,
+      minHeight: Math.max(0.8, naturalHeight),
+      maxHeight: Math.max(1.2, naturalHeight + 0.2),
       data: q,
       idx,
     });
@@ -589,18 +597,21 @@ function renderSecondarySlot(elements, items, slot, pageContent) {
           zIndex: 9,
         });
         // Quote text — italic, dark, on white (no purple block)
+        // Smaller font when slot is tight; pass height to enforce clipping
+        const quoteFontSize = h < 1.0 ? 10 : (h < 1.4 ? 11 : 12);
         elements.push({
           type: 'quote',
           text: item.data.text,
           attribution: item.data.attribution || '',
           x: slot.x + 0.18, y, width: slot.width - 0.18,
-          fontSize: 12,
+          height: h,  // Pass height so renderer can clip overflow
+          fontSize: quoteFontSize,
           fontFamily: 'Playfair Display',
           fontStyle: 'italic',
           fontWeight: '400',
           color: '#1A1A1A',
-          backgroundColor: null,  // No background — subtle, magazine-style
-          accentColor: '#523D73', // Purple quote marks
+          backgroundColor: null,
+          accentColor: '#523D73',
           zIndex: 10,
         });
         break;
