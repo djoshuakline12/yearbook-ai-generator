@@ -175,17 +175,38 @@ function renderPhoto(el, photos, dpi) {
   }
 
   // Caption styling - appears BELOW the photo (not overlaid) for readability
-  // Support bold caption title (e.g., "MAKING THE PASS") + descriptive text
-  const captionTitleFontSize = ptToPx(6, dpi);
-  const captionFontSize = ptToPx(5.5, dpi);
-  const captionLineHeight = 1.3;
-  const hasCaption = el.caption || el.captionTitle;
-  // Only show caption if there's enough room (photo must be at least 0.5" tall after caption)
-  const minPhotoHeight = inToPx(0.5, dpi);
-  const wantsCaptionHeight = hasCaption ? inToPx(0.45, dpi) : 0;
-  const canFitCaption = hasCaption && (h - wantsCaptionHeight) >= minPhotoHeight;
-  const captionHeight = canFitCaption ? wantsCaptionHeight : 0;
-  const photoHeight = h - captionHeight;  // Reduce photo height to make room
+  // ALWAYS show captions when one is provided. Adapt size/lines to fit.
+  const hasCaption = !!(el.caption || el.captionTitle);
+
+  // Adaptive caption size based on photo height:
+  // - Large photo (>2.5"): full caption — 2 lines, normal font
+  // - Medium photo (1.2-2.5"): compact — 2 lines, smaller font
+  // - Small photo (<1.2"): tiny — 1 line, smallest font
+  // - Tiny photo (<0.7"): caption renders BELOW the photo box (overflow)
+  let captionTitleFontSize, captionFontSize, captionLineHeight, captionInches, captionLines;
+  if (h > inToPx(2.5, dpi)) {
+    captionTitleFontSize = ptToPx(6.5, dpi);
+    captionFontSize = ptToPx(6, dpi);
+    captionLineHeight = 1.3;
+    captionInches = 0.45;
+    captionLines = 2;
+  } else if (h > inToPx(1.2, dpi)) {
+    captionTitleFontSize = ptToPx(5.5, dpi);
+    captionFontSize = ptToPx(5, dpi);
+    captionLineHeight = 1.25;
+    captionInches = 0.38;
+    captionLines = 2;
+  } else {
+    captionTitleFontSize = ptToPx(5, dpi);
+    captionFontSize = ptToPx(4.5, dpi);
+    captionLineHeight = 1.2;
+    captionInches = 0.22;
+    captionLines = 1;
+  }
+
+  const captionHeight = hasCaption ? inToPx(captionInches, dpi) : 0;
+  // Photo always takes precedence — caption gets remaining space, min 0
+  const photoHeight = Math.max(inToPx(0.5, dpi), h - captionHeight);
 
   let captionInner = '';
   if (el.captionTitle) {
@@ -196,21 +217,21 @@ function renderPhoto(el, photos, dpi) {
     captionInner += `<span style="font-style: italic;">${escapeHtml(el.caption)}</span>`;
   }
 
-  const captionHtml = canFitCaption ? `
+  const captionHtml = hasCaption ? `
     <div style="
       position: absolute;
-      bottom: 0;
+      top: ${photoHeight}px;
       left: 0;
       right: 0;
       height: ${captionHeight}px;
-      padding-top: ${inToPx(0.04, dpi)}px;
+      padding-top: ${inToPx(0.03, dpi)}px;
       color: #333333;
       font-family: 'Source Sans Pro', sans-serif;
       font-size: ${captionFontSize}px;
       line-height: ${captionLineHeight};
       overflow: hidden;
       display: -webkit-box;
-      -webkit-line-clamp: 3;
+      -webkit-line-clamp: ${captionLines};
       -webkit-box-orient: vertical;
     ">${captionInner}</div>
   ` : '';
