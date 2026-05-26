@@ -521,14 +521,40 @@ function buildParameterizedLayout(elements, photos, pageContent, bounds, params)
   const titleSlotItems = [];
   const photoSlotItems = [];
 
+  // Quote distribution strategy varies per layout for visual variety:
+  //   'cluster' — all quotes together on one page
+  //   'split'   — alternate quotes between pages
+  //   'balance' — fill smaller slot first (current behavior)
+  const quoteStrategies = ['cluster', 'split', 'balance', 'cluster-photo'];
+  const quoteStrategy = quoteStrategies[(params.titlePagePhotoRatio * 100) % quoteStrategies.length | 0];
+  let quoteIdx = 0;
+
   for (const item of elementsToPlace) {
     if (item.kind === 'bodyCopy') {
       (bodyOnTitlePage ? titleSlotItems : photoSlotItems).push(item);
     } else if (item.kind === 'roster' || item.kind === 'coaches') {
       // Roster/coaches prefer the page WITHOUT body copy (more space)
       (bodyOnTitlePage ? photoSlotItems : titleSlotItems).push(item);
+    } else if (item.kind === 'quote') {
+      // Quote placement varies by strategy
+      if (quoteStrategy === 'cluster') {
+        // All quotes on title page
+        titleSlotItems.push(item);
+      } else if (quoteStrategy === 'cluster-photo') {
+        // All quotes on photo page
+        photoSlotItems.push(item);
+      } else if (quoteStrategy === 'split') {
+        // Alternate: even-indexed on title page, odd on photo page
+        (quoteIdx % 2 === 0 ? titleSlotItems : photoSlotItems).push(item);
+      } else {
+        // 'balance' — fill smaller slot first
+        const titleFill = titleSlotItems.reduce((s, i) => s + i.minHeight, 0);
+        const photoFill = photoSlotItems.reduce((s, i) => s + i.minHeight, 0);
+        (titleFill <= photoFill ? titleSlotItems : photoSlotItems).push(item);
+      }
+      quoteIdx++;
     } else {
-      // Quotes and highlights: balance between slots
+      // Highlights: fill smaller slot
       const titleFill = titleSlotItems.reduce((s, i) => s + i.minHeight, 0);
       const photoFill = photoSlotItems.reduce((s, i) => s + i.minHeight, 0);
       (titleFill <= photoFill ? titleSlotItems : photoSlotItems).push(item);
