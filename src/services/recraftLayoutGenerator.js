@@ -435,52 +435,222 @@ function buildParameterizedLayout(elements, photos, pageContent, bounds, params)
     }
   }
 
-  // === BODY COPY ===
-  if (pageContent.bodyCopy) {
-    const bodyOnTitlePage = params.bodyPosition === 'bottom-title';
-    const bodyX = bodyOnTitlePage ? titleX : photoX;
-    const bodyW = bodyOnTitlePage ? titleW : photoW;
-    const bodyY = bodyOnTitlePage ? titlePhotoEnd + 0.1 : photoPagePhotoEnd + 0.1;
-    const bodyMaxH = pageHeight - MARGIN - bodyY - 0.1;
+  // === ADAPT TO ALL CONTENT THE USER PROVIDED ===
+  // Build a list of secondary elements to place in the body area:
+  // - bodyCopy
+  // - quotes (pull-quote style)
+  // - highlights
+  // - roster + coaches
+  // Each gets its own slot, sized to fit available space
 
-    if (bodyMaxH > 0.5) {
-      elements.push({
-        type: 'bodyCopy', text: pageContent.bodyCopy,
-        x: bodyX, y: bodyY, width: bodyW, height: Math.min(bodyMaxH, 2.8),
-        fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
-        color: '#1A1A1A', lineHeight: 1.5, columns: 2, textAlign: 'justify', zIndex: 10,
-      });
+  const hasBody = !!pageContent.bodyCopy;
+  const quotes = (pageContent.quotes || []).filter(q => q && q.text && q.text.trim() && !q.text.includes('['));
+  const hasQuotes = quotes.length > 0;
+  const highlights = (pageContent.highlights || []).filter(h => h && typeof h === 'string' && h.trim() && !h.includes('['));
+  const hasHighlights = highlights.length > 0;
+
+  const { coaches, rosterNames } = extractCoaches(pageContent);
+  const hasCoaches = coaches.length > 0;
+  const hasRoster = rosterNames.length > 0;
+
+  // Two slots: under-title-page-photos AND under-photo-page-photos
+  // We allocate content based on what's provided
+  const titlePageBottom = {
+    x: titleX,
+    width: titleW,
+    startY: titlePhotoEnd + 0.1,
+    endY: pageHeight - MARGIN - 0.1,
+  };
+  const photoPageBottom = {
+    x: photoX,
+    width: photoW,
+    startY: photoPagePhotoEnd + 0.1,
+    endY: pageHeight - MARGIN - 0.1,
+  };
+
+  // Place elements in this priority order, splitting across the two slots
+  // Strategy: put roster + body on opposite pages, mix in quotes/highlights
+  const elementsToPlace = [];
+
+  if (hasBody) {
+    elementsToPlace.push({
+      kind: 'bodyCopy',
+      priority: 1,
+      minHeight: 1.5,
+      maxHeight: 3.0,
+    });
+  }
+  if (hasQuotes) {
+    elementsToPlace.push({
+      kind: 'quote',
+      priority: 2,
+      minHeight: 0.9,
+      maxHeight: 1.8,
+      data: quotes[0],  // Use the first quote as a pull quote
+    });
+  }
+  if (hasHighlights) {
+    const itemsCount = highlights.length;
+    elementsToPlace.push({
+      kind: 'highlights',
+      priority: 3,
+      minHeight: 0.5 + itemsCount * 0.2,
+      maxHeight: 0.5 + itemsCount * 0.25,
+    });
+  }
+  if (hasCoaches) {
+    elementsToPlace.push({
+      kind: 'coaches',
+      priority: 4,
+      minHeight: 0.35 + coaches.length * 0.18,
+      maxHeight: 0.35 + coaches.length * 0.2,
+    });
+  }
+  if (hasRoster) {
+    const rows = Math.ceil(rosterNames.length / 4);
+    elementsToPlace.push({
+      kind: 'roster',
+      priority: 5,
+      minHeight: 0.4 + rows * 0.16,
+      maxHeight: 0.5 + rows * 0.2,
+    });
+  }
+
+  // Distribute: alternate between two slots, placing larger items first
+  // Body goes on its preferred page based on params
+  const bodyOnTitlePage = params.bodyPosition === 'bottom-title';
+  const titleSlotItems = [];
+  const photoSlotItems = [];
+
+  for (const item of elementsToPlace) {
+    if (item.kind === 'bodyCopy') {
+      (bodyOnTitlePage ? titleSlotItems : photoSlotItems).push(item);
+    } else if (item.kind === 'roster' || item.kind === 'coaches') {
+      // Roster/coaches prefer the page WITHOUT body copy (more space)
+      (bodyOnTitlePage ? photoSlotItems : titleSlotItems).push(item);
+    } else {
+      // Quotes and highlights: fill the smaller slot, then balance
+      const titleFill = titleSlotItems.reduce((s, i) => s + i.minHeight, 0);
+      const photoFill = photoSlotItems.reduce((s, i) => s + i.minHeight, 0);
+      (titleFill < photoFill ? titleSlotItems : photoSlotItems).push(item);
     }
   }
 
-  // === ROSTER — on whichever page has more room at bottom ===
-  const { coaches, rosterNames } = extractCoaches(pageContent);
-  const rosterOnTitlePage = params.bodyPosition !== 'bottom-title';
-  const rosterX = rosterOnTitlePage ? titleX : photoX;
-  const rosterW = rosterOnTitlePage ? titleW : photoW;
-  const rosterStartY = rosterOnTitlePage
-    ? titlePhotoEnd + 0.1
-    : photoPagePhotoEnd + 0.1;
+  // Render each slot
+  renderSecondarySlot(elements, titleSlotItems, titlePageBottom, pageContent);
+  renderSecondarySlot(elements, photoSlotItems, photoPageBottom, pageContent);
+}
 
-  let rosterY = rosterStartY;
-  if (coaches.length > 0) {
-    elements.push({
-      type: 'roster', title: pageContent.coachesTitle || 'Coaches:',
-      names: coaches, x: rosterX, y: rosterY, width: rosterW,
-      columns: 1, titleFontSize: 10, nameFontSize: 8,
-      fontFamily: 'Source Sans Pro', titleColor: '#523D73',
-      nameColor: '#1A1A1A', fontWeight: '600', zIndex: 10,
-    });
-    rosterY += 0.3 + (coaches.length * 0.14);
+/**
+ * Render items into a bottom slot, sizing them to fit available space.
+ * Items render in order, each getting a fair share of space.
+ */
+function renderSecondarySlot(elements, items, slot, pageContent) {
+  if (items.length === 0) return;
+
+  const totalHeight = slot.endY - slot.startY;
+  if (totalHeight < 0.5) return;  // Not enough room
+
+  // Scale heights to fit available space
+  const totalMin = items.reduce((s, i) => s + i.minHeight, 0);
+  const totalMax = items.reduce((s, i) => s + i.maxHeight, 0);
+  const GAP_BETWEEN = 0.15;
+  const totalGaps = GAP_BETWEEN * (items.length - 1);
+  const usableHeight = totalHeight - totalGaps;
+
+  // Determine actual heights
+  let heights;
+  if (totalMax <= usableHeight) {
+    // Everything fits at max — use max
+    heights = items.map(i => i.maxHeight);
+  } else if (totalMin <= usableHeight) {
+    // Scale between min and max
+    const scale = (usableHeight - totalMin) / (totalMax - totalMin);
+    heights = items.map(i => i.minHeight + (i.maxHeight - i.minHeight) * scale);
+  } else {
+    // Even min doesn't fit — proportionally shrink
+    const scale = usableHeight / totalMin;
+    heights = items.map(i => i.minHeight * scale);
   }
-  if (rosterNames.length > 0) {
-    elements.push({
-      type: 'roster', title: pageContent.rosterTitle || 'Team Roster:',
-      names: rosterNames, x: rosterX, y: rosterY, width: rosterW,
-      columns: 4, titleFontSize: 10, nameFontSize: 7,
-      fontFamily: 'Source Sans Pro', titleColor: '#1A1A1A', nameColor: '#333333', zIndex: 10,
-    });
-  }
+
+  let y = slot.startY;
+  items.forEach((item, idx) => {
+    const h = heights[idx];
+
+    switch (item.kind) {
+      case 'bodyCopy':
+        elements.push({
+          type: 'bodyCopy', text: pageContent.bodyCopy,
+          x: slot.x, y, width: slot.width, height: h,
+          fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
+          color: '#1A1A1A', lineHeight: 1.5, columns: 2, textAlign: 'justify', zIndex: 10,
+        });
+        break;
+
+      case 'quote':
+        elements.push({
+          type: 'quote',
+          text: item.data.text,
+          attribution: item.data.attribution || '',
+          x: slot.x, y, width: slot.width,
+          fontSize: 14,
+          fontFamily: 'Playfair Display',
+          fontStyle: 'italic',
+          fontWeight: '700',
+          color: '#FFFFFF',
+          backgroundColor: '#523D73',
+          accentColor: '#FFFFFF',
+          zIndex: 10,
+        });
+        break;
+
+      case 'highlights':
+        elements.push({
+          type: 'highlights',
+          title: 'Season Highlights',
+          items: (pageContent.highlights || []).filter(x => x && x.trim() && !x.includes('[')),
+          x: slot.x, y, width: slot.width,
+          titleFontSize: 11, itemFontSize: 9,
+          fontFamily: 'Source Sans Pro',
+          titleColor: '#523D73', itemColor: '#1A1A1A',
+          bulletStyle: 'disc',
+          zIndex: 10,
+        });
+        break;
+
+      case 'coaches': {
+        const { coaches } = extractCoaches(pageContent);
+        elements.push({
+          type: 'roster',
+          title: pageContent.coachesTitle || 'Coaches:',
+          names: coaches,
+          x: slot.x, y, width: slot.width,
+          columns: 1, titleFontSize: 10, nameFontSize: 8,
+          fontFamily: 'Source Sans Pro',
+          titleColor: '#523D73', nameColor: '#1A1A1A',
+          fontWeight: '600', zIndex: 10,
+        });
+        break;
+      }
+
+      case 'roster': {
+        const { rosterNames } = extractCoaches(pageContent);
+        elements.push({
+          type: 'roster',
+          title: pageContent.rosterTitle || 'Team Roster:',
+          names: rosterNames,
+          x: slot.x, y, width: slot.width,
+          columns: 4, titleFontSize: 10, nameFontSize: 7,
+          fontFamily: 'Source Sans Pro',
+          titleColor: '#1A1A1A', nameColor: '#333333',
+          zIndex: 10,
+        });
+        break;
+      }
+    }
+
+    y += h + GAP_BETWEEN;
+  });
 }
 
 // =============================================================================
