@@ -468,40 +468,33 @@ function buildParameterizedLayout(elements, photos, pageContent, bounds, params)
     endY: pageHeight - MARGIN - 0.1,
   };
 
-  // Place elements in this priority order, splitting across the two slots
-  // Strategy: put roster + body on opposite pages, mix in quotes/highlights
+  // Build list of all items to place
   const elementsToPlace = [];
 
   if (hasBody) {
-    elementsToPlace.push({
-      kind: 'bodyCopy',
-      priority: 1,
-      minHeight: 1.5,
-      maxHeight: 3.0,
-    });
+    elementsToPlace.push({ kind: 'bodyCopy', minHeight: 1.5, maxHeight: 3.0 });
   }
-  if (hasQuotes) {
+  // EACH quote becomes its own item — we render ALL of them
+  quotes.forEach((q, idx) => {
     elementsToPlace.push({
       kind: 'quote',
-      priority: 2,
-      minHeight: 0.9,
-      maxHeight: 1.8,
-      data: quotes[0],  // Use the first quote as a pull quote
+      minHeight: 0.7,
+      maxHeight: 1.3,
+      data: q,
+      idx,
     });
-  }
+  });
   if (hasHighlights) {
     const itemsCount = highlights.length;
     elementsToPlace.push({
       kind: 'highlights',
-      priority: 3,
-      minHeight: 0.5 + itemsCount * 0.2,
-      maxHeight: 0.5 + itemsCount * 0.25,
+      minHeight: 0.4 + itemsCount * 0.18,
+      maxHeight: 0.45 + itemsCount * 0.22,
     });
   }
   if (hasCoaches) {
     elementsToPlace.push({
       kind: 'coaches',
-      priority: 4,
       minHeight: 0.35 + coaches.length * 0.18,
       maxHeight: 0.35 + coaches.length * 0.2,
     });
@@ -510,14 +503,12 @@ function buildParameterizedLayout(elements, photos, pageContent, bounds, params)
     const rows = Math.ceil(rosterNames.length / 4);
     elementsToPlace.push({
       kind: 'roster',
-      priority: 5,
       minHeight: 0.4 + rows * 0.16,
       maxHeight: 0.5 + rows * 0.2,
     });
   }
 
-  // Distribute: alternate between two slots, placing larger items first
-  // Body goes on its preferred page based on params
+  // Distribute across two slots, balancing heights
   const bodyOnTitlePage = params.bodyPosition === 'bottom-title';
   const titleSlotItems = [];
   const photoSlotItems = [];
@@ -529,14 +520,13 @@ function buildParameterizedLayout(elements, photos, pageContent, bounds, params)
       // Roster/coaches prefer the page WITHOUT body copy (more space)
       (bodyOnTitlePage ? photoSlotItems : titleSlotItems).push(item);
     } else {
-      // Quotes and highlights: fill the smaller slot, then balance
+      // Quotes and highlights: balance between slots
       const titleFill = titleSlotItems.reduce((s, i) => s + i.minHeight, 0);
       const photoFill = photoSlotItems.reduce((s, i) => s + i.minHeight, 0);
-      (titleFill < photoFill ? titleSlotItems : photoSlotItems).push(item);
+      (titleFill <= photoFill ? titleSlotItems : photoSlotItems).push(item);
     }
   }
 
-  // Render each slot
   renderSecondarySlot(elements, titleSlotItems, titlePageBottom, pageContent);
   renderSecondarySlot(elements, photoSlotItems, photoPageBottom, pageContent);
 }
@@ -587,22 +577,34 @@ function renderSecondarySlot(elements, items, slot, pageContent) {
         });
         break;
 
-      case 'quote':
+      case 'quote': {
+        // Small purple vertical accent bar to the left of the quote
+        elements.push({
+          type: 'decorative',
+          shape: 'rectangle',
+          x: slot.x, y: y + 0.05,
+          width: 0.04, height: h - 0.1,
+          color: '#523D73',
+          opacity: 1,
+          zIndex: 9,
+        });
+        // Quote text — italic, dark, on white (no purple block)
         elements.push({
           type: 'quote',
           text: item.data.text,
           attribution: item.data.attribution || '',
-          x: slot.x, y, width: slot.width,
-          fontSize: 14,
+          x: slot.x + 0.18, y, width: slot.width - 0.18,
+          fontSize: 12,
           fontFamily: 'Playfair Display',
           fontStyle: 'italic',
-          fontWeight: '700',
-          color: '#FFFFFF',
-          backgroundColor: '#523D73',
-          accentColor: '#FFFFFF',
+          fontWeight: '400',
+          color: '#1A1A1A',
+          backgroundColor: null,  // No background — subtle, magazine-style
+          accentColor: '#523D73', // Purple quote marks
           zIndex: 10,
         });
         break;
+      }
 
       case 'highlights':
         elements.push({
