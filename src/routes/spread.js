@@ -12,6 +12,7 @@ const { polishContent, needsPolishing } = require('../services/contentPolisher')
 const { analyzePhotosForCropping } = require('../services/smartCrop');
 const { createSession, getSession, updateLayout, getActiveCount, getLayout, getPhotos, setLayout, listSessions, deleteSession } = require('../services/sessionStore');
 const { modifyLayout } = require('../services/layoutModifier');
+const { rewriteBodyCopy } = require('../services/bodyRewriter');
 const fs = require('fs').promises;
 
 // Feature flags
@@ -771,6 +772,38 @@ router.post('/session/:id/shuffle', express.json(), async (req, res) => {
   } catch (err) {
     console.error('Shuffle layout error:', err);
     res.status(500).json({ error: 'Failed to shuffle layout.', details: err.message });
+  }
+});
+
+/**
+ * POST /api/rewrite-body
+ * Rewrite body copy to be more professional and concise.
+ * Called BEFORE generating the page so user can review the suggestion.
+ *
+ * Request body:
+ *   { text: string, section?: string, pageCategory?: string, targetWordCount?: number }
+ *
+ * Returns:
+ *   { original, rewritten, wordCountOriginal, wordCountRewritten, changes }
+ */
+router.post('/rewrite-body', express.json({ limit: '1mb' }), async (req, res) => {
+  try {
+    const { text, section, pageCategory, targetWordCount } = req.body;
+
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ error: 'text field is required.' });
+    }
+
+    const result = await rewriteBodyCopy(text, {
+      section,
+      pageCategory,
+      targetWordCount,
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error('Rewrite body error:', err);
+    res.status(500).json({ error: 'Failed to rewrite body copy.', details: err.message });
   }
 });
 

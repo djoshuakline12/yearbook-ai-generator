@@ -163,9 +163,13 @@ IMPORTANT:
 - Preserve the user's voice and intent - polish, don't rewrite completely
 - NEVER change the capitalization of the section name - use it EXACTLY as provided
 - Don't invent facts, names, or statistics not provided
+- QUOTES ARE OPTIONAL — only include quotes if the user actually provided them. NEVER fabricate quotes. If no quotes were provided, return an empty array for "quotes".
 - Every photo caption MUST have a captionTitle (ALL CAPS, 2-4 words)
 - The pageTitle MUST tie into the "Building Our Futures" theme
 - If something is clearly wrong (misspelled name, wrong date), fix it
+- NEVER use em dashes (—) or en dashes (–) in body copy. Use commas or hyphens instead.
+- Avoid AI-cliche phrases: "delve", "tapestry", "navigate the journey", "showcased their resilience", "demonstrated unwavering"
+- Body copy should sound human-written, not corporate
 - Mark uncertain content with [VERIFY] or [NEEDS INFO]
 - The contentQualityScore is 0-100 based on completeness and quality`;
 }
