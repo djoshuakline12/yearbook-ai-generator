@@ -453,41 +453,25 @@ function buildParameterizedLayout(elements, photos, pageContent, bounds, params)
   const hasCoaches = coaches.length > 0;
   const hasRoster = rosterNames.length > 0;
 
-  // Two slots: under-title-page-photos AND under-photo-page-photos
-  // We allocate content based on what's provided
-  const titlePageBottom = {
-    x: titleX,
-    width: titleW,
-    startY: titlePhotoEnd + 0.1,
-    endY: pageHeight - MARGIN - 0.1,
-  };
-  const photoPageBottom = {
-    x: photoX,
-    width: photoW,
-    startY: photoPagePhotoEnd + 0.1,
-    endY: pageHeight - MARGIN - 0.1,
-  };
-
-  // Build list of all items to place
+  // Build list of all items first so we know how much vertical space they need
   const elementsToPlace = [];
 
   if (hasBody) {
-    elementsToPlace.push({ kind: 'bodyCopy', minHeight: 1.5, maxHeight: 3.0 });
+    // Body copy is flexible — can shrink to 1.2" or expand to 3.5"
+    elementsToPlace.push({ kind: 'bodyCopy', minHeight: 1.2, maxHeight: 3.5 });
   }
   // EACH quote becomes its own item — height scales with text length
-  // Rule of thumb: 4" wide quote box at 11pt fits ~50 chars per line
-  // Each line is about 0.22" tall plus attribution adds 0.25"
   quotes.forEach((q, idx) => {
     const charsPerLine = 48;
     const estLines = Math.ceil((q.text || '').length / charsPerLine);
-    const textHeight = estLines * 0.22;
-    const attrHeight = q.attribution ? 0.25 : 0;
-    const padding = 0.2;
+    const textHeight = estLines * 0.20;
+    const attrHeight = q.attribution ? 0.22 : 0;
+    const padding = 0.15;
     const naturalHeight = textHeight + attrHeight + padding;
     elementsToPlace.push({
       kind: 'quote',
-      minHeight: Math.max(0.8, naturalHeight),
-      maxHeight: Math.max(1.2, naturalHeight + 0.2),
+      minHeight: Math.max(0.65, naturalHeight * 0.85),
+      maxHeight: Math.max(1.0, naturalHeight + 0.15),
       data: q,
       idx,
     });
@@ -496,14 +480,14 @@ function buildParameterizedLayout(elements, photos, pageContent, bounds, params)
     const itemsCount = highlights.length;
     elementsToPlace.push({
       kind: 'highlights',
-      minHeight: 0.4 + itemsCount * 0.18,
-      maxHeight: 0.45 + itemsCount * 0.22,
+      minHeight: 0.35 + itemsCount * 0.15,
+      maxHeight: 0.45 + itemsCount * 0.20,
     });
   }
   if (hasCoaches) {
     elementsToPlace.push({
       kind: 'coaches',
-      minHeight: 0.35 + coaches.length * 0.18,
+      minHeight: 0.3 + coaches.length * 0.15,
       maxHeight: 0.35 + coaches.length * 0.2,
     });
   }
@@ -511,9 +495,101 @@ function buildParameterizedLayout(elements, photos, pageContent, bounds, params)
     const rows = Math.ceil(rosterNames.length / 4);
     elementsToPlace.push({
       kind: 'roster',
-      minHeight: 0.4 + rows * 0.16,
+      minHeight: 0.35 + rows * 0.14,
       maxHeight: 0.5 + rows * 0.2,
     });
+  }
+
+  // Calculate how much space the content needs (sum of min heights + gaps)
+  const totalMinHeightNeeded = elementsToPlace.reduce((s, i) => s + i.minHeight, 0)
+    + 0.15 * Math.max(0, elementsToPlace.length - 1);
+
+  // Available bottom-zone height assuming default photo zones
+  const defaultBottomSpace = (pageHeight - MARGIN - titlePhotoEnd - 0.1)
+    + (pageHeight - MARGIN - photoPagePhotoEnd - 0.1);
+
+  // If content needs more space than the default zones provide, shrink photos
+  let adjustedTitlePhotoEnd = titlePhotoEnd;
+  let adjustedPhotoPageEnd = photoPagePhotoEnd;
+  if (totalMinHeightNeeded > defaultBottomSpace) {
+    const shortfall = totalMinHeightNeeded - defaultBottomSpace;
+    // Reduce each photo zone to make room — minimum photo height stays at 50% of page
+    const minPhotoEnd = MARGIN + (pageHeight - 2 * MARGIN) * 0.50;
+    const titleReduction = Math.min(adjustedTitlePhotoEnd - minPhotoEnd, shortfall / 2);
+    const photoReduction = Math.min(adjustedPhotoPageEnd - minPhotoEnd, shortfall / 2);
+    adjustedTitlePhotoEnd = Math.max(minPhotoEnd, adjustedTitlePhotoEnd - titleReduction);
+    adjustedPhotoPageEnd = Math.max(minPhotoEnd, adjustedPhotoPageEnd - photoReduction);
+  }
+
+  // Two slots: under-title-page-photos AND under-photo-page-photos
+  const titlePageBottom = {
+    x: titleX,
+    width: titleW,
+    startY: adjustedTitlePhotoEnd + 0.1,
+    endY: pageHeight - MARGIN - 0.1,
+  };
+  const photoPageBottom = {
+    x: photoX,
+    width: photoW,
+    startY: adjustedPhotoPageEnd + 0.1,
+    endY: pageHeight - MARGIN - 0.1,
+  };
+
+  // Update photo zone boundaries that were used earlier in this function
+  // (rebuild photo grids with adjusted zones if needed)
+  if (adjustedTitlePhotoEnd !== titlePhotoEnd || adjustedPhotoPageEnd !== photoPagePhotoEnd) {
+    // Remove previously-placed photo elements and rebuild with adjusted zones
+    const photoIndices = [];
+    for (let i = elements.length - 1; i >= 0; i--) {
+      if (elements[i].type === 'photo') photoIndices.push(i);
+    }
+    photoIndices.forEach(i => elements.splice(i, 1));
+
+    // Rebuild photo grids with shrunk zones
+    const titlePagePhotos = photos.slice(0, titlePageCount);
+    if (titlePagePhotos.length > 0) {
+      const tpElements = buildPhotoGrid(titlePagePhotos, {
+        startX: titleX, startY: titleZoneEnd,
+        maxX: titleEnd, maxY: adjustedTitlePhotoEnd, GAP
+      }, 0, photoCaptions);
+      elements.push(...tpElements);
+    }
+    const photoPagePhotos = photos.slice(titlePageCount);
+    if (photoPagePhotos.length > 0) {
+      if (params.useStaggeredColumns && photoPagePhotos.length >= 3) {
+        const colW = (photoW - GAP) / 2;
+        const col1 = [], col2 = [];
+        photoPagePhotos.forEach((_, i) => (i % 2 === 0 ? col1 : col2).push(i));
+        let y1 = MARGIN;
+        for (const i of col1) {
+          const h = (adjustedPhotoPageEnd - MARGIN) / col1.length - GAP;
+          elements.push({
+            type: 'photo', photoIndex: titlePageCount + i,
+            x: photoX, y: y1, width: colW, height: h,
+            borderRadius: 0, shadow: false, blackAndWhite: i === 0,
+            zIndex: 1, cropFit: 'cover',
+          });
+          y1 += h + GAP;
+        }
+        let y2 = MARGIN + params.staggerOffset;
+        for (const i of col2) {
+          const h = (adjustedPhotoPageEnd - MARGIN - params.staggerOffset) / Math.max(col2.length, 1) - GAP;
+          elements.push({
+            type: 'photo', photoIndex: titlePageCount + i,
+            x: photoX + colW + GAP, y: y2, width: colW, height: h,
+            borderRadius: 0, shadow: false, blackAndWhite: false,
+            zIndex: 1, cropFit: 'cover',
+          });
+          y2 += h + GAP;
+        }
+      } else {
+        const ppElements = buildPhotoGrid(photoPagePhotos, {
+          startX: photoX, startY: MARGIN,
+          maxX: photoEnd, maxY: adjustedPhotoPageEnd, GAP
+        }, titlePageCount, photoCaptions);
+        elements.push(...ppElements);
+      }
+    }
   }
 
   // Distribute across two slots, balancing heights
