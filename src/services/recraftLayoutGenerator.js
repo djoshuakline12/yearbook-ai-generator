@@ -172,36 +172,38 @@ function chooseLayoutTemplate(pageContent, photoCount) {
   const h5 = hashString(contentHash.toString() + 'salt5');
   const h6 = hashString(contentHash.toString() + 'salt6');
 
+  // Pick a fundamentally different LAYOUT STYLE for variety
+  // - 'horizontal-split': photos top, text bottom (current default)
+  // - 'sidebar-text-left': text column left, photos column right
+  // - 'sidebar-text-right': photos column left, text column right
+  // - 'interleaved': photos and text interspersed top-to-bottom
+  // - 'magazine-spread': hero photo one page, text-heavy other page
+  const layoutStyles = [
+    'horizontal-split',
+    'horizontal-split',  // weight default 2x
+    'sidebar-text-left',
+    'sidebar-text-right',
+    'interleaved',
+    'magazine-spread',
+  ];
+  const layoutStyle = layoutStyles[h1 % layoutStyles.length];
+
   const params = {
-    // Which page gets the title: 'left' or 'right'
+    layoutStyle,
     titlePage: h1 % 2 === 0 ? 'left' : 'right',
-    // Title alignment: 'left', 'center', 'right'
     titleAlign: ['left', 'center', 'right'][h2 % 3],
-    // Photo split: fraction on title page (0.25 to 0.55 in 7 steps)
     titlePagePhotoRatio: 0.25 + (h2 % 7) * 0.05,
-    // Title zone size: 0.15 to 0.32 in 6 steps
     titleZoneSize: 0.15 + (h3 % 6) * 0.035,
-    // Photo zone end on title page: 0.60 to 0.85 in 6 steps
     titlePagePhotoEnd: 0.60 + (h4 % 6) * 0.05,
-    // Photo zone end on photo page: 0.72 to 0.92 in 5 steps
     photoPagePhotoEnd: 0.72 + (h5 % 5) * 0.05,
-    // Stagger offset for column 2: 0 to 2.1 in 8 steps
     staggerOffset: (h6 % 8) * 0.3,
-    // Use staggered columns on photo page
     useStaggeredColumns: h3 % 3 === 0,
-    // Body copy position: split across 4 options
     bodyPosition: ['bottom-title', 'bottom-photo', 'bottom-title', 'split'][h4 % 4],
-    // Photo grid style: dominant left, dominant right, dominant top, balanced grid
     photoGridStyle: ['dominant-left', 'dominant-right', 'dominant-top', 'balanced', 'mosaic'][h5 % 5],
-    // Title vertical position within title zone (top, middle, bottom)
     titleVerticalPos: ['top', 'middle', 'bottom'][h6 % 3],
-    // Should the page use a horizontal hero band?
     useHorizontalHero: h1 % 5 === 0,
-    // Hero band position (if enabled)
     heroBandPosition: ['top', 'middle', 'bottom'][h2 % 3],
-    // Gap size between photos (tight, normal, loose)
     gapStyle: ['tight', 'normal', 'loose'][h3 % 3],
-    // Whether to use asymmetric photo sizes
     asymmetric: h4 % 2 === 0,
   };
 
@@ -263,9 +265,22 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
     } else if (category === 'index') {
       buildIndexLayout(elements, photos, pageContent, bounds);
     } else {
-      // Default: activity spread with parameterized variety
+      // Default: activity spread — dispatch to one of several layout styles
       const layoutParams = chooseLayoutTemplate(pageContent, photoCount);
-      buildParameterizedLayout(elements, photos, pageContent, bounds, layoutParams);
+      console.log(`Layout style: ${layoutParams.layoutStyle}`);
+
+      if (layoutParams.layoutStyle === 'sidebar-text-left') {
+        buildSidebarTextLayout(elements, photos, pageContent, bounds, layoutParams, 'left');
+      } else if (layoutParams.layoutStyle === 'sidebar-text-right') {
+        buildSidebarTextLayout(elements, photos, pageContent, bounds, layoutParams, 'right');
+      } else if (layoutParams.layoutStyle === 'interleaved') {
+        buildInterleavedLayout(elements, photos, pageContent, bounds, layoutParams);
+      } else if (layoutParams.layoutStyle === 'magazine-spread') {
+        buildMagazineSpreadLayout(elements, photos, pageContent, bounds, layoutParams);
+      } else {
+        // horizontal-split (default)
+        buildParameterizedLayout(elements, photos, pageContent, bounds, layoutParams);
+      }
     }
 
   } else {
@@ -805,6 +820,427 @@ function renderSecondarySlot(elements, items, slot, pageContent) {
 
     y += h + GAP_BETWEEN;
   });
+}
+
+// =============================================================================
+// LAYOUT: SIDEBAR TEXT (Text in column on one side, photos column on other)
+// Text and photos sit SIDE BY SIDE on each page — not stacked top/bottom
+// =============================================================================
+function buildSidebarTextLayout(elements, photos, pageContent, bounds, params, textSide) {
+  const { leftPageStart, leftPageEnd, leftPageWidth,
+          rightPageStart, rightPageEnd, rightPageWidth,
+          pageHeight, MARGIN, GAP, photoCaptions = [] } = bounds;
+  const usableHeight = pageHeight - 2 * MARGIN;
+  const photoCount = photos.length;
+
+  // Text takes ~40% width, photos take ~60% on each page
+  // textSide='left' means text column is left half of each page
+  const textColRatio = 0.42;
+  const photoColRatio = 0.55;
+  const colGap = 0.15;
+
+  // === LEFT PAGE: split into text-col + photo-col ===
+  const leftTextX = textSide === 'left' ? leftPageStart : leftPageStart + leftPageWidth * photoColRatio + colGap;
+  const leftPhotoX = textSide === 'left' ? leftPageStart + leftPageWidth * textColRatio + colGap : leftPageStart;
+  const leftTextW = leftPageWidth * textColRatio;
+  const leftPhotoW = leftPageWidth * photoColRatio;
+
+  // === RIGHT PAGE: same split (or flipped) ===
+  const rightTextX = textSide === 'left' ? rightPageStart : rightPageStart + rightPageWidth * photoColRatio + colGap;
+  const rightPhotoX = textSide === 'left' ? rightPageStart + rightPageWidth * textColRatio + colGap : rightPageStart;
+  const rightTextW = rightPageWidth * textColRatio;
+  const rightPhotoW = rightPageWidth * photoColRatio;
+
+  // Title goes in the text column of the title page
+  const titlePage = params.titlePage; // 'left' or 'right'
+  const titleX = titlePage === 'left' ? leftTextX : rightTextX;
+  const titleW = titlePage === 'left' ? leftTextW : rightTextW;
+
+  addTitleBlock(elements, pageContent, {
+    x: titleX, y: MARGIN, width: titleW,
+    align: 'left', compact: true,
+  });
+
+  let titleColY = MARGIN + usableHeight * 0.22;  // After title block
+  let otherColY = MARGIN;  // The non-title text column
+
+  // Headline + record + date below title
+  if (pageContent.headline) {
+    elements.push({
+      type: 'headline', text: pageContent.headline,
+      x: titleX, y: titleColY, width: titleW * 0.85,
+      fontSize: 11, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+    titleColY += 0.4;
+  }
+  if (pageContent.record) {
+    elements.push({
+      type: 'record', text: pageContent.record,
+      x: titleX, y: titleColY, width: 1.5,
+      fontSize: 10, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+    titleColY += 0.32;
+  }
+  if (pageContent.dateOrYear) {
+    elements.push({
+      type: 'date', text: pageContent.dateOrYear,
+      x: titleX, y: titleColY, width: 2,
+      fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '600',
+      color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
+    });
+    titleColY += 0.3;
+  }
+
+  // Body copy in the title-page text column (under the meta info)
+  if (pageContent.bodyCopy) {
+    const bodyH = pageHeight - MARGIN - titleColY - 0.1;
+    elements.push({
+      type: 'bodyCopy', text: pageContent.bodyCopy,
+      x: titleX, y: titleColY + 0.1, width: titleW,
+      height: bodyH,
+      fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#1A1A1A', lineHeight: 1.5, columns: 1, textAlign: 'left', zIndex: 10,
+    });
+  }
+
+  // Photos: 50/50 split across pages
+  const leftPhotoCount = Math.ceil(photoCount / 2);
+  const leftPhotos = photos.slice(0, leftPhotoCount);
+  const rightPhotos = photos.slice(leftPhotoCount);
+
+  if (leftPhotos.length > 0) {
+    const lp = buildPhotoGrid(leftPhotos, {
+      startX: leftPhotoX, startY: MARGIN,
+      maxX: leftPhotoX + leftPhotoW, maxY: pageHeight - MARGIN, GAP
+    }, 0, photoCaptions);
+    elements.push(...lp);
+  }
+  if (rightPhotos.length > 0) {
+    const rp = buildPhotoGrid(rightPhotos, {
+      startX: rightPhotoX, startY: MARGIN,
+      maxX: rightPhotoX + rightPhotoW, maxY: pageHeight - MARGIN, GAP
+    }, leftPhotos.length, photoCaptions);
+    elements.push(...rp);
+  }
+
+  // Quotes + roster in the OTHER page's text column (non-title page)
+  const otherTextX = titlePage === 'left' ? rightTextX : leftTextX;
+  const otherTextW = titlePage === 'left' ? rightTextW : leftTextW;
+  const quotes = (pageContent.quotes || []).filter(q => q && q.text && !q.text.includes('['));
+  const highlights = (pageContent.highlights || []).filter(h => h && !h.includes('['));
+  const { coaches, rosterNames } = extractCoaches(pageContent);
+
+  let y = MARGIN;
+  // Section subtitle at top
+  if (titlePage !== 'left' && pageContent.section) {
+    // section header already in title — skip
+  }
+
+  // Quotes
+  quotes.forEach((q, idx) => {
+    const lines = Math.ceil((q.text || '').length / 35);
+    const h = Math.max(0.7, lines * 0.22 + (q.attribution ? 0.25 : 0) + 0.15);
+    if (y + h > pageHeight - MARGIN) return;
+    elements.push({
+      type: 'decorative', shape: 'rectangle',
+      x: otherTextX, y: y + 0.05, width: 0.04, height: h - 0.1,
+      color: '#523D73', opacity: 1, zIndex: 9,
+    });
+    elements.push({
+      type: 'quote',
+      text: q.text, attribution: q.attribution || '',
+      x: otherTextX + 0.18, y, width: otherTextW - 0.18, height: h,
+      fontSize: 11, fontFamily: 'Playfair Display', fontStyle: 'italic',
+      fontWeight: '400', color: '#1A1A1A',
+      backgroundColor: null, accentColor: '#523D73', zIndex: 10,
+    });
+    y += h + 0.2;
+  });
+
+  // Highlights
+  if (highlights.length > 0) {
+    const h = 0.4 + highlights.length * 0.18;
+    if (y + h <= pageHeight - MARGIN) {
+      elements.push({
+        type: 'highlights', title: 'Highlights',
+        items: highlights,
+        x: otherTextX, y, width: otherTextW,
+        titleFontSize: 11, itemFontSize: 9,
+        fontFamily: 'Source Sans Pro',
+        titleColor: '#523D73', itemColor: '#1A1A1A',
+        bulletStyle: 'disc', zIndex: 10,
+      });
+      y += h + 0.15;
+    }
+  }
+
+  // Roster
+  if (rosterNames.length > 0 && y < pageHeight - MARGIN - 0.5) {
+    elements.push({
+      type: 'roster',
+      title: pageContent.rosterTitle || 'Team Roster:',
+      names: rosterNames,
+      x: otherTextX, y, width: otherTextW,
+      columns: 2, titleFontSize: 10, nameFontSize: 7,
+      fontFamily: 'Source Sans Pro',
+      titleColor: '#1A1A1A', nameColor: '#333333', zIndex: 10,
+    });
+  }
+}
+
+// =============================================================================
+// LAYOUT: INTERLEAVED (Photos and text alternate top-to-bottom on each page)
+// =============================================================================
+function buildInterleavedLayout(elements, photos, pageContent, bounds, params) {
+  const { leftPageStart, leftPageEnd, leftPageWidth,
+          rightPageStart, rightPageEnd, rightPageWidth,
+          pageHeight, MARGIN, GAP, photoCaptions = [] } = bounds;
+  const usableHeight = pageHeight - 2 * MARGIN;
+
+  // Title page: title at top, then text+photo+text interleaved
+  // Other page: photos top, body in middle, more photos bottom
+  const titlePage = params.titlePage;
+  const photoCount = photos.length;
+
+  // === TITLE PAGE LAYOUT ===
+  const titleX = titlePage === 'left' ? leftPageStart : rightPageStart;
+  const titleW = titlePage === 'left' ? leftPageWidth : rightPageWidth;
+
+  addTitleBlock(elements, pageContent, {
+    x: titleX, y: MARGIN, width: titleW,
+    align: titlePage === 'left' ? 'left' : 'right',
+    compact: true,
+  });
+
+  // Photo band #1 on title page
+  const band1Start = MARGIN + usableHeight * 0.22;
+  const band1End = MARGIN + usableHeight * 0.50;
+  const titleSidePhotos = Math.min(2, Math.ceil(photoCount * 0.3));
+  if (titleSidePhotos > 0) {
+    const tp = buildPhotoGrid(photos.slice(0, titleSidePhotos), {
+      startX: titleX, startY: band1Start,
+      maxX: titleX + titleW, maxY: band1End, GAP
+    }, 0, photoCaptions);
+    elements.push(...tp);
+  }
+
+  // Body copy band on title page
+  const bodyStart = band1End + 0.15;
+  const bodyEnd = MARGIN + usableHeight * 0.78;
+  if (pageContent.bodyCopy) {
+    elements.push({
+      type: 'bodyCopy', text: pageContent.bodyCopy,
+      x: titleX, y: bodyStart, width: titleW, height: bodyEnd - bodyStart,
+      fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#1A1A1A', lineHeight: 1.5, columns: 2, textAlign: 'justify', zIndex: 10,
+    });
+  }
+
+  // Roster at bottom of title page
+  const { coaches, rosterNames } = extractCoaches(pageContent);
+  let titleBottomY = bodyEnd + 0.15;
+  if (rosterNames.length > 0) {
+    elements.push({
+      type: 'roster',
+      title: pageContent.rosterTitle || 'Team Roster:',
+      names: rosterNames,
+      x: titleX, y: titleBottomY, width: titleW,
+      columns: 4, titleFontSize: 10, nameFontSize: 7,
+      fontFamily: 'Source Sans Pro',
+      titleColor: '#1A1A1A', nameColor: '#333333', zIndex: 10,
+    });
+  }
+
+  // === PHOTO PAGE: photos top, quotes/highlights interleaved ===
+  const photoX = titlePage === 'left' ? rightPageStart : leftPageStart;
+  const photoW = titlePage === 'left' ? rightPageWidth : leftPageWidth;
+  const remainingPhotos = photos.slice(titleSidePhotos);
+
+  // Big photo band at top of photo page
+  const bigBandEnd = MARGIN + usableHeight * 0.55;
+  if (remainingPhotos.length > 0) {
+    const bigPhotos = remainingPhotos.slice(0, Math.ceil(remainingPhotos.length * 0.6));
+    const bp = buildPhotoGrid(bigPhotos, {
+      startX: photoX, startY: MARGIN,
+      maxX: photoX + photoW, maxY: bigBandEnd, GAP
+    }, titleSidePhotos, photoCaptions);
+    elements.push(...bp);
+  }
+
+  // Quotes in middle
+  const quotes = (pageContent.quotes || []).filter(q => q && q.text && !q.text.includes('['));
+  const highlights = (pageContent.highlights || []).filter(h => h && !h.includes('['));
+  let midY = bigBandEnd + 0.15;
+  const midEnd = MARGIN + usableHeight * 0.85;
+
+  quotes.forEach((q, idx) => {
+    const lines = Math.ceil((q.text || '').length / 48);
+    const h = Math.max(0.7, lines * 0.22 + (q.attribution ? 0.25 : 0) + 0.15);
+    if (midY + h > midEnd) return;
+    elements.push({
+      type: 'decorative', shape: 'rectangle',
+      x: photoX, y: midY + 0.05, width: 0.04, height: h - 0.1,
+      color: '#523D73', opacity: 1, zIndex: 9,
+    });
+    elements.push({
+      type: 'quote',
+      text: q.text, attribution: q.attribution || '',
+      x: photoX + 0.18, y: midY, width: photoW - 0.18, height: h,
+      fontSize: 12, fontFamily: 'Playfair Display', fontStyle: 'italic',
+      fontWeight: '400', color: '#1A1A1A',
+      backgroundColor: null, accentColor: '#523D73', zIndex: 10,
+    });
+    midY += h + 0.2;
+  });
+
+  // Remaining photos at bottom
+  const bottomBandStart = Math.max(midY + 0.15, midEnd);
+  const remainingBottomPhotos = remainingPhotos.slice(Math.ceil(remainingPhotos.length * 0.6));
+  if (remainingBottomPhotos.length > 0 && bottomBandStart < pageHeight - MARGIN - 0.5) {
+    const bp = buildPhotoGrid(remainingBottomPhotos, {
+      startX: photoX, startY: bottomBandStart,
+      maxX: photoX + photoW, maxY: pageHeight - MARGIN, GAP
+    }, titleSidePhotos + Math.ceil(remainingPhotos.length * 0.6), photoCaptions);
+    elements.push(...bp);
+  }
+}
+
+// =============================================================================
+// LAYOUT: MAGAZINE SPREAD (Big hero photo one page, text-heavy other page)
+// =============================================================================
+function buildMagazineSpreadLayout(elements, photos, pageContent, bounds, params) {
+  const { leftPageStart, leftPageEnd, leftPageWidth,
+          rightPageStart, rightPageEnd, rightPageWidth,
+          pageHeight, MARGIN, GAP, photoCaptions = [] } = bounds;
+  const usableHeight = pageHeight - 2 * MARGIN;
+  const photoCount = photos.length;
+
+  // Photo side: one big hero photo + smaller supporting photos below
+  // Text side: title at top, then quotes, body, roster — all text-focused
+  const photoSide = params.titlePage === 'left' ? 'right' : 'left';
+  const photoPageX = photoSide === 'left' ? leftPageStart : rightPageStart;
+  const photoPageW = photoSide === 'left' ? leftPageWidth : rightPageWidth;
+  const textPageX = photoSide === 'left' ? rightPageStart : leftPageStart;
+  const textPageW = photoSide === 'left' ? rightPageWidth : leftPageWidth;
+
+  // === PHOTO PAGE: hero + supporting ===
+  // Hero photo takes top 65% of page width-wise full
+  const heroHeight = usableHeight * 0.62;
+  if (photos.length > 0) {
+    elements.push({
+      type: 'photo', photoIndex: 0,
+      x: photoPageX, y: MARGIN,
+      width: photoPageW, height: heroHeight,
+      borderRadius: 0, shadow: false, blackAndWhite: true,
+      zIndex: 1, cropFit: 'cover',
+    });
+  }
+  // Supporting photos below hero
+  const supportingPhotos = photos.slice(1, Math.min(photos.length, 4));
+  if (supportingPhotos.length > 0) {
+    const supportingY = MARGIN + heroHeight + GAP;
+    const supportingH = pageHeight - MARGIN - supportingY;
+    if (supportingH > 0.5) {
+      const sp = buildPhotoGrid(supportingPhotos, {
+        startX: photoPageX, startY: supportingY,
+        maxX: photoPageX + photoPageW, maxY: pageHeight - MARGIN, GAP
+      }, 1, photoCaptions);
+      elements.push(...sp);
+    }
+  }
+
+  // Remaining photos (if more than 4) go on text page bottom as small thumbnails
+  const extraPhotos = photos.slice(4);
+
+  // === TEXT PAGE: title + body + quotes ===
+  addTitleBlock(elements, pageContent, {
+    x: textPageX, y: MARGIN, width: textPageW,
+    align: photoSide === 'left' ? 'left' : 'right',
+    compact: true,
+  });
+
+  let y = MARGIN + usableHeight * 0.22;
+
+  // Headline + record
+  if (pageContent.headline) {
+    elements.push({
+      type: 'headline', text: pageContent.headline,
+      x: textPageX, y, width: textPageW * 0.75,
+      fontSize: 13, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+    y += 0.45;
+  }
+  if (pageContent.record) {
+    elements.push({
+      type: 'record', text: pageContent.record,
+      x: textPageX, y, width: 1.5,
+      fontSize: 11, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+    y += 0.35;
+  }
+  if (pageContent.dateOrYear) {
+    elements.push({
+      type: 'date', text: pageContent.dateOrYear,
+      x: textPageX, y, width: 2,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '600',
+      color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
+    });
+    y += 0.3;
+  }
+
+  y += 0.15;
+
+  // Body copy (2 columns)
+  if (pageContent.bodyCopy) {
+    const bodyH = Math.min(3.2, pageHeight - MARGIN - y - 1.5);
+    elements.push({
+      type: 'bodyCopy', text: pageContent.bodyCopy,
+      x: textPageX, y, width: textPageW, height: bodyH,
+      fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#1A1A1A', lineHeight: 1.5, columns: 2, textAlign: 'justify', zIndex: 10,
+    });
+    y += bodyH + 0.2;
+  }
+
+  // Quotes
+  const quotes = (pageContent.quotes || []).filter(q => q && q.text && !q.text.includes('['));
+  quotes.forEach((q, idx) => {
+    const lines = Math.ceil((q.text || '').length / 50);
+    const h = Math.max(0.7, lines * 0.22 + (q.attribution ? 0.25 : 0) + 0.15);
+    if (y + h > pageHeight - MARGIN - 0.5) return;
+    elements.push({
+      type: 'decorative', shape: 'rectangle',
+      x: textPageX, y: y + 0.05, width: 0.04, height: h - 0.1,
+      color: '#523D73', opacity: 1, zIndex: 9,
+    });
+    elements.push({
+      type: 'quote',
+      text: q.text, attribution: q.attribution || '',
+      x: textPageX + 0.18, y, width: textPageW - 0.18, height: h,
+      fontSize: 12, fontFamily: 'Playfair Display', fontStyle: 'italic',
+      fontWeight: '400', color: '#1A1A1A',
+      backgroundColor: null, accentColor: '#523D73', zIndex: 10,
+    });
+    y += h + 0.2;
+  });
+
+  // Roster at bottom
+  const { coaches, rosterNames } = extractCoaches(pageContent);
+  if (rosterNames.length > 0 && y < pageHeight - MARGIN - 0.4) {
+    elements.push({
+      type: 'roster',
+      title: pageContent.rosterTitle || 'Team Roster:',
+      names: rosterNames,
+      x: textPageX, y, width: textPageW,
+      columns: 3, titleFontSize: 10, nameFontSize: 7,
+      fontFamily: 'Source Sans Pro',
+      titleColor: '#1A1A1A', nameColor: '#333333', zIndex: 10,
+    });
+  }
 }
 
 // =============================================================================
