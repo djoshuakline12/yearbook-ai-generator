@@ -7,6 +7,7 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "test": "jest --detectOpenHandles",
+    "bulk-generate": "node scripts/bulk-generate.js",
     "export:indesign": "node scripts/export-indesign.js"
   },
   "keywords": ["yearbook", "ai", "layout", "pdf", "puppeteer"],
