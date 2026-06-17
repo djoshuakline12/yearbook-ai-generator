@@ -68,7 +68,7 @@
         }
 
         // 5. Set up swatches + styles.
-        doc.__ybSwatchCache = {};
+        $.global.YB_SWATCH_CACHE = {};
         setupSwatches(doc, manifest.theme);
         setupParagraphStyles(doc, manifest.theme);
         setupCharacterStyles(doc, manifest.theme);

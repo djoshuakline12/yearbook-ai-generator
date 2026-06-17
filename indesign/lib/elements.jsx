@@ -33,13 +33,13 @@ function addTextElement(doc, page, el, spreadIdx, idx, layer, styleName) {
         } catch (e) {}
     }
     if (el.color) {
-        var brush = getSwatchByHex(doc, el.color, doc.__ybSwatchCache);
+        var brush = getSwatchByHex(doc, el.color, $.global.YB_SWATCH_CACHE);
         if (brush) {
             try { tf.parentStory.fillColor = brush; } catch (e) {}
         }
     }
     if (el.backgroundColor) {
-        var bg = getSwatchByHex(doc, el.backgroundColor, doc.__ybSwatchCache);
+        var bg = getSwatchByHex(doc, el.backgroundColor, $.global.YB_SWATCH_CACHE);
         if (bg) {
             try {
                 tf.fillColor = bg;
@@ -186,7 +186,7 @@ function renderQuote(doc, page, el, spreadIdx, idx, layer) {
     } catch (e) {}
 
     if (hasBg) {
-        var bg = getSwatchByHex(doc, el.backgroundColor, doc.__ybSwatchCache);
+        var bg = getSwatchByHex(doc, el.backgroundColor, $.global.YB_SWATCH_CACHE);
         if (bg) {
             try {
                 tf.fillColor = bg;
@@ -244,7 +244,7 @@ function renderCaptionNumber(doc, page, el, spreadIdx, idx, layer) {
     var bounds = pageLocalBounds(page, el);
     if (!bounds) return null;
     var fillHex = el.backgroundColor || '#1A1A1A';
-    var brush = getSwatchByHex(doc, fillHex, doc.__ybSwatchCache);
+    var brush = getSwatchByHex(doc, fillHex, $.global.YB_SWATCH_CACHE);
 
     var rect = page.rectangles.add({
         geometricBounds: bounds,
@@ -269,7 +269,7 @@ function renderCaptionNumber(doc, page, el, spreadIdx, idx, layer) {
 function renderDecorative(doc, page, el, spreadIdx, idx, layer) {
     var bounds = pageLocalBounds(page, el);
     if (!bounds) return null;
-    var brush = getSwatchByHex(doc, el.color || '#523D73', doc.__ybSwatchCache);
+    var brush = getSwatchByHex(doc, el.color || '#523D73', $.global.YB_SWATCH_CACHE);
 
     var obj;
     if (el.shape === 'circle') {

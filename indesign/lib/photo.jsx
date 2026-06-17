@@ -64,7 +64,7 @@ function placePhoto(doc, parentSpread, page, el, bundleFolder, layer, spreadIdx,
         try {
             frame.strokeWeight = inToPt(el.borderWidth);
             if (el.borderColor) {
-                var brush = getSwatchByHex(doc, el.borderColor, doc.__ybSwatchCache);
+                var brush = getSwatchByHex(doc, el.borderColor, $.global.YB_SWATCH_CACHE);
                 if (brush) frame.strokeColor = brush;
             }
         } catch (e) {}
