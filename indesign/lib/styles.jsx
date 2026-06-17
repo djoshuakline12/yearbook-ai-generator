@@ -1,5 +1,5 @@
 // styles.jsx — paragraph and character style setup.
-// All [Yearbook] X styles are created at the start of an import run.
+// All YB_X styles are created at the start of an import run.
 // Element renderers then apply these styles, so a user can globally
 // tweak typography via the Paragraph Styles panel.
 
@@ -47,23 +47,23 @@ function setupParagraphStyles(doc, theme) {
         return ps;
     }
 
-    p('[Yearbook] Page Title',       { font: headlineFont, weight: '900', size: 42, leading: 44, color: dark, tracking: 0 });
-    p('[Yearbook] Section Header',   { font: bodyFont,     weight: '600', size: 14, color: purple, tracking: 300, capital: Capitalization.ALL_CAPS });
-    p('[Yearbook] School Name',      { font: displayFont,  weight: '700', size: 60, color: dark, tracking: 200, capital: Capitalization.ALL_CAPS });
-    p('[Yearbook] Headline',         { font: displayFont,  weight: '700', size: 18, color: paper });
-    p('[Yearbook] Subheadline',      { font: bodyFont,     weight: '400', size: 14, color: medium, italic: true });
-    p('[Yearbook] Date',             { font: bodyFont,     weight: '600', size: 12, color: medium, tracking: 100, capital: Capitalization.ALL_CAPS });
-    p('[Yearbook] Record',           { font: displayFont,  weight: '700', size: 16, color: paper });
-    p('[Yearbook] Body Copy',        { font: bodyFont,     weight: '400', size: 10, leading: 14, color: dark, justification: Justification.LEFT_JUSTIFIED });
-    p('[Yearbook] Roster Title',     { font: bodyFont,     weight: '700', size: 11, color: dark });
-    p('[Yearbook] Roster Names',     { font: bodyFont,     weight: '400', size: 8, leading: 10.4, color: medium });
-    p('[Yearbook] Quote',            { font: headlineFont, weight: '400', size: 14, color: dark, italic: true });
-    p('[Yearbook] Quote Attribution',{ font: bodyFont,     weight: '700', size: 11, color: dark });
-    p('[Yearbook] Caption',          { font: bodyFont,     weight: '400', size: 8, color: medium, italic: true });
-    p('[Yearbook] Caption Title',    { font: bodyFont,     weight: '700', size: 8, color: dark, tracking: 50, capital: Capitalization.ALL_CAPS });
-    p('[Yearbook] Folio',            { font: bodyFont,     weight: '400', size: 10, color: dark });
-    p('[Yearbook] Highlights Title', { font: displayFont,  weight: '700', size: 11, color: dark, tracking: 100, capital: Capitalization.ALL_CAPS });
-    p('[Yearbook] Highlights Item',  { font: bodyFont,     weight: '400', size: 9, leading: 12, color: dark });
+    p('YB_Page Title',       { font: headlineFont, weight: '900', size: 42, leading: 44, color: dark, tracking: 0 });
+    p('YB_Section Header',   { font: bodyFont,     weight: '600', size: 14, color: purple, tracking: 300, capital: Capitalization.ALL_CAPS });
+    p('YB_School Name',      { font: displayFont,  weight: '700', size: 60, color: dark, tracking: 200, capital: Capitalization.ALL_CAPS });
+    p('YB_Headline',         { font: displayFont,  weight: '700', size: 18, color: paper });
+    p('YB_Subheadline',      { font: bodyFont,     weight: '400', size: 14, color: medium, italic: true });
+    p('YB_Date',             { font: bodyFont,     weight: '600', size: 12, color: medium, tracking: 100, capital: Capitalization.ALL_CAPS });
+    p('YB_Record',           { font: displayFont,  weight: '700', size: 16, color: paper });
+    p('YB_Body Copy',        { font: bodyFont,     weight: '400', size: 10, leading: 14, color: dark, justification: Justification.LEFT_JUSTIFIED });
+    p('YB_Roster Title',     { font: bodyFont,     weight: '700', size: 11, color: dark });
+    p('YB_Roster Names',     { font: bodyFont,     weight: '400', size: 8, leading: 10.4, color: medium });
+    p('YB_Quote',            { font: headlineFont, weight: '400', size: 14, color: dark, italic: true });
+    p('YB_Quote Attribution',{ font: bodyFont,     weight: '700', size: 11, color: dark });
+    p('YB_Caption',          { font: bodyFont,     weight: '400', size: 8, color: medium, italic: true });
+    p('YB_Caption Title',    { font: bodyFont,     weight: '700', size: 8, color: dark, tracking: 50, capital: Capitalization.ALL_CAPS });
+    p('YB_Folio',            { font: bodyFont,     weight: '400', size: 10, color: dark });
+    p('YB_Highlights Title', { font: displayFont,  weight: '700', size: 11, color: dark, tracking: 100, capital: Capitalization.ALL_CAPS });
+    p('YB_Highlights Item',  { font: bodyFont,     weight: '400', size: 9, leading: 12, color: dark });
 }
 
 function setupCharacterStyles(doc, theme) {
@@ -80,8 +80,8 @@ function setupCharacterStyles(doc, theme) {
         return cs;
     }
 
-    c('[Yearbook] Theme Word',   { font: headlineFont, weight: '900', italic: true, color: purple });
-    c('[Yearbook] Body Emphasis',{ font: bodyFont,     weight: '700' });
+    c('YB_Theme Word',   { font: headlineFont, weight: '900', italic: true, color: purple });
+    c('YB_Body Emphasis',{ font: bodyFont,     weight: '700' });
 }
 
 // Apply a paragraph style to all paragraphs in a text frame.

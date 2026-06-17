@@ -71,43 +71,43 @@ function addTextElement(doc, page, el, spreadIdx, idx, layer, styleName) {
 // ----- Renderers ----------------------------------------------------------
 
 function renderPageTitle(doc, page, el, spreadIdx, idx, layer) {
-    var tf = addTextElement(doc, page, el, spreadIdx, idx, layer, '[Yearbook] Page Title');
+    var tf = addTextElement(doc, page, el, spreadIdx, idx, layer, 'YB_Page Title');
     if (!tf || !el.themeWord) return tf;
     var text = String(el.text || '');
     var themeWord = String(el.themeWord);
     var pos = text.toLowerCase().indexOf(themeWord.toLowerCase());
     if (pos >= 0) {
-        applyCharacterStyleToRange(tf, doc, '[Yearbook] Theme Word', pos, pos + themeWord.length);
+        applyCharacterStyleToRange(tf, doc, 'YB_Theme Word', pos, pos + themeWord.length);
     }
     return tf;
 }
 
 function renderSectionHeader(doc, page, el, spreadIdx, idx, layer) {
-    return addTextElement(doc, page, el, spreadIdx, idx, layer, '[Yearbook] Section Header');
+    return addTextElement(doc, page, el, spreadIdx, idx, layer, 'YB_Section Header');
 }
 
 function renderSchoolName(doc, page, el, spreadIdx, idx, layer) {
-    return addTextElement(doc, page, el, spreadIdx, idx, layer, '[Yearbook] School Name');
+    return addTextElement(doc, page, el, spreadIdx, idx, layer, 'YB_School Name');
 }
 
 function renderHeadline(doc, page, el, spreadIdx, idx, layer) {
-    return addTextElement(doc, page, el, spreadIdx, idx, layer, '[Yearbook] Headline');
+    return addTextElement(doc, page, el, spreadIdx, idx, layer, 'YB_Headline');
 }
 
 function renderSubheadline(doc, page, el, spreadIdx, idx, layer) {
-    return addTextElement(doc, page, el, spreadIdx, idx, layer, '[Yearbook] Subheadline');
+    return addTextElement(doc, page, el, spreadIdx, idx, layer, 'YB_Subheadline');
 }
 
 function renderDate(doc, page, el, spreadIdx, idx, layer) {
-    return addTextElement(doc, page, el, spreadIdx, idx, layer, '[Yearbook] Date');
+    return addTextElement(doc, page, el, spreadIdx, idx, layer, 'YB_Date');
 }
 
 function renderRecord(doc, page, el, spreadIdx, idx, layer) {
-    return addTextElement(doc, page, el, spreadIdx, idx, layer, '[Yearbook] Record');
+    return addTextElement(doc, page, el, spreadIdx, idx, layer, 'YB_Record');
 }
 
 function renderBodyCopy(doc, page, el, spreadIdx, idx, layer) {
-    var tf = addTextElement(doc, page, el, spreadIdx, idx, layer, '[Yearbook] Body Copy');
+    var tf = addTextElement(doc, page, el, spreadIdx, idx, layer, 'YB_Body Copy');
     if (!tf) return null;
     if (el.columns && el.columns > 1) {
         try {
@@ -138,13 +138,13 @@ function renderRoster(doc, page, el, spreadIdx, idx, layer) {
 
     // Title paragraph
     try {
-        tf.paragraphs[0].appliedParagraphStyle = doc.paragraphStyles.itemByName('[Yearbook] Roster Title');
+        tf.paragraphs[0].appliedParagraphStyle = doc.paragraphStyles.itemByName('YB_Roster Title');
     } catch (e) {}
     // Names paragraph(s)
     try {
         if (tf.paragraphs.length > 1) {
             tf.paragraphs.itemByRange(1, tf.paragraphs.length - 1).appliedParagraphStyle =
-                doc.paragraphStyles.itemByName('[Yearbook] Roster Names');
+                doc.paragraphStyles.itemByName('YB_Roster Names');
         }
     } catch (e) {}
 
@@ -177,11 +177,11 @@ function renderQuote(doc, page, el, spreadIdx, idx, layer) {
 
     // Apply quote style to first paragraph.
     try {
-        tf.paragraphs[0].appliedParagraphStyle = doc.paragraphStyles.itemByName('[Yearbook] Quote');
+        tf.paragraphs[0].appliedParagraphStyle = doc.paragraphStyles.itemByName('YB_Quote');
     } catch (e) {}
     try {
         if (tf.paragraphs.length > 1) {
-            tf.paragraphs[1].appliedParagraphStyle = doc.paragraphStyles.itemByName('[Yearbook] Quote Attribution');
+            tf.paragraphs[1].appliedParagraphStyle = doc.paragraphStyles.itemByName('YB_Quote Attribution');
         }
     } catch (e) {}
 
@@ -224,12 +224,12 @@ function renderHighlights(doc, page, el, spreadIdx, idx, layer) {
     });
 
     try {
-        tf.paragraphs[0].appliedParagraphStyle = doc.paragraphStyles.itemByName('[Yearbook] Highlights Title');
+        tf.paragraphs[0].appliedParagraphStyle = doc.paragraphStyles.itemByName('YB_Highlights Title');
     } catch (e) {}
     try {
         if (tf.paragraphs.length > 1) {
             tf.paragraphs.itemByRange(1, tf.paragraphs.length - 1).appliedParagraphStyle =
-                doc.paragraphStyles.itemByName('[Yearbook] Highlights Item');
+                doc.paragraphStyles.itemByName('YB_Highlights Item');
         }
     } catch (e) {}
 
@@ -237,7 +237,7 @@ function renderHighlights(doc, page, el, spreadIdx, idx, layer) {
 }
 
 function renderCaption(doc, page, el, spreadIdx, idx, layer) {
-    return addTextElement(doc, page, el, spreadIdx, idx, layer, '[Yearbook] Caption');
+    return addTextElement(doc, page, el, spreadIdx, idx, layer, 'YB_Caption');
 }
 
 function renderCaptionNumber(doc, page, el, spreadIdx, idx, layer) {
@@ -299,7 +299,7 @@ function renderDecorative(doc, page, el, spreadIdx, idx, layer) {
 }
 
 function renderFolio(doc, page, el, spreadIdx, idx, layer) {
-    return addTextElement(doc, page, el, spreadIdx, idx, layer, '[Yearbook] Folio');
+    return addTextElement(doc, page, el, spreadIdx, idx, layer, 'YB_Folio');
 }
 
 // ----- Dispatch table -----------------------------------------------------
