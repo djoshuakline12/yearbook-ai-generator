@@ -9,6 +9,7 @@
     "test": "jest --detectOpenHandles",
     "bulk-generate": "node scripts/bulk-generate.js",
     "import-from-pack": "node scripts/import-from-pack.js",
+    "batch-render": "node scripts/batch-render.js",
     "export:indesign": "node scripts/export-indesign.js"
   },
   "keywords": ["yearbook", "ai", "layout", "pdf", "puppeteer"],
