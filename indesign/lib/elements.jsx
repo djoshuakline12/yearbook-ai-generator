@@ -8,12 +8,14 @@ function addTextElement(doc, page, el, spreadIdx, idx, layer, styleName) {
     var bounds = pageLocalBounds(page, el);
     if (!bounds) return null;
 
-    var tf = page.textFrames.add({
-        geometricBounds: bounds,
-        itemLayer: layer,
-        contents: String(el.text != null ? el.text : ''),
-        label: makeItemLabel(spreadIdx, el.type, idx)
-    });
+    var tf;
+    try { tf = page.textFrames.add(); }
+    catch (e) { ybLog('textFrames.add() failed: ' + e.message); return null; }
+
+    try { tf.itemLayer = layer; } catch (e) {}
+    try { tf.geometricBounds = bounds; } catch (e) {}
+    try { tf.contents = String(el.text != null ? el.text : ''); } catch (e) {}
+    try { tf.label = makeItemLabel(spreadIdx, el.type, idx); } catch (e) {}
 
     if (styleName) applyParagraphStyle(tf, doc, styleName);
 
@@ -129,12 +131,13 @@ function renderRoster(doc, page, el, spreadIdx, idx, layer) {
     var namesStr = (el.names && el.names.length ? el.names.join(', ') : '');
     var contents = title + namesStr;
 
-    var tf = page.textFrames.add({
-        geometricBounds: bounds,
-        itemLayer: layer,
-        contents: contents,
-        label: makeItemLabel(spreadIdx, 'roster', idx)
-    });
+    var tf;
+    try { tf = page.textFrames.add(); }
+    catch (e) { ybLog('roster textFrames.add() failed: ' + e.message); return null; }
+    try { tf.itemLayer = layer; } catch (e) {}
+    try { tf.geometricBounds = bounds; } catch (e) {}
+    try { tf.contents = contents; } catch (e) {}
+    try { tf.label = makeItemLabel(spreadIdx, 'roster', idx); } catch (e) {}
 
     // Title paragraph
     try {
@@ -168,12 +171,13 @@ function renderQuote(doc, page, el, spreadIdx, idx, layer) {
     var contents = quoteText;
     if (el.attribution) contents += '\r' + String(el.attribution);
 
-    var tf = page.textFrames.add({
-        geometricBounds: bounds,
-        itemLayer: layer,
-        contents: contents,
-        label: makeItemLabel(spreadIdx, 'quote', idx)
-    });
+    var tf;
+    try { tf = page.textFrames.add(); }
+    catch (e) { ybLog('quote textFrames.add() failed: ' + e.message); return null; }
+    try { tf.itemLayer = layer; } catch (e) {}
+    try { tf.geometricBounds = bounds; } catch (e) {}
+    try { tf.contents = contents; } catch (e) {}
+    try { tf.label = makeItemLabel(spreadIdx, 'quote', idx); } catch (e) {}
 
     // Apply quote style to first paragraph.
     try {
@@ -216,12 +220,13 @@ function renderHighlights(doc, page, el, spreadIdx, idx, layer) {
     }
     var contents = title + lines.join('\r');
 
-    var tf = page.textFrames.add({
-        geometricBounds: bounds,
-        itemLayer: layer,
-        contents: contents,
-        label: makeItemLabel(spreadIdx, 'highlights', idx)
-    });
+    var tf;
+    try { tf = page.textFrames.add(); }
+    catch (e) { ybLog('highlights textFrames.add() failed: ' + e.message); return null; }
+    try { tf.itemLayer = layer; } catch (e) {}
+    try { tf.geometricBounds = bounds; } catch (e) {}
+    try { tf.contents = contents; } catch (e) {}
+    try { tf.label = makeItemLabel(spreadIdx, 'highlights', idx); } catch (e) {}
 
     try {
         tf.paragraphs[0].appliedParagraphStyle = doc.paragraphStyles.itemByName('YB_Highlights Title');
@@ -246,19 +251,22 @@ function renderCaptionNumber(doc, page, el, spreadIdx, idx, layer) {
     var fillHex = el.backgroundColor || '#1A1A1A';
     var brush = getSwatchByHex(doc, fillHex, $.global.YB_SWATCH_CACHE);
 
-    var rect = page.rectangles.add({
-        geometricBounds: bounds,
-        itemLayer: layer,
-        fillColor: brush || doc.swatches.itemByName('Black'),
-        strokeColor: doc.swatches.itemByName('None'),
-        label: makeItemLabel(spreadIdx, 'capnum_bg', idx)
-    });
-    var tf = page.textFrames.add({
-        geometricBounds: bounds,
-        itemLayer: layer,
-        contents: String(el.number != null ? el.number : ''),
-        label: makeItemLabel(spreadIdx, 'capnum', idx)
-    });
+    var rect;
+    try { rect = page.rectangles.add(); }
+    catch (e) { ybLog('capnum rect failed: ' + e.message); return null; }
+    try { rect.itemLayer = layer; } catch (e) {}
+    try { rect.geometricBounds = bounds; } catch (e) {}
+    try { rect.fillColor = brush || doc.swatches.itemByName('Black'); } catch (e) {}
+    try { rect.strokeColor = safeNone(doc); } catch (e) {}
+    try { rect.label = makeItemLabel(spreadIdx, 'capnum_bg', idx); } catch (e) {}
+
+    var tf;
+    try { tf = page.textFrames.add(); }
+    catch (e) { ybLog('capnum text failed: ' + e.message); return rect; }
+    try { tf.itemLayer = layer; } catch (e) {}
+    try { tf.geometricBounds = bounds; } catch (e) {}
+    try { tf.contents = String(el.number != null ? el.number : ''); } catch (e) {}
+    try { tf.label = makeItemLabel(spreadIdx, 'capnum', idx); } catch (e) {}
     try {
         tf.parentStory.justification = Justification.CENTER_ALIGN;
         tf.parentStory.fillColor = doc.swatches.itemByName('Paper');
@@ -272,23 +280,17 @@ function renderDecorative(doc, page, el, spreadIdx, idx, layer) {
     var brush = getSwatchByHex(doc, el.color || '#523D73', $.global.YB_SWATCH_CACHE);
 
     var obj;
-    if (el.shape === 'circle') {
-        obj = page.ovals.add({
-            geometricBounds: bounds,
-            itemLayer: layer,
-            fillColor: brush || doc.swatches.itemByName('Black'),
-            strokeColor: doc.swatches.itemByName('None'),
-            label: makeItemLabel(spreadIdx, 'decorative', idx)
-        });
-    } else {
-        obj = page.rectangles.add({
-            geometricBounds: bounds,
-            itemLayer: layer,
-            fillColor: brush || doc.swatches.itemByName('Black'),
-            strokeColor: doc.swatches.itemByName('None'),
-            label: makeItemLabel(spreadIdx, 'decorative', idx)
-        });
+    try {
+        obj = el.shape === 'circle' ? page.ovals.add() : page.rectangles.add();
+    } catch (e) {
+        ybLog('decorative add failed: ' + e.message);
+        return null;
     }
+    try { obj.itemLayer = layer; } catch (e) {}
+    try { obj.geometricBounds = bounds; } catch (e) {}
+    try { obj.fillColor = brush || doc.swatches.itemByName('Black'); } catch (e) {}
+    try { obj.strokeColor = safeNone(doc); } catch (e) {}
+    try { obj.label = makeItemLabel(spreadIdx, 'decorative', idx); } catch (e) {}
     if (el.rotation && el.rotation !== 0) {
         try { obj.rotationAngle = -el.rotation; } catch (e) {}
     }
