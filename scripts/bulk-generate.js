@@ -82,6 +82,8 @@ Options:
   --no-polish           Skip AI content polishing (faster, raw text used)
   --no-crop             Skip AI smart crop analysis (faster, default crop used)
   --only <list>         Only process specific folders (comma-separated)
+  --skip-empty          Skip rows whose folder is missing or has no photos
+                        (warning instead of error)
   --theme <preset>      Theme preset name (default: dchs-official)
   --dry-run             Validate input without generating
   --help                Show this help
@@ -358,13 +360,23 @@ function validate(inputDir, records, options) {
     const photosRequired = category !== 'divider' && category !== 'index';
 
     if (!exists && photosRequired) {
-      errors.push(`Folder not found: ${row.folder} (required for category=${category})`);
+      if (options.skipEmpty) {
+        warnings.push(`Skipping ${row.folder}: folder not found`);
+        row.__skip = true;
+      } else {
+        errors.push(`Folder not found: ${row.folder} (required for category=${category})`);
+      }
       continue;
     }
     if (exists) {
       const imgs = fs.readdirSync(folderPath).filter(isImage);
       if (photosRequired && imgs.length === 0) {
-        errors.push(`No photos in: ${row.folder}`);
+        if (options.skipEmpty) {
+          warnings.push(`Skipping ${row.folder}: no photos`);
+          row.__skip = true;
+        } else {
+          errors.push(`No photos in: ${row.folder}`);
+        }
       }
       if (imgs.length > 15) {
         warnings.push(`${row.folder}: ${imgs.length} photos (max 15 will be used)`);
@@ -411,6 +423,7 @@ async function main() {
     usePolish: !args['no-polish'],
     useCrop: !args['no-crop'],
     only: args.only ? args.only.split(',').map(s => s.trim()) : null,
+    skipEmpty: !!args['skip-empty'],
     dryRun: !!args['dry-run'],
     themeName: args.theme || 'dchs-official',
   };
@@ -428,10 +441,10 @@ async function main() {
     process.exit(1);
   }
 
-  // Filter rows by --only if set
-  let rowsToProcess = records;
+  // Filter rows by --only if set, and drop rows marked __skip by validation
+  let rowsToProcess = records.filter(r => !r.__skip);
   if (options.only) {
-    rowsToProcess = records.filter(r => options.only.includes(r.folder));
+    rowsToProcess = rowsToProcess.filter(r => options.only.includes(r.folder));
   }
 
   console.log(`Bulk generator`);
