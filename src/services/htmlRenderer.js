@@ -1,5 +1,6 @@
 const fs = require('fs');
 const { PAGE } = require('../utils/constants');
+const { hasHandTemplate, renderHandTemplate } = require('./templates');
 
 /**
  * Convert layout JSON + processed photos into an HTML string
@@ -11,6 +12,13 @@ const { PAGE } = require('../utils/constants');
  * @param {number} options.dpi - DPI override (default: PAGE.DPI)
  */
 function renderLayoutToHtml(layout, photos, { dpi: dpiOverride } = {}) {
+  // Hand-crafted template intercept — bypass algorithmic layout.
+  if (layout && layout.isHandTemplate && hasHandTemplate(layout.templateId)) {
+    return renderHandTemplate(layout.templateId, layout.pageContent, photos, {
+      dpi: dpiOverride || PAGE.DPI,
+    });
+  }
+
   const isSpread = layout.pageType === 'spread';
   const dpi = dpiOverride || PAGE.DPI;
   const widthPx = Math.round((isSpread ? PAGE.SPREAD_WIDTH_IN : PAGE.WIDTH_IN) * dpi);

@@ -295,7 +295,14 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
       } else if (layoutParams.layoutStyle === 'sidebar-mods-bleed') {
         buildSidebarModsBleedLayout(elements, photos, pageContent, bounds, layoutParams);
       } else if (layoutParams.layoutStyle === 'cross-gutter-mosaic') {
-        buildCrossGutterMosaicLayout(elements, photos, pageContent, bounds, layoutParams);
+        // Hand-crafted template — bypass algorithmic layout entirely.
+        return {
+          isHandTemplate: true,
+          templateId: 'cross-gutter-mosaic',
+          pageContent,
+          pageType,
+          background: theme && theme.background ? theme.background : null,
+        };
       } else {
         // horizontal-split (default)
         buildParameterizedLayout(elements, photos, pageContent, bounds, layoutParams);
