@@ -3800,183 +3800,244 @@ function buildHeroDominantSidebarLayout(elements, photos, pageContent, bounds, p
 }
 
 // =============================================================================
-// LAYOUT: SIDEBAR MODS BLEED (Tpl 4)
-// Far-left vertical "mod" sidebar with mini portraits + short quote bubbles.
-// Middle column: title + body copy + small photo grid.
-// Far-right: big group photo that bleeds off the right edge with a pull
-// quote overlay box.
+// LAYOUT: MAIN HEADLINE BLEED (Tpl 4 — Herff Jones style, purple)
+// Left page: 2 small photos + grouped numbered captions top; main headline +
+// purple mod bar + 2-col body middle; 2 support photos bottom-left.
+// Right page: 3 numbered photos across top with grouped captions column;
+// big hero photo bleeds bottom-right with multi-line purple pull quote overlay.
 // =============================================================================
 function buildSidebarModsBleedLayout(elements, photos, pageContent, bounds, params) {
-  const { leftPageStart, leftPageEnd, leftPageWidth,
-          rightPageStart, rightPageEnd, rightPageWidth,
-          pageHeight, pageWidth, MARGIN, GAP, photoCaptions = [] } = bounds;
+  const { pageHeight, pageWidth, MARGIN, GAP, photoCaptions = [] } = bounds;
+  const PURPLE = '#523D73';
 
-  // Three vertical columns: sidebar (left page left), middle (left page right
-  // + right page left), big bleed photo (right page right)
-  const sidebarW = leftPageWidth * 0.4;
-  const sidebarX = leftPageStart;
-  const middleX = leftPageStart + sidebarW + 0.2;
-  const middleEnd = rightPageStart + rightPageWidth * 0.45;
-  const middleW = middleEnd - middleX;
-  const bleedPhotoX = middleEnd + 0.2;
-  const bleedPhotoEndX = pageWidth; // hard right edge (bleed)
+  // ================ LEFT PAGE (0 - 8) ================
 
-  // === SIDEBAR with mod boxes ===
-  // Top: section + small page title
-  let sbY = MARGIN;
-  if (pageContent.section) {
+  // A. Top-left small photo column (2 stacked, ~1.5x1.75 each)
+  const topX = 0.5;
+  const topW = 1.5;
+  const topH = 1.75;
+  const topGap = 0.15;
+  if (photos.length > 0) {
     elements.push({
-      type: 'sectionHeader', text: pageContent.section,
-      x: sidebarX, y: sbY, width: sidebarW,
-      fontSize: 12, fontFamily: 'Source Sans Pro', fontWeight: '600',
-      color: '#523D73', textAlign: 'left', textTransform: 'uppercase',
-      letterSpacing: 2, zIndex: 10,
+      type: 'photo', photoIndex: 0,
+      x: topX, y: 0.5, width: topW, height: topH,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 1, cropFit: 'cover',
     });
-    sbY += 0.35;
   }
+  if (photos.length > 1) {
+    elements.push({
+      type: 'photo', photoIndex: 1,
+      x: topX, y: 0.5 + topH + topGap, width: topW, height: topH,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 1, cropFit: 'cover',
+    });
+  }
+  // number badges (small, in corner)
+  elements.push({
+    type: 'captionNumber', text: '1',
+    x: topX + 0.05, y: 0.5 + topH - 0.28,
+    width: 0.24, height: 0.24,
+    fontSize: 8, fontFamily: 'Source Sans Pro', fontWeight: '700',
+    color: '#333333', backgroundColor: null, zIndex: 11,
+  });
+  elements.push({
+    type: 'captionNumber', text: '2',
+    x: topX + 0.05, y: 0.5 + 2 * topH + topGap - 0.28,
+    width: 0.24, height: 0.24,
+    fontSize: 8, fontFamily: 'Source Sans Pro', fontWeight: '700',
+    color: '#333333', backgroundColor: null, zIndex: 11,
+  });
+
+  // B. Grouped captions block right of top-left photos
+  const groupedTopCaps = buildGroupedCaptionsText(photoCaptions, 0, Math.min(2, photos.length));
+  if (groupedTopCaps) {
+    elements.push({
+      type: 'bodyCopy', text: groupedTopCaps,
+      x: topX + topW + 0.15, y: 0.5,
+      width: 1.7, height: 2 * topH + topGap,
+      fontSize: 8, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#1A1A1A', lineHeight: 1.4, columns: 1, textAlign: 'left', zIndex: 10,
+    });
+  }
+
+  // C. Main headline (huge serif) — from pageTitle
+  const titleY = 4.5;
   if (pageContent.pageTitle) {
     elements.push({
       type: 'pageTitle', text: pageContent.pageTitle,
       themeWord: pageContent.pageTitleThemeWord || null,
-      x: sidebarX, y: sbY, width: sidebarW,
-      fontSize: 28, fontFamily: 'Playfair Display', fontWeight: '900',
+      x: 0.5, y: titleY, width: 4.4,
+      fontSize: 36, fontFamily: 'Playfair Display', fontWeight: '900',
       color: '#1A1A1A', textAlign: 'left', letterSpacing: 1, zIndex: 10,
     });
-    sbY += (pageContent.pageTitle.length > 12 ? 1.4 : 0.9);
   }
 
-  // Mini portrait + quote "mod" stack — 3 to 4 modules
-  const sidebarPhotos = photos.slice(1, 5);
-  const quotes = (pageContent.quotes || []).filter(q => q && q.text && !q.text.includes('['));
-  const modAvailable = pageHeight - MARGIN - sbY;
-  const modCount = Math.min(sidebarPhotos.length, Math.max(quotes.length, 2), 4);
-  if (modCount > 0) {
-    const modH = (modAvailable - GAP * (modCount - 1)) / Math.max(modCount, 1);
-    for (let i = 0; i < modCount; i++) {
-      const modY = sbY + i * (modH + GAP);
-      const portraitW = Math.min(sidebarW * 0.5, modH * 0.8);
-      // portrait
-      if (sidebarPhotos[i]) {
-        elements.push({
-          type: 'photo', photoIndex: i + 1,
-          x: sidebarX, y: modY,
-          width: portraitW, height: portraitW,
-          borderRadius: 0, shadow: false, blackAndWhite: false,
-          zIndex: 1, cropFit: 'cover',
-        });
-      }
-      // quote bubble next to it
-      const q = quotes[i];
-      if (q) {
-        elements.push({
-          type: 'quote',
-          text: q.text, attribution: q.attribution || '',
-          x: sidebarX + portraitW + 0.12, y: modY,
-          width: sidebarW - portraitW - 0.12, height: portraitW,
-          fontSize: 9, fontFamily: 'Playfair Display', fontStyle: 'italic',
-          fontWeight: '400', color: '#1A1A1A',
-          backgroundColor: null, accentColor: '#523D73', zIndex: 10,
-        });
-      } else {
-        // caption beneath portrait if no quote
-        const cap = photoCaptions.find(c => c.photoIndex === i + 1) || photoCaptions[i + 1];
-        if (cap && (cap.people || cap.caption)) {
-          const txt = (cap.people || '') + (cap.caption ? ': ' + cap.caption : '');
-          elements.push({
-            type: 'caption', text: txt,
-            x: sidebarX + portraitW + 0.12, y: modY,
-            width: sidebarW - portraitW - 0.12, height: portraitW,
-            fontSize: 8, fontFamily: 'Source Sans Pro', fontWeight: '400',
-            color: '#1A1A1A', textAlign: 'left', zIndex: 10,
-          });
-        }
-      }
-    }
-  }
+  // D. Purple MOD HEADLINE / SUBHEAD bar
+  const modBarY = titleY + 1.2;
+  const modBarText = (pageContent.subheadline || pageContent.section || '').toUpperCase() || 'MOD HEADLINE / SUBHEAD';
+  elements.push({
+    type: 'headline', text: modBarText,
+    x: 0.5, y: modBarY, width: 3.4,
+    fontSize: 11, fontFamily: 'Source Sans Pro', fontWeight: '700',
+    color: '#FFFFFF', backgroundColor: PURPLE, zIndex: 10,
+  });
 
-  // === MIDDLE: headline + body copy + small photo grid ===
-  let midY = MARGIN;
-  if (pageContent.headline) {
-    elements.push({
-      type: 'headline', text: pageContent.headline,
-      x: middleX, y: midY, width: middleW * 0.9,
-      fontSize: 14, fontFamily: 'Playfair Display', fontWeight: '700',
-      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
-    });
-    midY += 0.5;
-  }
-  if (pageContent.dateOrYear) {
-    elements.push({
-      type: 'date', text: pageContent.dateOrYear,
-      x: middleX, y: midY, width: 2,
-      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '600',
-      color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
-    });
-    midY += 0.3;
-  }
-
-  // Small photo grid bottom of middle column
-  const midGridPhotos = photos.slice(5, 8);
-  const midGridH = midGridPhotos.length > 0 ? 1.8 : 0;
-  const bodyH = pageHeight - MARGIN - midY - midGridH - (midGridH > 0 ? 0.2 : 0);
-  if (pageContent.bodyCopy && bodyH > 0.8) {
+  // E. Body copy — 2 columns
+  if (pageContent.bodyCopy) {
     elements.push({
       type: 'bodyCopy', text: pageContent.bodyCopy,
-      x: middleX, y: midY + 0.1, width: middleW,
-      height: bodyH - 0.1,
-      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '400',
-      color: '#1A1A1A', lineHeight: 1.5, columns: 1, textAlign: 'left', zIndex: 10,
+      x: 0.5, y: modBarY + 0.55, width: 3.8, height: 3.2,
+      fontSize: 9, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#1A1A1A', lineHeight: 1.45, columns: 2, textAlign: 'left', zIndex: 10,
     });
   }
 
-  if (midGridPhotos.length > 0) {
-    const gridY = pageHeight - MARGIN - midGridH;
-    const cellW = (middleW - GAP * (midGridPhotos.length - 1)) / midGridPhotos.length;
-    midGridPhotos.forEach((_, i) => {
-      elements.push({
-        type: 'photo', photoIndex: 5 + i,
-        x: middleX + i * (cellW + GAP), y: gridY,
-        width: cellW, height: midGridH,
-        borderRadius: 0, shadow: false, blackAndWhite: false,
-        zIndex: 1, cropFit: 'cover',
-      });
-    });
-  }
-
-  // === RIGHT BLEED: big group photo with pull-quote overlay ===
-  if (photos.length > 0) {
-    const heroIdx = 0;
+  // F. Middle-left support photo (B&W crowd shot area)
+  if (photos.length > 2) {
     elements.push({
-      type: 'photo', photoIndex: heroIdx,
-      x: bleedPhotoX, y: 0,
-      width: bleedPhotoEndX - bleedPhotoX, height: pageHeight,
+      type: 'photo', photoIndex: 2,
+      x: 4.7, y: 4.5, width: 3.0, height: 3.5,
+      borderRadius: 0, shadow: false, blackAndWhite: true,
+      zIndex: 1, cropFit: 'cover',
+    });
+    // number badge
+    elements.push({
+      type: 'captionNumber', text: '3',
+      x: 4.75, y: 7.7,
+      width: 0.24, height: 0.24,
+      fontSize: 8, fontFamily: 'Source Sans Pro', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: null, zIndex: 11,
+    });
+  }
+
+  // G. Two bottom photos (below crowd shot)
+  const botY = 8.2;
+  const botW = 1.6;
+  const botH = 1.6;
+  if (photos.length > 3) {
+    elements.push({
+      type: 'photo', photoIndex: 3,
+      x: 4.7, y: botY, width: botW, height: botH,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 1, cropFit: 'cover',
+    });
+  }
+  if (photos.length > 4) {
+    elements.push({
+      type: 'photo', photoIndex: 4,
+      x: 4.7 + botW + 0.1, y: botY, width: botW, height: botH,
       borderRadius: 0, shadow: false, blackAndWhite: false,
       zIndex: 1, cropFit: 'cover',
     });
   }
 
-  // Pull quote overlay at bottom of bleed photo
-  const overlayQuote = quotes[quotes.length - 1] || quotes[0];
-  if (overlayQuote) {
-    const oW = bleedPhotoEndX - bleedPhotoX - 0.4;
-    const oH = 1.5;
-    const oX = bleedPhotoX + 0.2;
-    const oY = pageHeight - oH - 0.5;
+  // ================ RIGHT PAGE (8 - 16) ================
+
+  // H. Top row of 3 numbered photos + right caption column
+  const rightTopY = 0.4;
+  const rightTopW = 1.9;
+  const rightTopH = 1.9;
+  const rightTopX = 8.25;
+  const rightTopGap = 0.1;
+  for (let i = 0; i < 3; i++) {
+    const idx = 5 + i;
+    if (photos.length > idx) {
+      const px = rightTopX + i * (rightTopW + rightTopGap);
+      elements.push({
+        type: 'photo', photoIndex: idx,
+        x: px, y: rightTopY, width: rightTopW, height: rightTopH,
+        borderRadius: 0, shadow: false, blackAndWhite: false,
+        zIndex: 1, cropFit: 'cover',
+      });
+      elements.push({
+        type: 'captionNumber', text: String(i + 1),
+        x: px + rightTopW - 0.28, y: rightTopY + rightTopH - 0.28,
+        width: 0.24, height: 0.24,
+        fontSize: 8, fontFamily: 'Source Sans Pro', fontWeight: '700',
+        color: '#FFFFFF', backgroundColor: null, zIndex: 11,
+      });
+    }
+  }
+
+  // I. Right column caption block (top-right corner)
+  const rightCapText = buildGroupedCaptionsText(photoCaptions, 5, Math.min(3, Math.max(0, photos.length - 5)));
+  if (rightCapText) {
     elements.push({
-      type: 'decorative', shape: 'rectangle',
-      x: oX, y: oY, width: oW, height: oH,
-      color: '#1A1A1A', opacity: 0.85, zIndex: 8,
+      type: 'bodyCopy', text: rightCapText,
+      x: 14.35, y: rightTopY,
+      width: 1.4, height: rightTopH,
+      fontSize: 7, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#1A1A1A', lineHeight: 1.35, columns: 1, textAlign: 'left', zIndex: 10,
+    });
+  }
+
+  // J. Big hero photo bottom-right — bleeds off right + bottom edges
+  const heroX = 8.3;
+  const heroY = 3.2;
+  const heroW = pageWidth - heroX;
+  const heroH = pageHeight - heroY;
+  const heroIdx = Math.max(0, Math.min(photos.length - 1, 8));
+  if (photos.length > 0) {
+    elements.push({
+      type: 'photo', photoIndex: heroIdx,
+      x: heroX, y: heroY, width: heroW, height: heroH,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 1, cropFit: 'cover',
     });
     elements.push({
-      type: 'quote',
-      text: overlayQuote.text, attribution: overlayQuote.attribution || '',
-      x: oX + 0.2, y: oY + 0.15,
-      width: oW - 0.4, height: oH - 0.3,
-      fontSize: 13, fontFamily: 'Playfair Display', fontStyle: 'italic',
-      fontWeight: '400', color: '#FFFFFF',
-      backgroundColor: null, accentColor: '#FFFFFF',
-      zIndex: 10,
+      type: 'captionNumber', text: '4',
+      x: heroX + 0.1, y: heroY + heroH - 0.4,
+      width: 0.24, height: 0.24,
+      fontSize: 8, fontFamily: 'Source Sans Pro', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: null, zIndex: 11,
     });
+  }
+
+  // K. Multi-line purple pull-quote overlay on hero (top-left of hero)
+  const pulled = (pageContent.quotes || []).find(q => q && q.text && !q.text.includes('['));
+  if (pulled) {
+    const words = pulled.text.replace(/^["']|["']$/g, '').replace(/[.!?]+$/, '').split(/\s+/);
+    const targetLines = 5;
+    const perLine = Math.max(2, Math.ceil(words.length / targetLines));
+    const lines = [];
+    for (let i = 0; i < words.length; i += perLine) {
+      lines.push(words.slice(i, i + perLine).join(' ').toUpperCase());
+    }
+    if (lines.length > 0) {
+      lines[0] = '"' + lines[0];
+      lines[lines.length - 1] = lines[lines.length - 1] + '"';
+    }
+    const qX = heroX + 0.3;
+    const qY = heroY + 0.4;
+    const qW = 3.2;
+    const barH = 0.4;
+    const lineGap = 0.05;
+    lines.forEach((line, i) => {
+      const y = qY + i * (barH + lineGap);
+      elements.push({
+        type: 'decorative', shape: 'rectangle',
+        x: qX, y, width: qW, height: barH,
+        color: PURPLE, opacity: 0.95, zIndex: 8,
+      });
+      elements.push({
+        type: 'headline', text: line,
+        x: qX + 0.18, y: y + 0.05,
+        width: qW - 0.36,
+        fontSize: 13, fontFamily: 'Source Sans Pro', fontWeight: '700',
+        color: '#FFFFFF', backgroundColor: null, zIndex: 10,
+      });
+    });
+    if (pulled.attribution) {
+      elements.push({
+        type: 'caption',
+        text: '—' + pulled.attribution,
+        x: qX + 0.18, y: qY + lines.length * (barH + lineGap) + 0.05,
+        width: qW - 0.36, height: 0.3,
+        fontSize: 9, fontFamily: 'Playfair Display', fontStyle: 'italic',
+        color: '#FFFFFF', textAlign: 'left', zIndex: 10,
+      });
+    }
   }
 }
 
