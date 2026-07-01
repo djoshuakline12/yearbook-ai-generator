@@ -591,21 +591,23 @@ function renderCaptionNumber(el, dpi) {
   const x = inToPx(el.x, dpi);
   const y = inToPx(el.y, dpi);
   const fontSize = ptToPx(el.fontSize || 9, dpi);
-  const size = Math.round(fontSize * 1.5);
+  const size = el.width != null ? inToPx(el.width, dpi) : Math.round(fontSize * 1.5);
+  const content = el.number != null ? el.number : el.text;
+  const bg = el.backgroundColor === null ? 'transparent' : (el.backgroundColor || '#1a1a1a');
 
   return `<div class="element" style="
     left: ${x}px; top: ${y}px;
     width: ${size}px; height: ${size}px;
     font-family: '${el.fontFamily || 'Source Sans Pro'}', sans-serif;
     font-size: ${fontSize}px;
-    font-weight: 700;
+    font-weight: ${el.fontWeight || 700};
     color: ${el.color || '#ffffff'};
-    background-color: ${el.backgroundColor || '#1a1a1a'};
+    background-color: ${bg};
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: ${el.zIndex || 15};
-  ">${escapeHtml(el.number)}</div>`;
+  ">${escapeHtml(content)}</div>`;
 }
 
 function renderDecorative(el, dpi) {
@@ -616,11 +618,16 @@ function renderDecorative(el, dpi) {
   const rotation = el.rotation || 0;
   const opacity = el.opacity != null ? el.opacity : 1;
   const borderRadius = el.shape === 'circle' ? '50%' : '0';
+  const fill = el.color === null ? 'transparent' : (el.color || '#8b5cf6');
+  const borderCss = el.strokeColor
+    ? `border: ${inToPx(el.strokeWidth || 0.02, dpi)}px solid ${el.strokeColor};`
+    : '';
 
   return `<div class="element" style="
     left: ${x}px; top: ${y}px;
     width: ${w}px; height: ${h}px;
-    background: ${el.color || '#8b5cf6'};
+    background: ${fill};
+    ${borderCss}
     opacity: ${opacity};
     transform: rotate(${rotation}deg);
     border-radius: ${borderRadius};
