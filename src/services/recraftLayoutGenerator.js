@@ -3367,14 +3367,20 @@ function buildSinglePageLayout(elements, photos, pageContent, options) {
 // Returns null if no captions are present.
 function buildGroupedCaptionsText(photoCaptions, startIndex, count) {
   if (!photoCaptions || photoCaptions.length === 0) return null;
+  // Strip URLs, then any trailing colons/whitespace left behind.
+  const clean = (s) => (s || '')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/[:\s]+$/, '')
+    .replace(/^[:\s]+/, '')
+    .trim();
   const parts = [];
   for (let i = 0; i < count; i++) {
     const idx = startIndex + i;
     const cap = photoCaptions.find(c => c.photoIndex === idx) || photoCaptions[idx];
     if (!cap) continue;
-    const people = (cap.people || '').trim();
-    const text = (cap.caption || '').trim();
-    const title = (cap.captionTitle || '').trim();
+    const people = clean(cap.people);
+    const text = clean(cap.caption);
+    const title = clean(cap.captionTitle);
     const isPlaceholder = (s) => !s || s.toLowerCase().includes('needs info') || s.toLowerCase().includes('names needed') || s.includes('[') || s.toLowerCase().includes('tbd');
     let combined = '';
     if (!isPlaceholder(title)) combined += title.toUpperCase();
@@ -3387,6 +3393,44 @@ function buildGroupedCaptionsText(photoCaptions, startIndex, count) {
     if (combined) parts.push(`${i + 1}  ${combined}`);
   }
   return parts.length ? parts.join('   ') : null;
+}
+
+// Split a quote string into stacked lines that fit a given bar width.
+// Returns an array of clean uppercase lines (with opening/closing quote marks
+// on the first/last elements).
+function splitQuoteIntoLines(quoteText, barInWidth, fontSizePt) {
+  const clean = (quoteText || '')
+    .replace(/^["'“‘]+|["'”’]+$/g, '')
+    .replace(/[.!?]+$/, '')
+    .trim()
+    .toUpperCase();
+  if (!clean) return [];
+
+  // Empirical: bold Source Sans Pro at N pt fits ~ (72 / (N * 0.60)) chars per inch
+  // → chars-per-inch ≈ 120 / N. Tune with a small safety margin.
+  const charsPerInch = Math.max(2.5, (120 / fontSizePt) - 0.3);
+  const budget = Math.max(8, Math.floor(barInWidth * charsPerInch));
+
+  const words = clean.split(/\s+/);
+  const lines = [];
+  let current = '';
+  for (const w of words) {
+    if (!current) {
+      current = w;
+    } else if ((current.length + 1 + w.length) <= budget) {
+      current += ' ' + w;
+    } else {
+      lines.push(current);
+      current = w;
+    }
+  }
+  if (current) lines.push(current);
+
+  if (lines.length > 0) {
+    lines[0] = '"' + lines[0];
+    lines[lines.length - 1] = lines[lines.length - 1] + '"';
+  }
+  return lines;
 }
 
 // =============================================================================
@@ -3997,22 +4041,14 @@ function buildSidebarModsBleedLayout(elements, photos, pageContent, bounds, para
   // K. Multi-line purple pull-quote overlay on hero (top-left of hero)
   const pulled = (pageContent.quotes || []).find(q => q && q.text && !q.text.includes('['));
   if (pulled) {
-    const words = pulled.text.replace(/^["']|["']$/g, '').replace(/[.!?]+$/, '').split(/\s+/);
-    const targetLines = 5;
-    const perLine = Math.max(2, Math.ceil(words.length / targetLines));
-    const lines = [];
-    for (let i = 0; i < words.length; i += perLine) {
-      lines.push(words.slice(i, i + perLine).join(' ').toUpperCase());
-    }
-    if (lines.length > 0) {
-      lines[0] = '"' + lines[0];
-      lines[lines.length - 1] = lines[lines.length - 1] + '"';
-    }
     const qX = heroX + 0.3;
     const qY = heroY + 0.4;
-    const qW = 3.2;
-    const barH = 0.4;
-    const lineGap = 0.05;
+    const qW = 3.4;
+    const quoteFontSize = 12;
+    const textInWidth = qW - 0.36;
+    const lines = splitQuoteIntoLines(pulled.text, textInWidth, quoteFontSize);
+    const barH = 0.36;
+    const lineGap = 0.04;
     lines.forEach((line, i) => {
       const y = qY + i * (barH + lineGap);
       elements.push({
@@ -4022,9 +4058,9 @@ function buildSidebarModsBleedLayout(elements, photos, pageContent, bounds, para
       });
       elements.push({
         type: 'headline', text: line,
-        x: qX + 0.18, y: y + 0.05,
-        width: qW - 0.36,
-        fontSize: 13, fontFamily: 'Source Sans Pro', fontWeight: '700',
+        x: qX + 0.18, y: y + 0.06,
+        width: textInWidth,
+        fontSize: quoteFontSize, fontFamily: 'Source Sans Pro', fontWeight: '700',
         color: '#FFFFFF', backgroundColor: null, zIndex: 10,
       });
     });
@@ -4033,7 +4069,7 @@ function buildSidebarModsBleedLayout(elements, photos, pageContent, bounds, para
         type: 'caption',
         text: '—' + pulled.attribution,
         x: qX + 0.18, y: qY + lines.length * (barH + lineGap) + 0.05,
-        width: qW - 0.36, height: 0.3,
+        width: textInWidth, height: 0.3,
         fontSize: 9, fontFamily: 'Playfair Display', fontStyle: 'italic',
         color: '#FFFFFF', textAlign: 'left', zIndex: 10,
       });
@@ -4174,18 +4210,14 @@ function buildCrossGutterMosaicLayout(elements, photos, pageContent, bounds, par
     ? (pageContent.quotes || []).find(q => q && q !== attributedQuote && q.text && !q.text.includes('['))
     : (pageContent.quotes || []).find(q => q && q.text && !q.text.includes('['));
   if (overlayQuote) {
-    // Break the quote text into ~3-4 short lines by word count.
-    const words = overlayQuote.text.replace(/[.!?]+$/, '').split(/\s+/);
-    const perLine = Math.ceil(words.length / 4);
-    const lines = [];
-    for (let i = 0; i < words.length; i += perLine) {
-      lines.push(words.slice(i, i + perLine).join(' ').toUpperCase());
-    }
     const oX = 3.4;
     const oW = 3.8;
-    const barH = 0.42;
-    const lineGap = 0.06;
-    const startY = 8.15;
+    const barH = 0.38;
+    const lineGap = 0.05;
+    const startY = 7.7;
+    const overlayFontSize = 12;
+    const textInWidth = oW - 0.3;
+    const lines = splitQuoteIntoLines(overlayQuote.text, textInWidth, overlayFontSize);
     lines.forEach((line, i) => {
       const y = startY + i * (barH + lineGap);
       elements.push({
@@ -4195,9 +4227,9 @@ function buildCrossGutterMosaicLayout(elements, photos, pageContent, bounds, par
       });
       elements.push({
         type: 'headline', text: line,
-        x: oX + 0.15, y: y + 0.03,
-        width: oW - 0.3,
-        fontSize: 13, fontFamily: 'Source Sans Pro', fontWeight: '700',
+        x: oX + 0.15, y: y + 0.06,
+        width: textInWidth,
+        fontSize: overlayFontSize, fontFamily: 'Source Sans Pro', fontWeight: '700',
         color: '#FFFFFF', backgroundColor: null, zIndex: 10,
       });
     });
