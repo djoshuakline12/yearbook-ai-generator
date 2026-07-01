@@ -4068,7 +4068,7 @@ function buildCrossGutterMosaicLayout(elements, photos, pageContent, bounds, par
       width: leftColW, height: titleBoxH,
       color: null,
       strokeColor: '#523D73',
-      strokeWidth: 0.02,
+      strokeWidth: 0.04,
       opacity: 1, zIndex: 8,
     });
     elements.push({
@@ -4162,10 +4162,10 @@ function buildCrossGutterMosaicLayout(elements, photos, pageContent, bounds, par
     // Small "1" number badge in bottom-left corner of hero
     elements.push({
       type: 'captionNumber', text: '1',
-      x: heroX + 0.05, y: heroY + heroH - 0.35,
-      width: 0.3, height: 0.3,
-      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '400',
-      color: '#FFFFFF', backgroundColor: null, zIndex: 11,
+      x: heroX + 0.08, y: heroY + heroH - 0.4,
+      width: 0.28, height: 0.28,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 11,
     });
   }
 
@@ -4183,9 +4183,9 @@ function buildCrossGutterMosaicLayout(elements, photos, pageContent, bounds, par
     }
     const oX = 3.4;
     const oW = 3.8;
-    const barH = 0.32;
+    const barH = 0.42;
     const lineGap = 0.06;
-    const startY = 6.9;
+    const startY = 8.15;
     lines.forEach((line, i) => {
       const y = startY + i * (barH + lineGap);
       elements.push({
