@@ -30,6 +30,29 @@ router.get('/themes', (req, res) => {
 });
 
 /**
+ * GET /api/layout-styles
+ * Returns the list of layout templates the user can pick from in the UI.
+ * If the user picks "auto", the backend chooses by hash (existing behavior).
+ */
+router.get('/layout-styles', (req, res) => {
+  res.json({
+    styles: [
+      { id: '',                       label: 'Auto (pick for me)',                             description: 'Backend picks a template based on the content.' },
+      { id: 'horizontal-split',       label: 'Classic — photos top, text bottom',              description: 'Simple, balanced spread with photos above and text below.' },
+      { id: 'sidebar-text-left',      label: 'Sidebar — text on the left',                     description: 'Narrow text column on the left, photos filling the rest.' },
+      { id: 'sidebar-text-right',     label: 'Sidebar — text on the right',                    description: 'Narrow text column on the right, photos filling the rest.' },
+      { id: 'interleaved',            label: 'Interleaved rows',                               description: 'Photo strips and text alternate top to bottom.' },
+      { id: 'magazine-spread',        label: 'Magazine — hero + text page',                    description: 'Big hero photo on one page, a text-heavy layout on the other.' },
+      { id: 'hero-top-bleed',         label: 'Hero bleed — top (Herff Jones)',                 description: 'Big photo bleeds across the top of the spread with a purple pull quote.' },
+      { id: 'hero-left-magazine',     label: 'Hero bleed — full left page (Herff Jones)',      description: 'Full-page bleed hero on one side, text + photo grid + quote on the other.' },
+      { id: 'hero-dominant-sidebar',  label: 'Hero + talking heads (Herff Jones)',             description: 'Massive hero, giant headline, round portrait row along the bottom.' },
+      { id: 'sidebar-mods-bleed',     label: 'Mod sidebar + bleed group (Herff Jones)',        description: 'Sidebar of mini portrait+quote modules, body, and a big bleed group photo.' },
+      { id: 'cross-gutter-mosaic',    label: 'Cross-gutter hero + mosaic (Freshman Retreat)',  description: 'Left text column, big cross-gutter hero, 2x2 numbered mosaic + bottom stack.' },
+    ],
+  });
+});
+
+/**
  * POST /api/extract-theme
  * Upload an example page image and AI extracts the visual theme.
  */
@@ -319,6 +342,7 @@ function parsePageContent(body) {
     indexEntries: parseIndexEntries(body),
     pageTitle: body.pageTitle || '',
     pageTitleThemeWord: body.pageTitleThemeWord || '',
+    layoutStyle: body.layoutStyle || '',
   };
 }
 

@@ -180,13 +180,22 @@ function chooseLayoutTemplate(pageContent, photoCount) {
   // - 'magazine-spread': hero photo one page, text-heavy other page
   const layoutStyles = [
     'horizontal-split',
-    'horizontal-split',  // weight default 2x
     'sidebar-text-left',
     'sidebar-text-right',
     'interleaved',
     'magazine-spread',
+    // Herff Jones-style templates
+    'hero-top-bleed',           // Tpl 1: dominant photo bleeds top
+    'hero-left-magazine',       // Tpl 2: big hero left, text + small photos right
+    'hero-dominant-sidebar',    // Tpl 3: massive bleed hero left, text + talking heads right
+    'sidebar-mods-bleed',       // Tpl 4: mod sidebar left, body middle, bleed group photo right
+    'cross-gutter-mosaic',      // Tpl 5: left-col text + cross-gutter hero + right 2x2 mosaic + bottom-right mini stack
   ];
-  const layoutStyle = layoutStyles[h1 % layoutStyles.length];
+  // Honor an explicit user pick from the frontend if it matches a real style.
+  const requested = (pageContent.layoutStyle || '').toString().trim();
+  const layoutStyle = layoutStyles.includes(requested)
+    ? requested
+    : layoutStyles[h1 % layoutStyles.length];
 
   const params = {
     layoutStyle,
@@ -277,6 +286,16 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
         buildInterleavedLayout(elements, photos, pageContent, bounds, layoutParams);
       } else if (layoutParams.layoutStyle === 'magazine-spread') {
         buildMagazineSpreadLayout(elements, photos, pageContent, bounds, layoutParams);
+      } else if (layoutParams.layoutStyle === 'hero-top-bleed') {
+        buildHeroTopBleedLayout(elements, photos, pageContent, bounds, layoutParams);
+      } else if (layoutParams.layoutStyle === 'hero-left-magazine') {
+        buildHeroLeftMagazineLayout(elements, photos, pageContent, bounds, layoutParams);
+      } else if (layoutParams.layoutStyle === 'hero-dominant-sidebar') {
+        buildHeroDominantSidebarLayout(elements, photos, pageContent, bounds, layoutParams);
+      } else if (layoutParams.layoutStyle === 'sidebar-mods-bleed') {
+        buildSidebarModsBleedLayout(elements, photos, pageContent, bounds, layoutParams);
+      } else if (layoutParams.layoutStyle === 'cross-gutter-mosaic') {
+        buildCrossGutterMosaicLayout(elements, photos, pageContent, bounds, layoutParams);
       } else {
         // horizontal-split (default)
         buildParameterizedLayout(elements, photos, pageContent, bounds, layoutParams);
@@ -344,9 +363,43 @@ function buildParameterizedLayout(elements, photos, pageContent, bounds, params)
   const photoEnd = isLeftTitle ? rightPageEnd : leftPageEnd;
 
   // Zone boundaries
-  const titleZoneEnd = MARGIN + usableHeight * params.titleZoneSize;
-  const titlePhotoEnd = MARGIN + usableHeight * params.titlePagePhotoEnd;
-  const photoPagePhotoEnd = MARGIN + usableHeight * params.photoPagePhotoEnd;
+  // Title zone is tighter — only enough for actual title + meta lines
+  // (title block: ~1.5", headline + record + date: ~1.2" max = ~2.0" total)
+  // This frees up space for photos to fill the page.
+  const titleBlockHeight = 1.6; // inches needed for title + section
+  const metaBlockHeight = (pageContent.headline ? 0.5 : 0)
+                       + (pageContent.record ? 0.4 : 0)
+                       + (pageContent.dateOrYear ? 0.3 : 0);
+  var titleZoneEnd = MARGIN + titleBlockHeight + metaBlockHeight;
+
+  // Photo zones expand to fill page when body/quotes/highlights are small
+  // Estimate space needed by secondary content
+  const bodyCharCount = (pageContent.bodyCopy || '').length;
+  const quoteCountEst = (pageContent.quotes || []).filter(q => q && q.text).length;
+  const highlightCountEst = (pageContent.highlights || []).filter(h => h).length;
+  const hasRosterEst = (pageContent.roster && pageContent.roster.length > 0);
+
+  // Rough vertical demand for secondary content (inches)
+  // Body: ~0.5" + chars/300 (2 col body at 9pt fits ~300 chars/inch)
+  const bodyDemand = bodyCharCount > 50 ? (0.4 + bodyCharCount / 300) : 0;
+  const quoteDemand = quoteCountEst * 0.9; // ~0.9" per quote
+  const highlightDemand = highlightCountEst > 0 ? (0.4 + highlightCountEst * 0.22) : 0;
+  const rosterDemand = hasRosterEst ? 1.0 : 0;
+
+  // Split secondary demand between the two pages
+  const bottomDemandPerPage = Math.max(
+    1.2, // minimum bottom area on each page
+    (bodyDemand + quoteDemand + highlightDemand + rosterDemand) / 2
+  );
+
+  // Photo zones extend as far down as possible, leaving just enough for
+  // the secondary content slot.
+  var titlePhotoEnd = pageHeight - MARGIN - bottomDemandPerPage;
+  var photoPagePhotoEnd = pageHeight - MARGIN - bottomDemandPerPage;
+
+  // Clamp so photos don't crowd into the title or run too short
+  titlePhotoEnd = Math.max(titleZoneEnd + 1.5, Math.min(titlePhotoEnd, pageHeight - MARGIN - 0.5));
+  photoPagePhotoEnd = Math.max(MARGIN + 3.5, Math.min(photoPagePhotoEnd, pageHeight - MARGIN - 0.5));
 
   // Title vertical position within title zone
   let titleStartY = MARGIN;
@@ -3302,6 +3355,914 @@ function buildSinglePageLayout(elements, photos, pageContent, options) {
       columns: 2,
       zIndex: 10,
     });
+  }
+}
+
+// =============================================================================
+// HERFF JONES-STYLE LAYOUTS
+// =============================================================================
+
+// Build a single "grouped numbered captions" text block — produces text like
+//   "1 CAPTION TITLE — caption body.   2 CAPTION TITLE — caption body."
+// Returns null if no captions are present.
+function buildGroupedCaptionsText(photoCaptions, startIndex, count) {
+  if (!photoCaptions || photoCaptions.length === 0) return null;
+  const parts = [];
+  for (let i = 0; i < count; i++) {
+    const idx = startIndex + i;
+    const cap = photoCaptions.find(c => c.photoIndex === idx) || photoCaptions[idx];
+    if (!cap) continue;
+    const people = (cap.people || '').trim();
+    const text = (cap.caption || '').trim();
+    const title = (cap.captionTitle || '').trim();
+    const isPlaceholder = (s) => !s || s.toLowerCase().includes('needs info') || s.toLowerCase().includes('names needed') || s.includes('[') || s.toLowerCase().includes('tbd');
+    let combined = '';
+    if (!isPlaceholder(title)) combined += title.toUpperCase();
+    if (!isPlaceholder(people) && combined) combined += ' — ';
+    if (!isPlaceholder(people)) combined += people;
+    if (!isPlaceholder(text)) {
+      if (combined) combined += ': ';
+      combined += text;
+    }
+    if (combined) parts.push(`${i + 1}  ${combined}`);
+  }
+  return parts.length ? parts.join('   ') : null;
+}
+
+// =============================================================================
+// LAYOUT: HERO TOP BLEED (Tpl 1)
+// Dominant photo bleeds across the top half of the spread.
+// Big pull quote overlays a colored block top-right corner of the hero.
+// Bottom: row of 3-5 small photos with grouped numbered captions below.
+// Title and body copy live in the lower portion left side.
+// =============================================================================
+function buildHeroTopBleedLayout(elements, photos, pageContent, bounds, params) {
+  const { leftPageStart, leftPageEnd, leftPageWidth,
+          rightPageStart, rightPageEnd, rightPageWidth,
+          pageHeight, pageWidth, MARGIN, GAP, photoCaptions = [] } = bounds;
+
+  // Hero photo across the top — bleeds to the spread edges (x=0, width=pageWidth)
+  // Heights as ratio of page height
+  const heroH = pageHeight * 0.5;
+  if (photos.length > 0) {
+    elements.push({
+      type: 'photo', photoIndex: 0,
+      x: 0, y: 0,
+      width: pageWidth, height: heroH,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 1, cropFit: 'cover',
+    });
+  }
+
+  // Pull quote overlay on top-right of hero
+  const pulled = (pageContent.quotes || []).find(q => q && q.text && !q.text.includes('['));
+  if (pulled) {
+    const qBoxW = Math.min(rightPageWidth * 0.9, 5.0);
+    const qBoxH = 1.6;
+    const qBoxX = pageWidth - MARGIN - qBoxW;
+    const qBoxY = heroH - qBoxH - 0.4;
+    // Colored block background
+    elements.push({
+      type: 'decorative', shape: 'rectangle',
+      x: qBoxX, y: qBoxY,
+      width: qBoxW, height: qBoxH,
+      color: '#523D73', opacity: 0.92, zIndex: 8,
+    });
+    elements.push({
+      type: 'quote',
+      text: pulled.text, attribution: pulled.attribution || '',
+      x: qBoxX + 0.25, y: qBoxY + 0.15,
+      width: qBoxW - 0.5, height: qBoxH - 0.3,
+      fontSize: 18, fontFamily: 'Playfair Display', fontStyle: 'italic',
+      fontWeight: '400', color: '#FFFFFF',
+      backgroundColor: null, accentColor: '#FFFFFF',
+      zIndex: 10,
+    });
+  }
+
+  // Bottom half: title + section + body on left, photo row + grouped captions on right
+  const bottomY = heroH + 0.2;
+  const bottomH = pageHeight - bottomY - MARGIN;
+
+  // LEFT page bottom: title block + body copy
+  let textY = bottomY;
+  textY = addTitleBlock(elements, pageContent, {
+    x: leftPageStart, y: textY, width: leftPageWidth,
+    align: 'left', compact: true,
+  });
+
+  if (pageContent.headline) {
+    elements.push({
+      type: 'headline', text: pageContent.headline,
+      x: leftPageStart, y: textY, width: leftPageWidth * 0.85,
+      fontSize: 13, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+    textY += 0.45;
+  }
+  if (pageContent.dateOrYear) {
+    elements.push({
+      type: 'date', text: pageContent.dateOrYear,
+      x: leftPageStart, y: textY, width: 2,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '600',
+      color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
+    });
+    textY += 0.3;
+  }
+  if (pageContent.bodyCopy) {
+    const bodyH = pageHeight - MARGIN - textY - 0.1;
+    elements.push({
+      type: 'bodyCopy', text: pageContent.bodyCopy,
+      x: leftPageStart, y: textY + 0.1, width: leftPageWidth,
+      height: bodyH,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#1A1A1A', lineHeight: 1.45, columns: 1, textAlign: 'left', zIndex: 10,
+    });
+  }
+
+  // RIGHT page bottom: small numbered photo row + grouped captions block
+  const supportingPhotos = photos.slice(1, Math.min(photos.length, 6));
+  if (supportingPhotos.length > 0) {
+    const captionsH = 1.3;
+    const photosH = bottomH - captionsH - 0.15;
+    const colCount = supportingPhotos.length;
+    const colW = (rightPageWidth - GAP * (colCount - 1)) / colCount;
+
+    supportingPhotos.forEach((_, i) => {
+      const idx = i + 1;
+      elements.push({
+        type: 'photo', photoIndex: idx,
+        x: rightPageStart + i * (colW + GAP), y: bottomY,
+        width: colW, height: photosH,
+        borderRadius: 0, shadow: false, blackAndWhite: false,
+        zIndex: 1, cropFit: 'cover',
+      });
+      // Number badge over each photo (top-left)
+      elements.push({
+        type: 'captionNumber', text: String(idx),
+        x: rightPageStart + i * (colW + GAP) + 0.1, y: bottomY + 0.1,
+        width: 0.35, height: 0.35,
+        fontSize: 14, fontFamily: 'Playfair Display', fontWeight: '700',
+        color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 11,
+      });
+    });
+
+    const groupedText = buildGroupedCaptionsText(photoCaptions, 1, supportingPhotos.length);
+    if (groupedText) {
+      elements.push({
+        type: 'bodyCopy', text: groupedText,
+        x: rightPageStart, y: bottomY + photosH + 0.15,
+        width: rightPageWidth, height: captionsH,
+        fontSize: 8, fontFamily: 'Source Sans Pro', fontWeight: '400',
+        color: '#1A1A1A', lineHeight: 1.4, columns: 2, textAlign: 'left', zIndex: 10,
+      });
+    }
+  }
+}
+
+// =============================================================================
+// LAYOUT: HERO LEFT MAGAZINE (Tpl 2)
+// Big hero photo fills the entire left page (bleeds to outer edge).
+// Right page: title at top, body copy middle, small photo grid + grouped
+// numbered captions, and a colored pull-quote box at the bottom right.
+// =============================================================================
+function buildHeroLeftMagazineLayout(elements, photos, pageContent, bounds, params) {
+  const { leftPageStart, leftPageEnd, leftPageWidth,
+          rightPageStart, rightPageEnd, rightPageWidth,
+          pageHeight, pageWidth, MARGIN, GAP, photoCaptions = [] } = bounds;
+
+  // Hero photo: bleed to the outer (left) edge — x=0, width = half page + bleed
+  const heroSide = params.titlePage === 'left' ? 'right' : 'left';
+  if (photos.length > 0) {
+    if (heroSide === 'left') {
+      elements.push({
+        type: 'photo', photoIndex: 0,
+        x: 0, y: 0,
+        width: pageWidth / 2, height: pageHeight,
+        borderRadius: 0, shadow: false, blackAndWhite: false,
+        zIndex: 1, cropFit: 'cover',
+      });
+    } else {
+      elements.push({
+        type: 'photo', photoIndex: 0,
+        x: pageWidth / 2, y: 0,
+        width: pageWidth / 2, height: pageHeight,
+        borderRadius: 0, shadow: false, blackAndWhite: false,
+        zIndex: 1, cropFit: 'cover',
+      });
+    }
+  }
+
+  // Text page = opposite side
+  const textX = heroSide === 'left' ? rightPageStart : leftPageStart;
+  const textW = heroSide === 'left' ? rightPageWidth : leftPageWidth;
+
+  // Title block at top
+  let textY = MARGIN;
+  textY = addTitleBlock(elements, pageContent, {
+    x: textX, y: textY, width: textW, align: 'left', compact: true,
+  });
+
+  if (pageContent.headline) {
+    elements.push({
+      type: 'headline', text: pageContent.headline,
+      x: textX, y: textY, width: textW * 0.85,
+      fontSize: 13, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+    textY += 0.45;
+  }
+  if (pageContent.dateOrYear) {
+    elements.push({
+      type: 'date', text: pageContent.dateOrYear,
+      x: textX, y: textY, width: 2,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '600',
+      color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
+    });
+    textY += 0.3;
+  }
+
+  // Reserve bottom area for photo grid + pull quote
+  const bottomReserveH = 4.0;
+  const bodyAreaH = (pageHeight - MARGIN - bottomReserveH) - textY - 0.1;
+  if (pageContent.bodyCopy && bodyAreaH > 0.8) {
+    elements.push({
+      type: 'bodyCopy', text: pageContent.bodyCopy,
+      x: textX, y: textY + 0.1, width: textW,
+      height: bodyAreaH,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#1A1A1A', lineHeight: 1.5, columns: 2, textAlign: 'left', zIndex: 10,
+    });
+  }
+
+  // Bottom area: small photo grid (left half of text page) + pull quote box (right half)
+  const supportingPhotos = photos.slice(1, Math.min(photos.length, 5));
+  const bottomY = pageHeight - MARGIN - bottomReserveH;
+  const halfW = (textW - GAP) / 2;
+
+  // Photo grid - 2x2 or row
+  if (supportingPhotos.length > 0) {
+    const gridW = halfW;
+    const gridH = bottomReserveH * 0.7;
+    const cols = supportingPhotos.length >= 3 ? 2 : supportingPhotos.length;
+    const rows = Math.ceil(supportingPhotos.length / cols);
+    const cellW = (gridW - GAP * (cols - 1)) / cols;
+    const cellH = (gridH - GAP * (rows - 1)) / rows;
+
+    supportingPhotos.forEach((_, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      elements.push({
+        type: 'photo', photoIndex: i + 1,
+        x: textX + col * (cellW + GAP),
+        y: bottomY + row * (cellH + GAP),
+        width: cellW, height: cellH,
+        borderRadius: 0, shadow: false, blackAndWhite: false,
+        zIndex: 1, cropFit: 'cover',
+      });
+      elements.push({
+        type: 'captionNumber', text: String(i + 1),
+        x: textX + col * (cellW + GAP) + 0.08,
+        y: bottomY + row * (cellH + GAP) + 0.08,
+        width: 0.32, height: 0.32,
+        fontSize: 12, fontFamily: 'Playfair Display', fontWeight: '700',
+        color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 11,
+      });
+    });
+
+    const groupedText = buildGroupedCaptionsText(photoCaptions, 1, supportingPhotos.length);
+    if (groupedText) {
+      elements.push({
+        type: 'bodyCopy', text: groupedText,
+        x: textX, y: bottomY + gridH + 0.1,
+        width: gridW, height: bottomReserveH - gridH - 0.15,
+        fontSize: 7.5, fontFamily: 'Source Sans Pro', fontWeight: '400',
+        color: '#1A1A1A', lineHeight: 1.35, columns: 1, textAlign: 'left', zIndex: 10,
+      });
+    }
+  }
+
+  // Pull quote in colored box, bottom right
+  const pulled = (pageContent.quotes || []).find(q => q && q.text && !q.text.includes('['));
+  if (pulled) {
+    const qX = textX + halfW + GAP;
+    const qY = bottomY;
+    const qW = halfW;
+    const qH = bottomReserveH;
+    elements.push({
+      type: 'decorative', shape: 'rectangle',
+      x: qX, y: qY, width: qW, height: qH,
+      color: '#523D73', opacity: 1, zIndex: 8,
+    });
+    elements.push({
+      type: 'quote',
+      text: pulled.text, attribution: pulled.attribution || '',
+      x: qX + 0.25, y: qY + 0.3,
+      width: qW - 0.5, height: qH - 0.5,
+      fontSize: 16, fontFamily: 'Playfair Display', fontStyle: 'italic',
+      fontWeight: '400', color: '#FFFFFF',
+      backgroundColor: null, accentColor: '#FFFFFF',
+      zIndex: 10,
+    });
+  }
+}
+
+// =============================================================================
+// LAYOUT: HERO DOMINANT SIDEBAR (Tpl 3)
+// Massive bleed hero photo fills left page entirely + extends across gutter.
+// Right page: section header + headline + body copy with a colored panel
+// behind. Bottom of right page: row of small "talking heads" portraits with
+// inline quotes.
+// =============================================================================
+function buildHeroDominantSidebarLayout(elements, photos, pageContent, bounds, params) {
+  const { leftPageStart, leftPageEnd, leftPageWidth,
+          rightPageStart, rightPageEnd, rightPageWidth,
+          pageHeight, pageWidth, MARGIN, GAP, photoCaptions = [] } = bounds;
+
+  // Massive hero — fills left page entirely with full bleed
+  if (photos.length > 0) {
+    elements.push({
+      type: 'photo', photoIndex: 0,
+      x: 0, y: 0,
+      width: pageWidth / 2 + 0.6, height: pageHeight,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 1, cropFit: 'cover',
+    });
+  }
+
+  // Caption strip on the hero (small white text near bottom-left)
+  const heroCap = photoCaptions.find(c => c.photoIndex === 0) || photoCaptions[0];
+  if (heroCap) {
+    const heroCapText = (heroCap.captionTitle ? heroCap.captionTitle.toUpperCase() + ' — ' : '') +
+                       (heroCap.people || '') +
+                       (heroCap.caption ? ': ' + heroCap.caption : '');
+    if (heroCapText.trim()) {
+      elements.push({
+        type: 'caption', text: heroCapText.trim(),
+        x: MARGIN, y: pageHeight - MARGIN - 0.5,
+        width: leftPageWidth * 0.8, height: 0.4,
+        fontSize: 8, fontFamily: 'Source Sans Pro', fontWeight: '400',
+        color: '#FFFFFF', italic: true, zIndex: 11,
+      });
+    }
+  }
+
+  // Right page: colored panel + headline + body
+  const talkingHeadsH = 2.2;
+  const rightContentH = pageHeight - 2 * MARGIN - talkingHeadsH - 0.3;
+
+  // Section header at top
+  let textY = MARGIN;
+  if (pageContent.section) {
+    elements.push({
+      type: 'sectionHeader', text: pageContent.section,
+      x: rightPageStart, y: textY, width: rightPageWidth,
+      fontSize: 14, fontFamily: 'Source Sans Pro', fontWeight: '600',
+      color: '#523D73', textAlign: 'left', textTransform: 'uppercase',
+      letterSpacing: 3, zIndex: 10,
+    });
+    textY += 0.4;
+  }
+
+  // Big page title
+  if (pageContent.pageTitle) {
+    elements.push({
+      type: 'pageTitle', text: pageContent.pageTitle,
+      themeWord: pageContent.pageTitleThemeWord || null,
+      x: rightPageStart, y: textY, width: rightPageWidth,
+      fontSize: 48, fontFamily: 'Playfair Display', fontWeight: '900',
+      color: '#1A1A1A', textAlign: 'left', letterSpacing: 1, zIndex: 10,
+    });
+    textY += (pageContent.pageTitle.length > 15 ? 1.4 : 1.0);
+  }
+
+  if (pageContent.dateOrYear) {
+    elements.push({
+      type: 'date', text: pageContent.dateOrYear,
+      x: rightPageStart, y: textY, width: 2,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '600',
+      color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
+    });
+    textY += 0.3;
+  }
+
+  // Body copy block
+  const bodyEnd = MARGIN + rightContentH;
+  if (pageContent.bodyCopy && (bodyEnd - textY) > 1.0) {
+    elements.push({
+      type: 'bodyCopy', text: pageContent.bodyCopy,
+      x: rightPageStart, y: textY + 0.1, width: rightPageWidth,
+      height: bodyEnd - textY - 0.1,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#1A1A1A', lineHeight: 1.5, columns: 2, textAlign: 'left', zIndex: 10,
+    });
+  }
+
+  // Talking heads row at bottom of right page
+  const talkingPhotos = photos.slice(1, Math.min(photos.length, 5));
+  if (talkingPhotos.length > 0) {
+    const headsY = pageHeight - MARGIN - talkingHeadsH;
+    const headW = (rightPageWidth - GAP * (talkingPhotos.length - 1)) / talkingPhotos.length;
+    const headSize = Math.min(headW, talkingHeadsH * 0.55);
+    const quoteH = talkingHeadsH - headSize - 0.1;
+
+    talkingPhotos.forEach((_, i) => {
+      const colX = rightPageStart + i * (headW + GAP);
+      // portrait
+      elements.push({
+        type: 'photo', photoIndex: i + 1,
+        x: colX + (headW - headSize) / 2, y: headsY,
+        width: headSize, height: headSize,
+        borderRadius: headSize / 2, shadow: false, blackAndWhite: false,
+        zIndex: 1, cropFit: 'cover',
+      });
+      // mini quote / caption below
+      const cap = photoCaptions.find(c => c.photoIndex === i + 1) || photoCaptions[i + 1];
+      let micro = '';
+      if (cap) {
+        if (cap.people) micro += cap.people.split(',')[0];
+        if (cap.caption && !cap.caption.includes('[')) {
+          if (micro) micro += '\n';
+          micro += '"' + cap.caption + '"';
+        }
+      }
+      if (micro) {
+        elements.push({
+          type: 'caption', text: micro,
+          x: colX + 0.05, y: headsY + headSize + 0.08,
+          width: headW - 0.1, height: quoteH,
+          fontSize: 8, fontFamily: 'Source Sans Pro', fontWeight: '400',
+          color: '#1A1A1A', textAlign: 'center', zIndex: 10,
+        });
+      }
+    });
+  }
+}
+
+// =============================================================================
+// LAYOUT: SIDEBAR MODS BLEED (Tpl 4)
+// Far-left vertical "mod" sidebar with mini portraits + short quote bubbles.
+// Middle column: title + body copy + small photo grid.
+// Far-right: big group photo that bleeds off the right edge with a pull
+// quote overlay box.
+// =============================================================================
+function buildSidebarModsBleedLayout(elements, photos, pageContent, bounds, params) {
+  const { leftPageStart, leftPageEnd, leftPageWidth,
+          rightPageStart, rightPageEnd, rightPageWidth,
+          pageHeight, pageWidth, MARGIN, GAP, photoCaptions = [] } = bounds;
+
+  // Three vertical columns: sidebar (left page left), middle (left page right
+  // + right page left), big bleed photo (right page right)
+  const sidebarW = leftPageWidth * 0.4;
+  const sidebarX = leftPageStart;
+  const middleX = leftPageStart + sidebarW + 0.2;
+  const middleEnd = rightPageStart + rightPageWidth * 0.45;
+  const middleW = middleEnd - middleX;
+  const bleedPhotoX = middleEnd + 0.2;
+  const bleedPhotoEndX = pageWidth; // hard right edge (bleed)
+
+  // === SIDEBAR with mod boxes ===
+  // Top: section + small page title
+  let sbY = MARGIN;
+  if (pageContent.section) {
+    elements.push({
+      type: 'sectionHeader', text: pageContent.section,
+      x: sidebarX, y: sbY, width: sidebarW,
+      fontSize: 12, fontFamily: 'Source Sans Pro', fontWeight: '600',
+      color: '#523D73', textAlign: 'left', textTransform: 'uppercase',
+      letterSpacing: 2, zIndex: 10,
+    });
+    sbY += 0.35;
+  }
+  if (pageContent.pageTitle) {
+    elements.push({
+      type: 'pageTitle', text: pageContent.pageTitle,
+      themeWord: pageContent.pageTitleThemeWord || null,
+      x: sidebarX, y: sbY, width: sidebarW,
+      fontSize: 28, fontFamily: 'Playfair Display', fontWeight: '900',
+      color: '#1A1A1A', textAlign: 'left', letterSpacing: 1, zIndex: 10,
+    });
+    sbY += (pageContent.pageTitle.length > 12 ? 1.4 : 0.9);
+  }
+
+  // Mini portrait + quote "mod" stack — 3 to 4 modules
+  const sidebarPhotos = photos.slice(1, 5);
+  const quotes = (pageContent.quotes || []).filter(q => q && q.text && !q.text.includes('['));
+  const modAvailable = pageHeight - MARGIN - sbY;
+  const modCount = Math.min(sidebarPhotos.length, Math.max(quotes.length, 2), 4);
+  if (modCount > 0) {
+    const modH = (modAvailable - GAP * (modCount - 1)) / Math.max(modCount, 1);
+    for (let i = 0; i < modCount; i++) {
+      const modY = sbY + i * (modH + GAP);
+      const portraitW = Math.min(sidebarW * 0.5, modH * 0.8);
+      // portrait
+      if (sidebarPhotos[i]) {
+        elements.push({
+          type: 'photo', photoIndex: i + 1,
+          x: sidebarX, y: modY,
+          width: portraitW, height: portraitW,
+          borderRadius: 0, shadow: false, blackAndWhite: false,
+          zIndex: 1, cropFit: 'cover',
+        });
+      }
+      // quote bubble next to it
+      const q = quotes[i];
+      if (q) {
+        elements.push({
+          type: 'quote',
+          text: q.text, attribution: q.attribution || '',
+          x: sidebarX + portraitW + 0.12, y: modY,
+          width: sidebarW - portraitW - 0.12, height: portraitW,
+          fontSize: 9, fontFamily: 'Playfair Display', fontStyle: 'italic',
+          fontWeight: '400', color: '#1A1A1A',
+          backgroundColor: null, accentColor: '#523D73', zIndex: 10,
+        });
+      } else {
+        // caption beneath portrait if no quote
+        const cap = photoCaptions.find(c => c.photoIndex === i + 1) || photoCaptions[i + 1];
+        if (cap && (cap.people || cap.caption)) {
+          const txt = (cap.people || '') + (cap.caption ? ': ' + cap.caption : '');
+          elements.push({
+            type: 'caption', text: txt,
+            x: sidebarX + portraitW + 0.12, y: modY,
+            width: sidebarW - portraitW - 0.12, height: portraitW,
+            fontSize: 8, fontFamily: 'Source Sans Pro', fontWeight: '400',
+            color: '#1A1A1A', textAlign: 'left', zIndex: 10,
+          });
+        }
+      }
+    }
+  }
+
+  // === MIDDLE: headline + body copy + small photo grid ===
+  let midY = MARGIN;
+  if (pageContent.headline) {
+    elements.push({
+      type: 'headline', text: pageContent.headline,
+      x: middleX, y: midY, width: middleW * 0.9,
+      fontSize: 14, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+    midY += 0.5;
+  }
+  if (pageContent.dateOrYear) {
+    elements.push({
+      type: 'date', text: pageContent.dateOrYear,
+      x: middleX, y: midY, width: 2,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '600',
+      color: '#523D73', textTransform: 'uppercase', letterSpacing: 1, zIndex: 10,
+    });
+    midY += 0.3;
+  }
+
+  // Small photo grid bottom of middle column
+  const midGridPhotos = photos.slice(5, 8);
+  const midGridH = midGridPhotos.length > 0 ? 1.8 : 0;
+  const bodyH = pageHeight - MARGIN - midY - midGridH - (midGridH > 0 ? 0.2 : 0);
+  if (pageContent.bodyCopy && bodyH > 0.8) {
+    elements.push({
+      type: 'bodyCopy', text: pageContent.bodyCopy,
+      x: middleX, y: midY + 0.1, width: middleW,
+      height: bodyH - 0.1,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#1A1A1A', lineHeight: 1.5, columns: 1, textAlign: 'left', zIndex: 10,
+    });
+  }
+
+  if (midGridPhotos.length > 0) {
+    const gridY = pageHeight - MARGIN - midGridH;
+    const cellW = (middleW - GAP * (midGridPhotos.length - 1)) / midGridPhotos.length;
+    midGridPhotos.forEach((_, i) => {
+      elements.push({
+        type: 'photo', photoIndex: 5 + i,
+        x: middleX + i * (cellW + GAP), y: gridY,
+        width: cellW, height: midGridH,
+        borderRadius: 0, shadow: false, blackAndWhite: false,
+        zIndex: 1, cropFit: 'cover',
+      });
+    });
+  }
+
+  // === RIGHT BLEED: big group photo with pull-quote overlay ===
+  if (photos.length > 0) {
+    const heroIdx = 0;
+    elements.push({
+      type: 'photo', photoIndex: heroIdx,
+      x: bleedPhotoX, y: 0,
+      width: bleedPhotoEndX - bleedPhotoX, height: pageHeight,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 1, cropFit: 'cover',
+    });
+  }
+
+  // Pull quote overlay at bottom of bleed photo
+  const overlayQuote = quotes[quotes.length - 1] || quotes[0];
+  if (overlayQuote) {
+    const oW = bleedPhotoEndX - bleedPhotoX - 0.4;
+    const oH = 1.5;
+    const oX = bleedPhotoX + 0.2;
+    const oY = pageHeight - oH - 0.5;
+    elements.push({
+      type: 'decorative', shape: 'rectangle',
+      x: oX, y: oY, width: oW, height: oH,
+      color: '#1A1A1A', opacity: 0.85, zIndex: 8,
+    });
+    elements.push({
+      type: 'quote',
+      text: overlayQuote.text, attribution: overlayQuote.attribution || '',
+      x: oX + 0.2, y: oY + 0.15,
+      width: oW - 0.4, height: oH - 0.3,
+      fontSize: 13, fontFamily: 'Playfair Display', fontStyle: 'italic',
+      fontWeight: '400', color: '#FFFFFF',
+      backgroundColor: null, accentColor: '#FFFFFF',
+      zIndex: 10,
+    });
+  }
+}
+
+// =============================================================================
+// LAYOUT: CROSS-GUTTER MOSAIC (Tpl 5 — "Freshman Retreat" style)
+// Left page: narrow left column with title in an outlined box, body copy,
+// pull-quote attribution, one small preview photo with caption.
+// Center: big cross-gutter hero photo, purple line-block pull quote overlay.
+// Right page: 2x2 mosaic of numbered supporting photos; bottom-right vertical
+// stack of two small photos with left-side captions, and a two-bar "featured
+// moments" title block above them.
+// =============================================================================
+function buildCrossGutterMosaicLayout(elements, photos, pageContent, bounds, params) {
+  const { leftPageStart, leftPageEnd, leftPageWidth,
+          rightPageStart, rightPageEnd, rightPageWidth,
+          pageHeight, pageWidth, MARGIN, GAP, photoCaptions = [] } = bounds;
+
+  // === LEFT PAGE narrow column (T1..T4, P_small) ===
+  const leftColW = 2.4;
+  const leftColX = leftPageStart;
+
+  // T1 — Title in a thin outlined box
+  const titleBoxH = 1.2;
+  if (pageContent.pageTitle) {
+    elements.push({
+      type: 'decorative', shape: 'rectangle',
+      x: leftColX, y: MARGIN - 0.1,
+      width: leftColW, height: titleBoxH,
+      color: null,
+      strokeColor: '#523D73',
+      strokeWidth: 0.02,
+      opacity: 1, zIndex: 8,
+    });
+    elements.push({
+      type: 'pageTitle', text: pageContent.pageTitle,
+      themeWord: pageContent.pageTitleThemeWord || null,
+      x: leftColX + 0.15, y: MARGIN,
+      width: leftColW - 0.3,
+      fontSize: 26, fontFamily: 'Playfair Display', fontWeight: '900',
+      color: '#1A1A1A', textAlign: 'left', letterSpacing: 1, zIndex: 10,
+    });
+  }
+
+  // T2 — Body copy, single column
+  let leftY = MARGIN + titleBoxH + 0.25;
+  const bodyEndY = 6.7;
+  if (pageContent.bodyCopy) {
+    elements.push({
+      type: 'bodyCopy', text: pageContent.bodyCopy,
+      x: leftColX, y: leftY, width: leftColW,
+      height: bodyEndY - leftY,
+      fontSize: 9.5, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#1A1A1A', lineHeight: 1.45, columns: 1, textAlign: 'left', zIndex: 10,
+    });
+  }
+
+  // T3 — Italic attribution/pull-quote
+  const attrY = 6.85;
+  const attributedQuote = (pageContent.quotes || []).find(q => q && q.text && !q.text.includes('['));
+  if (attributedQuote) {
+    elements.push({
+      type: 'quote',
+      text: `'${attributedQuote.text}'`,
+      attribution: attributedQuote.attribution || '',
+      x: leftColX, y: attrY, width: leftColW, height: 0.9,
+      fontSize: 9, fontFamily: 'Playfair Display', fontStyle: 'italic',
+      fontWeight: '400', color: '#1A1A1A',
+      backgroundColor: null, accentColor: '#523D73', zIndex: 10,
+    });
+  }
+
+  // P_small — bottom-left preview photo (uses last photo so it's distinct from hero)
+  const smallPreviewIdx = Math.min(photos.length - 1, 5);
+  const smallPreviewY = 8.3;
+  const smallPreviewH = 1.6;
+  if (photos.length > 1) {
+    elements.push({
+      type: 'photo', photoIndex: smallPreviewIdx,
+      x: leftColX, y: smallPreviewY,
+      width: leftColW, height: smallPreviewH,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 1, cropFit: 'cover',
+    });
+
+    // T4 — Caption for P_small
+    const cap = photoCaptions.find(c => c.photoIndex === smallPreviewIdx) || photoCaptions[smallPreviewIdx];
+    if (cap) {
+      const title = (cap.captionTitle || '').trim();
+      const people = (cap.people || '').trim();
+      const text = (cap.caption || '').trim();
+      const isPlaceholder = (s) => !s || s.toLowerCase().includes('needs info') || s.includes('[') || s.toLowerCase().includes('tbd');
+      let combined = '';
+      if (!isPlaceholder(title)) combined += title.toUpperCase() + '  ';
+      if (!isPlaceholder(people)) combined += people;
+      if (!isPlaceholder(text)) combined += (combined ? ' ' : '') + text;
+      if (combined) {
+        elements.push({
+          type: 'caption', text: combined,
+          x: leftColX, y: smallPreviewY + smallPreviewH + 0.08,
+          width: leftColW, height: 0.45,
+          fontSize: 7.5, fontFamily: 'Source Sans Pro', fontWeight: '400',
+          color: '#1A1A1A', textAlign: 'left', zIndex: 10,
+        });
+      }
+    }
+  }
+
+  // === CENTER: cross-gutter hero photo ===
+  // Starts on left page at ~x=3.0, extends across gutter to right page x~9.7
+  const heroX = 3.0;
+  const heroEndX = 9.7;
+  const heroY = 0.25;
+  const heroH = pageHeight - 0.55;  // bleeds top and bottom
+  if (photos.length > 0) {
+    elements.push({
+      type: 'photo', photoIndex: 0,
+      x: heroX, y: heroY,
+      width: heroEndX - heroX, height: heroH,
+      borderRadius: 0, shadow: false, blackAndWhite: true,
+      zIndex: 1, cropFit: 'cover',
+    });
+    // Small "1" number badge in bottom-left corner of hero
+    elements.push({
+      type: 'captionNumber', text: '1',
+      x: heroX + 0.05, y: heroY + heroH - 0.35,
+      width: 0.3, height: 0.3,
+      fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '400',
+      color: '#FFFFFF', backgroundColor: null, zIndex: 11,
+    });
+  }
+
+  // Q_overlay — purple line-block quote lower-left area of hero
+  const overlayQuote = attributedQuote
+    ? (pageContent.quotes || []).find(q => q && q !== attributedQuote && q.text && !q.text.includes('['))
+    : (pageContent.quotes || []).find(q => q && q.text && !q.text.includes('['));
+  if (overlayQuote) {
+    // Break the quote text into ~3-4 short lines by word count.
+    const words = overlayQuote.text.replace(/[.!?]+$/, '').split(/\s+/);
+    const perLine = Math.ceil(words.length / 4);
+    const lines = [];
+    for (let i = 0; i < words.length; i += perLine) {
+      lines.push(words.slice(i, i + perLine).join(' ').toUpperCase());
+    }
+    const oX = 3.4;
+    const oW = 3.8;
+    const barH = 0.32;
+    const lineGap = 0.06;
+    const startY = 6.9;
+    lines.forEach((line, i) => {
+      const y = startY + i * (barH + lineGap);
+      elements.push({
+        type: 'decorative', shape: 'rectangle',
+        x: oX, y, width: oW, height: barH,
+        color: '#523D73', opacity: 0.92, zIndex: 8,
+      });
+      elements.push({
+        type: 'headline', text: line,
+        x: oX + 0.15, y: y + 0.03,
+        width: oW - 0.3,
+        fontSize: 13, fontFamily: 'Source Sans Pro', fontWeight: '700',
+        color: '#FFFFFF', backgroundColor: null, zIndex: 10,
+      });
+    });
+    if (overlayQuote.attribution) {
+      elements.push({
+        type: 'caption',
+        text: overlayQuote.attribution,
+        x: oX, y: startY + lines.length * (barH + lineGap) + 0.05,
+        width: oW, height: 0.3,
+        fontSize: 9, fontFamily: 'Playfair Display', fontStyle: 'italic',
+        color: '#FFFFFF', textAlign: 'left', zIndex: 10,
+      });
+    }
+  }
+
+  // === RIGHT PAGE 2x2 photo mosaic (P2..P5) ===
+  const mosaicPhotos = photos.slice(1, Math.min(photos.length, 5));
+  const mosaicX = 10.0;
+  const mosaicY = MARGIN - 0.35;
+  const mosaicW = pageWidth - mosaicX - MARGIN;
+  const mosaicH = 4.9;
+  if (mosaicPhotos.length > 0) {
+    const cellW = (mosaicW - GAP) / 2;
+    const cellH = (mosaicH - GAP) / 2;
+    mosaicPhotos.forEach((_, i) => {
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      const px = mosaicX + col * (cellW + GAP);
+      const py = mosaicY + row * (cellH + GAP);
+      elements.push({
+        type: 'photo', photoIndex: i + 1,
+        x: px, y: py, width: cellW, height: cellH,
+        borderRadius: 0, shadow: false, blackAndWhite: false,
+        zIndex: 1, cropFit: 'cover',
+      });
+      elements.push({
+        type: 'captionNumber', text: String(i + 2),
+        x: px + cellW - 0.35, y: py + cellH - 0.35,
+        width: 0.3, height: 0.3,
+        fontSize: 10, fontFamily: 'Source Sans Pro', fontWeight: '700',
+        color: '#FFFFFF', backgroundColor: null, zIndex: 11,
+      });
+    });
+  }
+
+  // === RIGHT PAGE bottom: "featured moments" title bars + 2 vertical mini photos with left captions ===
+  const featuredHeadline = pageContent.headline || pageContent.subheadline || null;
+  const featuredTagline = pageContent.subheadline && pageContent.headline
+    ? pageContent.subheadline
+    : (pageContent.record || null);
+
+  const hbX = 13.2;
+  const hbY = 5.9;
+  const hbW = pageWidth - hbX - MARGIN;
+  const barH = 0.55;
+  if (featuredHeadline) {
+    elements.push({
+      type: 'headline',
+      text: featuredHeadline,
+      x: hbX, y: hbY, width: hbW,
+      fontSize: 14, fontFamily: 'Playfair Display', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+  }
+  if (featuredTagline) {
+    elements.push({
+      type: 'headline',
+      text: featuredTagline,
+      x: hbX, y: hbY + barH + 0.05, width: hbW,
+      fontSize: 12, fontFamily: 'Source Sans Pro', fontWeight: '700',
+      color: '#FFFFFF', backgroundColor: '#523D73', zIndex: 10,
+    });
+  }
+
+  // Two vertical mini photos with captions on their LEFT side
+  const miniPhotoStartIdx = 5;
+  const miniPhotos = photos.slice(miniPhotoStartIdx, Math.min(photos.length, miniPhotoStartIdx + 2));
+  const miniW = 1.7;
+  const miniX = pageWidth - MARGIN - miniW;
+  const miniCapX = hbX;
+  const miniCapW = miniX - hbX - 0.1;
+
+  if (miniPhotos[0]) {
+    const y1 = 7.4;
+    const h1 = 1.4;
+    elements.push({
+      type: 'photo', photoIndex: miniPhotoStartIdx,
+      x: miniX, y: y1, width: miniW, height: h1,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 1, cropFit: 'cover',
+    });
+    const cap = photoCaptions.find(c => c.photoIndex === miniPhotoStartIdx) || photoCaptions[miniPhotoStartIdx];
+    const capText = cap && !((cap.caption || '').includes('['))
+      ? ((cap.people ? cap.people + '\n' : '') + (cap.caption || ''))
+      : null;
+    if (capText) {
+      elements.push({
+        type: 'caption', text: capText.trim(),
+        x: miniCapX, y: y1, width: miniCapW, height: h1,
+        fontSize: 8, fontFamily: 'Source Sans Pro', fontWeight: '400',
+        color: '#1A1A1A', textAlign: 'left', zIndex: 10,
+      });
+    }
+  }
+
+  if (miniPhotos[1]) {
+    const y2 = 9.05;
+    const h2 = 1.2;
+    elements.push({
+      type: 'photo', photoIndex: miniPhotoStartIdx + 1,
+      x: miniX, y: y2, width: miniW, height: h2,
+      borderRadius: 0, shadow: false, blackAndWhite: false,
+      zIndex: 1, cropFit: 'cover',
+    });
+    const cap = photoCaptions.find(c => c.photoIndex === miniPhotoStartIdx + 1) || photoCaptions[miniPhotoStartIdx + 1];
+    const capText = cap && !((cap.caption || '').includes('['))
+      ? ((cap.people ? cap.people + '\n' : '') + (cap.caption || ''))
+      : null;
+    if (capText) {
+      elements.push({
+        type: 'caption', text: capText.trim(),
+        x: miniCapX, y: y2, width: miniCapW, height: h2,
+        fontSize: 8, fontFamily: 'Source Sans Pro', fontWeight: '400',
+        color: '#1A1A1A', textAlign: 'left', zIndex: 10,
+      });
+    }
   }
 }
 
