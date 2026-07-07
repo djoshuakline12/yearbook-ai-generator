@@ -45,6 +45,14 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   const smallCap = dedupCaption(pickCaption(pageContent.photoCaptions, smallPreviewIdx));
   const miniCaps = [6, 7].map(i => dedupCaption(pickCaption(pageContent.photoCaptions, i)));
 
+  // Grouped numbered captions for the 2x2 mosaic (photos 2-5).
+  const mosaicCapEntries = [1, 2, 3, 4].map((photoIdx, i) => {
+    const c = dedupCaption(pickCaption(pageContent.photoCaptions, photoIdx));
+    if (!c || (!c.lead && !c.body)) return null;
+    const text = [c.lead, c.body].filter(Boolean).join(' ');
+    return `<span class="mcap"><b>${i + 2}</b>&nbsp;&nbsp;${escapeHtml(text)}</span>`;
+  }).filter(Boolean).join('\n');
+
   // Featured moments block: black serif headline (2nd word italic, matching
   // the reference's "THE *BEST* MOMENTS") + tagline split across purple bars.
   const featuredHeadlineRaw = (pageContent.headline || pageContent.section || 'The Moments').toUpperCase();
@@ -54,9 +62,32 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
       ? `<span class="accent">${escapeHtml(w)}</span>`
       : escapeHtml(w))
     .join(' ');
-  const firstHighlight = ((pageContent.highlights || []).find(h => h && !h.includes('['))) || '';
-  const taglineRaw = pageContent.subheadline || pageContent.record || firstHighlight;
-  const taglineLines = taglineRaw ? wrapToLines(taglineRaw, 2.3, 10) : [];
+  // Tagline: pick the first candidate that fits in TWO purple bars (matching
+  // the reference). A long highlight that would wrap into 4-5 bars overflows
+  // onto the photos below — better to show no bars than a wall of them.
+  const tagCandidates = [
+    pageContent.subheadline,
+    pageContent.record,
+    ...(pageContent.highlights || []),
+  ].filter(t => t && !t.includes('['));
+  let taglineLines = [];
+  for (const t of tagCandidates) {
+    const lines = wrapToLines(t, 2.3, 10);
+    if (lines.length >= 1 && lines.length <= 2) { taglineLines = lines; break; }
+  }
+
+  // Vertical layout of the right rail, computed so blocks can never overlap:
+  // mosaic ends at 5.4; grouped captions (if any) 5.5-6.25; featured block
+  // below that; mini stack below the featured block.
+  const featuredTop = mosaicCapEntries ? 6.4 : 5.85;
+  const headlineCharsPerLine = 19; // ~15pt Playfair in a 2.55in column
+  const headlineLineCount = Math.max(1, Math.ceil(featuredHeadlineRaw.length / headlineCharsPerLine));
+  const featuredHeight = headlineLineCount * 0.24 + 0.1 + taglineLines.length * 0.29;
+  const mini1Top = Math.max(7.55, featuredTop + featuredHeight + 0.22);
+  const mini1H = 1.35;
+  const mini2Top = mini1Top + mini1H + 0.18;
+  const mini2H = Math.max(0.8, Math.min(1.2, 10.4 - mini2Top));
+  const showMini2 = (10.4 - mini2Top) >= 0.8;
 
   // Split overlay quote into fitted lines (bar is 3.8" wide, minus padding)
   const quoteFontPt = 12;
@@ -242,10 +273,30 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
     background: rgba(0, 0, 0, 0.55);
   }
 
+  /* Grouped numbered captions for the mosaic */
+  .mosaic-captions {
+    position: absolute;
+    left: ${px(10.0)}; top: ${px(5.52)};
+    width: ${px(5.5)}; height: ${px(0.75)};
+    font-family: 'Source Sans Pro', sans-serif;
+    font-size: ${pt(7.5)};
+    line-height: 1.35;
+    color: ${DARK};
+    column-count: 2;
+    column-gap: ${px(0.18)};
+    overflow: hidden;
+  }
+  .mosaic-captions .mcap {
+    display: block;
+    margin-bottom: ${px(0.05)};
+    break-inside: avoid;
+  }
+  .mosaic-captions .mcap b { font-weight: 700; }
+
   /* Featured moments title block: black serif headline + purple tagline bars */
   .featured {
     position: absolute;
-    left: ${px(13.2)}; top: ${px(5.85)};
+    left: ${px(13.2)}; top: ${px(featuredTop)};
     width: ${px(2.55)};
   }
   .featured .headline-black {
@@ -284,8 +335,8 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
     display: flex;
     gap: ${px(0.12)};
   }
-  .mini-1 { left: ${px(13.2)}; top: ${px(7.45)}; height: ${px(1.45)}; }
-  .mini-2 { left: ${px(13.2)}; top: ${px(9.1)}; height: ${px(1.25)}; }
+  .mini-1 { left: ${px(13.2)}; top: ${px(mini1Top)}; height: ${px(mini1H)}; }
+  .mini-2 { left: ${px(13.2)}; top: ${px(mini2Top)}; height: ${px(mini2H)}; }
   .mini-1 img, .mini-2 img {
     width: ${px(1.5)};
     height: 100%;
@@ -351,6 +402,10 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
     }).join('\n')}
   </div>
 
+  <!-- ============ MOSAIC GROUPED CAPTIONS ============ -->
+
+  ${mosaicCapEntries ? `<div class="mosaic-captions">\n${mosaicCapEntries}\n</div>` : ''}
+
   <!-- ============ FEATURED MOMENTS TITLE ============ -->
 
   <div class="featured">
@@ -366,12 +421,12 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
       ${miniCaps[0] && miniCaps[0].lead ? `<span class="name">${escapeHtml(miniCaps[0].lead)}</span> ` : ''}${miniCaps[0] && miniCaps[0].body ? escapeHtml(miniCaps[0].body) : ''}
     </div>
   </div>
-  <div class="mini-2">
+  ${showMini2 ? `<div class="mini-2">
     ${miniSrcs[1] ? `<img src="${miniSrcs[1]}" alt="">` : ''}
     <div class="cap">
       ${miniCaps[1] && miniCaps[1].lead ? `<span class="name">${escapeHtml(miniCaps[1].lead)}</span> ` : ''}${miniCaps[1] && miniCaps[1].body ? escapeHtml(miniCaps[1].body) : ''}
     </div>
-  </div>
+  </div>` : ''}
 
 </div>
 </body>
