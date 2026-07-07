@@ -152,9 +152,10 @@ function renderShareAStory(pageContent, photos, options = {}) {
   // With only 1-2 mods, bigger photos carry the band; 3+ mods pack tighter.
   const headModW = modCount <= 2 ? Math.min(headModStride - 0.25, 5.4) : Math.min(headModStride - 0.25, 4.6);
   const headImgW = modCount <= 2 ? 2.0 : 1.45;
-  // Angle bar: only if it says something new (never repeat the title).
-  const angleBarRaw = [pageContent.headline, subtitleText, pageContent.section]
-    .find(t => t && t.toUpperCase().trim() !== titleRaw.trim()) || '';
+  // Angle bar: a distinct teaser — never repeats the title OR the subtitle.
+  const angleBarRaw = [pageContent.headline, pageContent.record, pageContent.section]
+    .find(t => t && t.toUpperCase().trim() !== titleRaw.trim()
+      && t.toUpperCase().trim() !== subtitleText.trim()) || '';
 
   return `<!DOCTYPE html>
 <html>
