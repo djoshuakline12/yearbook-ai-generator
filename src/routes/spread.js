@@ -37,17 +37,12 @@ router.get('/themes', (req, res) => {
 router.get('/layout-styles', (req, res) => {
   res.json({
     styles: [
-      { id: '',                       label: 'Auto (pick for me)',                             description: 'Backend picks a template based on the content.' },
-      { id: 'horizontal-split',       label: 'Classic — photos top, text bottom',              description: 'Simple, balanced spread with photos above and text below.' },
-      { id: 'sidebar-text-left',      label: 'Sidebar — text on the left',                     description: 'Narrow text column on the left, photos filling the rest.' },
-      { id: 'sidebar-text-right',     label: 'Sidebar — text on the right',                    description: 'Narrow text column on the right, photos filling the rest.' },
-      { id: 'interleaved',            label: 'Interleaved rows',                               description: 'Photo strips and text alternate top to bottom.' },
-      { id: 'magazine-spread',        label: 'Magazine — hero + text page',                    description: 'Big hero photo on one page, a text-heavy layout on the other.' },
-      { id: 'hero-top-bleed',         label: 'Hero bleed — top (Herff Jones)',                 description: 'Big photo bleeds across the top of the spread with a purple pull quote.' },
-      { id: 'hero-left-magazine',     label: 'Hero bleed — full left page (Herff Jones)',      description: 'Full-page bleed hero on one side, text + photo grid + quote on the other.' },
-      { id: 'hero-dominant-sidebar',  label: 'Hero + talking heads (Herff Jones)',             description: 'Massive hero, giant headline, round portrait row along the bottom.' },
-      { id: 'sidebar-mods-bleed',     label: 'Mod sidebar + bleed group (Herff Jones)',        description: 'Sidebar of mini portrait+quote modules, body, and a big bleed group photo.' },
-      { id: 'cross-gutter-mosaic',    label: 'Cross-gutter hero + mosaic (Freshman Retreat)',  description: 'Left text column, big cross-gutter hero, 2x2 numbered mosaic + bottom stack.' },
+      { id: '',                       label: 'Auto (pick for me)',              description: 'Backend picks one of the five templates based on the content.' },
+      { id: 'hero-top-bleed',         label: 'Template 1 — Share a Story',      description: 'Editorial spread: script-accent title, 2-column body, photo blocks, talking-heads row, quote rail.' },
+      { id: 'hero-left-magazine',     label: 'Template 2 — Mod Sidebar + Group', description: 'Talking-head sidebar on the left, title + body center, giant group photo bleeding off the right.' },
+      { id: 'hero-dominant-sidebar',  label: 'Template 3 — Headline + Hero Rail', description: 'Big headline + 2-column body left, dominant center hero, talking-heads rail on the right.' },
+      { id: 'sidebar-mods-bleed',     label: 'Template 4 — Main Headline Bleed', description: 'Photo column + headline left, top photo strip, B&W block, hero bleeding bottom-right with quote bars.' },
+      { id: 'cross-gutter-mosaic',    label: 'Template 5 — Cross-Gutter Mosaic', description: 'Outlined title + text column left, huge cross-gutter hero with quote bars, 2x2 numbered mosaic right.' },
     ],
   });
 });

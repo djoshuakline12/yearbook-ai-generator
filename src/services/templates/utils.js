@@ -33,7 +33,7 @@ function photoDataUri(photo) {
 
 function cleanCaption(str) {
   return (str || '')
-    .replace(/https?:\/\/\S+/g, '')
+    .replace(/https?:\/\/\S+/gi, '')
     .replace(/^[\s:]+|[\s:]+$/g, '')
     .trim();
 }
@@ -117,8 +117,26 @@ function dedupCaption(cap) {
   return { lead, body: body || '' };
 }
 
+// Estimate rendered height (inches) of body text at a given column width,
+// font size, and column count. Used to position blocks below text without
+// leaving a fixed-layout gap when the text is short.
+function estimateTextHeightIn(text, colWidthIn, fontPt, { lineHeight = 1.45, columns = 1, paragraphGapIn = 0.08 } = {}) {
+  const clean = (text || '').trim();
+  if (!clean) return 0;
+  const charsPerLine = Math.max(10, Math.floor(colWidthIn * (120 / fontPt - 0.3) * 1.15)); // body text ~15% denser than bold caps
+  const paragraphs = clean.split(/\n\s*\n/).filter(p => p.trim());
+  let lines = 0;
+  for (const p of paragraphs) {
+    lines += Math.max(1, Math.ceil(p.trim().length / charsPerLine));
+  }
+  const linesPerCol = Math.ceil(lines / columns);
+  const lineIn = (fontPt * lineHeight) / 72;
+  return linesPerCol * lineIn + Math.max(0, paragraphs.length - 1) * paragraphGapIn / columns;
+}
+
 module.exports = {
   inToPx, ptToPx, escapeHtml, photoDataUri,
   cleanCaption, isPlaceholder, pickCaption,
   splitQuoteIntoLines, wrapToLines, dedupCaption,
+  estimateTextHeightIn,
 };

@@ -178,18 +178,15 @@ function chooseLayoutTemplate(pageContent, photoCount) {
   // - 'sidebar-text-right': photos column left, text column right
   // - 'interleaved': photos and text interspersed top-to-bottom
   // - 'magazine-spread': hero photo one page, text-heavy other page
+  // All five are hand-crafted templates (src/services/templates/). The old
+  // algorithmic styles are retired from the shuffle; explicit requests for
+  // their names still work via LEGACY_STYLE_MAP in templates/index.js.
   const layoutStyles = [
-    'horizontal-split',
-    'sidebar-text-left',
-    'sidebar-text-right',
-    'interleaved',
-    'magazine-spread',
-    // Herff Jones-style templates
-    'hero-top-bleed',           // Tpl 1: dominant photo bleeds top
-    'hero-left-magazine',       // Tpl 2: big hero left, text + small photos right
-    'hero-dominant-sidebar',    // Tpl 3: massive bleed hero left, text + talking heads right
-    'sidebar-mods-bleed',       // Tpl 4: mod sidebar left, body middle, bleed group photo right
-    'cross-gutter-mosaic',      // Tpl 5: left-col text + cross-gutter hero + right 2x2 mosaic + bottom-right mini stack
+    'hero-top-bleed',           // Tpl 1: editorial "share a story" spread
+    'hero-left-magazine',       // Tpl 2: mod sidebar + group photo bleed
+    'hero-dominant-sidebar',    // Tpl 3: headline + center hero + talking-heads rail
+    'sidebar-mods-bleed',       // Tpl 4: main headline + top strip + hero bleed
+    'cross-gutter-mosaic',      // Tpl 5: cross-gutter hero + 2x2 mosaic
   ];
   // Honor an explicit user pick from the frontend if it matches a real style.
   const requested = (pageContent.layoutStyle || '').toString().trim();
@@ -277,6 +274,19 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
       // Default: activity spread — dispatch to one of several layout styles
       const layoutParams = chooseLayoutTemplate(pageContent, photoCount);
       console.log(`Layout style: ${layoutParams.layoutStyle}`);
+
+      // Hand-crafted templates bypass algorithmic layout entirely.
+      const { resolveTemplateId } = require('./templates');
+      const handTemplateId = resolveTemplateId(layoutParams.layoutStyle);
+      if (handTemplateId) {
+        return {
+          isHandTemplate: true,
+          templateId: handTemplateId,
+          pageContent,
+          pageType,
+          background: theme && theme.background ? theme.background : null,
+        };
+      }
 
       if (layoutParams.layoutStyle === 'sidebar-text-left') {
         buildSidebarTextLayout(elements, photos, pageContent, bounds, layoutParams, 'left');
@@ -3381,9 +3391,9 @@ function buildSinglePageLayout(elements, photos, pageContent, options) {
 // Returns null if no captions are present.
 function buildGroupedCaptionsText(photoCaptions, startIndex, count) {
   if (!photoCaptions || photoCaptions.length === 0) return null;
-  // Strip URLs, then any trailing colons/whitespace left behind.
+  // Strip URLs (any case), then any trailing colons/whitespace left behind.
   const clean = (s) => (s || '')
-    .replace(/https?:\/\/\S+/g, '')
+    .replace(/https?:\/\/\S+/gi, '')
     .replace(/[:\s]+$/, '')
     .replace(/^[:\s]+/, '')
     .trim();
