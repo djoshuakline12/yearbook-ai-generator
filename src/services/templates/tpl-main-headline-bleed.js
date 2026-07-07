@@ -127,7 +127,7 @@ ${BRAND.fontLink}
     width: ${spreadWpx}px;
     height: ${spreadHpx}px;
     background: white;
-    font-family: 'Bodoni Moda', serif;
+    font-family: ${BRAND.body};
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     overflow: hidden;

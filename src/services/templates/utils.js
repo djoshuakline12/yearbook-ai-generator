@@ -13,9 +13,13 @@ const fs = require('fs');
 const BRAND = {
   purple: '#563D82',
   dark: '#1A1A1A',
+  // Display face only — headlines, pull-quote attributions, feature headers.
+  // Didone hairlines are unreadable at body sizes; never use for body text.
   serif: "'Bodoni Moda', 'Playfair Display', serif",
+  // Workhorse for body copy, captions, and colored bars.
+  body: "'Source Sans 3', 'Source Sans Pro', sans-serif",
   script: "'Caveat', 'Dancing Script', cursive",
-  fontLink: '<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,600;0,6..96,700;0,6..96,900;1,6..96,400;1,6..96,700&family=Caveat:wght@400;600;700&display=swap" rel="stylesheet">',
+  fontLink: '<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=Caveat:wght@400..700&display=swap" rel="stylesheet">',
 };
 
 function inToPx(inches, dpi) {

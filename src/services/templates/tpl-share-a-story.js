@@ -114,9 +114,22 @@ function renderShareAStory(pageContent, photos, options = {}) {
   const railStackBottom = 0.4 + railBarsH + 0.35 + (railSrc ? 2.55 : 0);
   // Right pair: taller when there are no captions to show beneath them.
   const rightPairH = rightCaps ? 2.2 : 3.55;
-  // Bottom band: fewer talking heads get wider slots so the band stays full.
-  const headModW = headQuotes.length <= 2 ? 5.6 : 3.6;
-  const headModStride = headQuotes.length <= 2 ? 5.85 : 3.85;
+  // Bottom band: quotes first, then caption-based photo mods (photos 7-9),
+  // distributed edge-to-edge across the band (stops before the rail) so the
+  // bottom of the spread is always full.
+  const headMods = [];
+  headQuotes.forEach((q, i) => headMods.push({ quoteObj: q, src: headSrcs[i] }));
+  for (let i = 0; i < 3 && headMods.length < 4; i++) {
+    if (headSrcs[i] && !headMods.some(m => m.src === headSrcs[i])) {
+      const t = capText(7 + i);
+      if (t) headMods.push({ capOnly: t, src: headSrcs[i] });
+    }
+  }
+  const bandLeft = 0.75;
+  const bandRight = 12.6; // rail starts at 13.1
+  const modCount = Math.max(1, headMods.length);
+  const headModStride = (bandRight - bandLeft) / modCount;
+  const headModW = Math.min(headModStride - 0.25, 4.6);
   // Angle bar: only if it says something new (never repeat the title).
   const angleBarRaw = [pageContent.headline, subtitleText, pageContent.section]
     .find(t => t && t.toUpperCase().trim() !== titleRaw.trim()) || '';
@@ -131,7 +144,7 @@ ${BRAND.fontLink}
   body {
     width: ${spreadWpx}px; height: ${spreadHpx}px;
     background: white;
-    font-family: 'Bodoni Moda', serif;
+    font-family: ${BRAND.body};
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
     overflow: hidden;
   }
@@ -387,12 +400,20 @@ ${BRAND.fontLink}
   <!-- BOTTOM TALKING-HEADS BAND -->
   <div class="angle-header">THIS IS <span class="accent">MY</span> ANGLE</div>
   ${angleBarRaw ? `<div class="angle-bar">${escapeHtml(angleBarRaw.toUpperCase())}</div>` : ''}
-  ${headQuotes.map((q, i) => {
-    const x = 0.75 + i * headModStride;
-    const img = headSrcs[i] ? `<img src="${headSrcs[i]}" alt="">` : '';
-    const attr = q.attribution && !isPlaceholder(q.attribution)
-      ? `<span class="attr">— ${escapeHtml(q.attribution)}</span>` : '';
-    return `<div class="head-mod" style="left:${px(x)}">${img}<div class="quote">"${escapeHtml(q.text.replace(/^["']|["']$/g, ''))}"${attr}</div></div>`;
+  ${headMods.map((m, i) => {
+    const x = bandLeft + i * headModStride;
+    const img = m.src ? `<img src="${m.src}" alt="">` : '';
+    let body;
+    if (m.quoteObj) {
+      let text = m.quoteObj.text.replace(/^["']|["']$/g, '');
+      if (text.length > 260) text = text.slice(0, 257).replace(/\s+\S*$/, '') + '…';
+      const attr = m.quoteObj.attribution && !isPlaceholder(m.quoteObj.attribution)
+        ? `<span class="attr">— ${escapeHtml(m.quoteObj.attribution)}</span>` : '';
+      body = `"${escapeHtml(text)}"${attr}`;
+    } else {
+      body = escapeHtml(m.capOnly);
+    }
+    return `<div class="head-mod" style="left:${px(x)}">${img}<div class="quote">${body}</div></div>`;
   }).join('\n')}
 
   <!-- RIGHT PAGE PHOTOS -->
