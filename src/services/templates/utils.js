@@ -10,6 +10,28 @@ const fs = require('fs');
 //   Caveat       ≈ AHJ Bungalow Script  (script accents)
 // InDesign will substitute the real AHJ fonts at print time.
 // ---------------------------------------------------------------------------
+// Fonts are SELF-HOSTED (src/services/templates/fonts/, OFL-licensed) and
+// embedded as base64 @font-face — rendering never depends on Google Fonts
+// being reachable from the server. Built once, cached for the process.
+const path = require('path');
+let _fontCssCache = null;
+function fontFaceCss() {
+  if (_fontCssCache) return _fontCssCache;
+  const fontsDir = path.join(__dirname, 'fonts');
+  const face = (file, family, style, weightRange) => {
+    const b64 = fs.readFileSync(path.join(fontsDir, file)).toString('base64');
+    return `@font-face{font-family:'${family}';src:url(data:font/ttf;base64,${b64}) format('truetype-variations');font-weight:${weightRange};font-style:${style};}`;
+  };
+  _fontCssCache = [
+    face('BodoniModa.ttf', 'Bodoni Moda', 'normal', '400 900'),
+    face('BodoniModa-Italic.ttf', 'Bodoni Moda', 'italic', '400 900'),
+    face('SourceSans3.ttf', 'Source Sans 3', 'normal', '200 900'),
+    face('SourceSans3-Italic.ttf', 'Source Sans 3', 'italic', '200 900'),
+    face('Caveat.ttf', 'Caveat', 'normal', '400 700'),
+  ].join('\n');
+  return _fontCssCache;
+}
+
 const BRAND = {
   purple: '#563D82',
   dark: '#1A1A1A',
@@ -19,7 +41,9 @@ const BRAND = {
   // Workhorse for body copy, captions, and colored bars.
   body: "'Source Sans 3', 'Source Sans Pro', sans-serif",
   script: "'Caveat', 'Dancing Script', cursive",
-  fontLink: '<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=Caveat:wght@400..700&display=swap" rel="stylesheet">',
+  // Kept the name "fontLink" — templates interpolate ${BRAND.fontLink} in
+  // <head>; it now emits an inline <style> with the embedded fonts.
+  get fontLink() { return `<style>\n${fontFaceCss()}\n</style>`; },
 };
 
 function inToPx(inches, dpi) {

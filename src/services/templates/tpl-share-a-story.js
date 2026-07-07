@@ -107,11 +107,27 @@ function renderShareAStory(pageContent, photos, options = {}) {
   const crowdH = leftBlockBottom - 0.05 - crowdY;
   const stackH = (crowdH - 0.12) / 2;
   const stack2Y = crowdY + stackH + 0.12;
-  // Rail stack order (bit1 flips photo above bars). ~0.37in per Bodoni bar.
+  // Rail: bars + photo + highlights fill the full column height. The
+  // highlights block bottom-anchors at 10.4 and the photo stretches to meet
+  // it — no dead space at the rail bottom. ~0.37in per Bodoni bar.
   const railBarsH = railQuoteLines.length * 0.37 + (railQuote && railQuote.attribution ? 0.35 : 0.1);
-  const railQuoteTop = flipQuote && railSrc ? 0.4 + 2.55 : 0.4;
-  const railPhotoTop = flipQuote ? 0.4 : 0.4 + railBarsH + 0.35;
-  const railStackBottom = 0.4 + railBarsH + 0.35 + (railSrc ? 2.55 : 0);
+  const hlEstH = highlights.length
+    ? 0.38 + highlights.reduce((a, h) => a + Math.ceil(h.length / 34) * 0.155 + 0.08, 0)
+    : 0;
+  const highlightsTop = 10.4 - hlEstH;
+  const railContentBottom = highlightsTop - 0.25;
+  let railQuoteTop;
+  let railPhotoTop;
+  let railPhotoH;
+  if (flipQuote && railSrc) {
+    railPhotoTop = 0.4;
+    railPhotoH = Math.max(1.2, railContentBottom - railBarsH - 0.35 - 0.4);
+    railQuoteTop = railPhotoTop + railPhotoH + 0.35;
+  } else {
+    railQuoteTop = 0.4;
+    railPhotoTop = 0.4 + railBarsH + 0.35;
+    railPhotoH = Math.max(1.2, railContentBottom - railPhotoTop);
+  }
   // Right pair: taller when there are no captions to show beneath them.
   const rightPairH = rightCaps ? 2.2 : 3.55;
   // Bottom band: quotes first, then caption-based photo mods (photos 7-9),
@@ -129,7 +145,9 @@ function renderShareAStory(pageContent, photos, options = {}) {
   const bandRight = 12.6; // rail starts at 13.1
   const modCount = Math.max(1, headMods.length);
   const headModStride = (bandRight - bandLeft) / modCount;
-  const headModW = Math.min(headModStride - 0.25, 4.6);
+  // With only 1-2 mods, bigger photos carry the band; 3+ mods pack tighter.
+  const headModW = modCount <= 2 ? Math.min(headModStride - 0.25, 5.4) : Math.min(headModStride - 0.25, 4.6);
+  const headImgW = modCount <= 2 ? 2.0 : 1.45;
   // Angle bar: only if it says something new (never repeat the title).
   const angleBarRaw = [pageContent.headline, subtitleText, pageContent.section]
     .find(t => t && t.toUpperCase().trim() !== titleRaw.trim()) || '';
@@ -269,7 +287,7 @@ ${BRAND.fontLink}
     gap: ${px(0.12)};
   }
   .head-mod img {
-    width: ${px(1.45)}; height: 100%;
+    width: ${px(headImgW)}; height: 100%;
     object-fit: cover;
     flex: none;
   }
@@ -346,7 +364,7 @@ ${BRAND.fontLink}
   .rail-photo {
     position: absolute;
     left: ${px(13.1)};
-    width: ${px(2.4)}; height: ${px(2.3)};
+    width: ${px(2.4)}; height: ${px(railPhotoH)};
     object-fit: cover;
   }
   .rail-highlights {
@@ -430,7 +448,7 @@ ${BRAND.fontLink}
   </div>` : ''}
   ${railSrc ? `<img class="rail-photo" src="${railSrc}" style="top:${px(railPhotoTop)}" alt="">` : ''}
   ${highlights.length > 0 ? `
-  <div class="rail-highlights" style="top:${px(railStackBottom)}">
+  <div class="rail-highlights" style="top:${px(highlightsTop)}">
     <div class="hl-header">More to the story</div>
     ${highlights.map(h => `<div class="hl-item">${escapeHtml(h)}</div>`).join('\n')}
   </div>` : ''}
