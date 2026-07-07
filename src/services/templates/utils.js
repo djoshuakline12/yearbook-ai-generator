@@ -1,5 +1,23 @@
 const fs = require('fs');
 
+// ---------------------------------------------------------------------------
+// BRAND — single source of truth for every template.
+//
+// purple: DCHS spot color C=43 M=68 Y=0 K=43 (screen-converted).
+// Fonts: print uses AHJ Bodoni Display + AHJ Bungalow Script (Herff Jones
+// fonts, not web-licensed). Web-safe stand-ins with matching metrics:
+//   Bodoni Moda  ≈ AHJ Bodoni Display   (serif — headlines AND body)
+//   Caveat       ≈ AHJ Bungalow Script  (script accents)
+// InDesign will substitute the real AHJ fonts at print time.
+// ---------------------------------------------------------------------------
+const BRAND = {
+  purple: '#563D82',
+  dark: '#1A1A1A',
+  serif: "'Bodoni Moda', 'Playfair Display', serif",
+  script: "'Caveat', 'Dancing Script', cursive",
+  fontLink: '<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,600;0,6..96,700;0,6..96,900;1,6..96,400;1,6..96,700&family=Caveat:wght@400;600;700&display=swap" rel="stylesheet">',
+};
+
 function inToPx(inches, dpi) {
   return Math.round(inches * dpi);
 }
@@ -135,6 +153,7 @@ function estimateTextHeightIn(text, colWidthIn, fontPt, { lineHeight = 1.45, col
 }
 
 module.exports = {
+  BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri,
   cleanCaption, isPlaceholder, pickCaption,
   splitQuoteIntoLines, wrapToLines, dedupCaption,

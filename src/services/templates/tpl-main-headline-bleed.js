@@ -13,13 +13,18 @@
 // Spread: 16" x 10.5". Left page x=0-8, right page x=8-16.
 
 const {
+  BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri,
   isPlaceholder, pickCaption, splitQuoteIntoLines, wrapToLines, dedupCaption,
 } = require('./utils');
 
 function renderMainHeadlineBleed(pageContent, photos, options = {}) {
   const dpi = options.dpi || 450;
-  const PURPLE = '#523D73';
+  const variant = options.variant || 0;
+  const anchorColor = !!(variant & 1);   // bit0: anchor photo color vs B&W
+  const flipQuote = !!(variant & 2);     // bit1: quote-block position flip
+  const bwFilter = anchorColor ? '' : 'filter: grayscale(1) contrast(1.05);';
+  const PURPLE = BRAND.purple;
   const DARK = '#1A1A1A';
   const spreadWpx = inToPx(16, dpi);
   const spreadHpx = inToPx(10.5, dpi);
@@ -115,14 +120,14 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
 <html>
 <head>
 <meta charset="utf-8">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Source+Sans+Pro:ital,wght@0,300;0,400;0,600;0,700&display=swap" rel="stylesheet">
+${BRAND.fontLink}
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     width: ${spreadWpx}px;
     height: ${spreadHpx}px;
     background: white;
-    font-family: 'Source Sans Pro', sans-serif;
+    font-family: 'Bodoni Moda', serif;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     overflow: hidden;
@@ -163,7 +168,7 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
     position: absolute;
     left: ${px(leftColX)}; top: ${px(titleY)};
     width: ${px(leftColW)};
-    font-family: 'Playfair Display', serif;
+    font-family: 'Bodoni Moda', serif;
     font-weight: 900;
     font-size: ${pt(30)};
     line-height: 1.08;
@@ -197,7 +202,7 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
     position: absolute;
     left: ${px(leftColX)}; top: ${px(fillerY)};
     width: ${px(leftColW)}; height: ${px(1.1)};
-    font-family: 'Playfair Display', serif;
+    font-family: 'Bodoni Moda', serif;
     font-style: italic;
     font-size: ${pt(9.5)};
     line-height: 1.35;
@@ -284,11 +289,11 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
     left: ${px(8.0)}; top: ${px(3.1)};
     width: ${px(8.0)}; height: ${px(7.4)};
     object-fit: cover;
-    filter: grayscale(1) contrast(1.05);
+    ${bwFilter}
   }
   .quote-overlay {
     position: absolute;
-    left: ${px(8.4)}; top: ${px(3.5)};
+    left: ${px(8.4)}; top: ${px(flipQuote ? Math.max(3.5, 10.0 - quoteLines.length * 0.41 - 0.6) : 3.5)};
     width: ${px(3.7)};
     z-index: 3;
   }
@@ -310,7 +315,7 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
     display: inline-block;
     color: white;
     background: rgba(26,26,26,0.75);
-    font-family: 'Playfair Display', serif;
+    font-family: 'Bodoni Moda', serif;
     font-style: italic;
     font-size: ${pt(10)};
     padding: ${px(0.03)} ${px(0.1)};

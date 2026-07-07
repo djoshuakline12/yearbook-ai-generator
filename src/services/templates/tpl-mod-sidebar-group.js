@@ -13,6 +13,7 @@
 // Spread: 16" x 10.5".
 
 const {
+  BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri,
   isPlaceholder, pickCaption, splitQuoteIntoLines, dedupCaption,
   estimateTextHeightIn,
@@ -20,7 +21,11 @@ const {
 
 function renderModSidebarGroup(pageContent, photos, options = {}) {
   const dpi = options.dpi || 450;
-  const PURPLE = '#523D73';
+  const variant = options.variant || 0;
+  const anchorColor = !!(variant & 1);   // bit0: anchor photo color vs B&W
+  const flipQuote = !!(variant & 2);     // bit1: quote-block position flip
+  const bwFilter = anchorColor ? '' : 'filter: grayscale(1) contrast(1.05);';
+  const PURPLE = BRAND.purple;
   const DARK = '#1A1A1A';
   const spreadWpx = inToPx(16, dpi);
   const spreadHpx = inToPx(10.5, dpi);
@@ -106,13 +111,13 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
 <html>
 <head>
 <meta charset="utf-8">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Source+Sans+Pro:ital,wght@0,300;0,400;0,600;0,700&family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
+${BRAND.fontLink}
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     width: ${spreadWpx}px; height: ${spreadHpx}px;
     background: white;
-    font-family: 'Source Sans Pro', sans-serif;
+    font-family: 'Bodoni Moda', serif;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
     overflow: hidden;
   }
@@ -149,7 +154,7 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
   .side-mod .quote .attr {
     display: block;
     margin-top: ${px(0.03)};
-    font-family: 'Playfair Display', serif;
+    font-family: 'Bodoni Moda', serif;
     font-style: italic;
     font-size: ${pt(7)};
     color: ${PURPLE};
@@ -164,7 +169,7 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
   .script-accent {
     position: absolute;
     left: ${px(2.95)}; top: ${px(0.3)};
-    font-family: 'Dancing Script', cursive;
+    font-family: 'Caveat', cursive;
     font-size: ${pt(20)};
     color: ${PURPLE};
     transform: rotate(-3deg);
@@ -174,7 +179,7 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
     position: absolute;
     left: ${px(2.8)}; top: ${px(0.75)};
     width: ${px(4.7)};
-    font-family: 'Playfair Display', serif;
+    font-family: 'Bodoni Moda', serif;
     font-weight: 900;
     font-size: ${pt(24)};
     line-height: 1.08;
@@ -260,7 +265,7 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
     left: ${px(7.95)}; top: ${px(2.85)};
     width: ${px(8.05)}; height: ${px(7.65)};
     object-fit: cover;
-    filter: grayscale(1) contrast(1.05);
+    ${bwFilter}
   }
   .quote-overlay {
     position: absolute;
@@ -286,7 +291,7 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
     display: inline-block;
     color: white;
     background: rgba(26,26,26,0.75);
-    font-family: 'Playfair Display', serif;
+    font-family: 'Bodoni Moda', serif;
     font-style: italic;
     font-size: ${pt(9.5)};
     padding: ${px(0.03)} ${px(0.1)};
@@ -336,7 +341,7 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
   <!-- GROUP HERO -->
   ${heroSrc ? `<img class="hero" src="${heroSrc}" alt=""><span class="num-badge" style="left:${px(8.03)};top:${px(10.1)}">5</span>` : ''}
   ${heroQuoteLines.length > 0 ? `
-  <div class="quote-overlay" style="top:${px(10.1 - heroQuoteLines.length * 0.32 - (heroQuote.attribution ? 0.35 : 0.1))}">
+  <div class="quote-overlay" style="top:${px(flipQuote ? 3.25 : 10.1 - heroQuoteLines.length * 0.32 - (heroQuote.attribution ? 0.35 : 0.1))}">
     ${heroQuoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}
     ${heroQuote.attribution && !isPlaceholder(heroQuote.attribution) ? `<div class="quote-attr">—${escapeHtml(heroQuote.attribution)}</div>` : ''}
   </div>` : ''}

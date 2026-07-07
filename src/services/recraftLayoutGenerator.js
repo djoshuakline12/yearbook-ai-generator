@@ -196,6 +196,7 @@ function chooseLayoutTemplate(pageContent, photoCount) {
 
   const params = {
     layoutStyle,
+    templateVariant: h2 % 4,
     titlePage: h1 % 2 === 0 ? 'left' : 'right',
     titleAlign: ['left', 'center', 'right'][h2 % 3],
     titlePagePhotoRatio: 0.25 + (h2 % 7) * 0.05,
@@ -276,12 +277,15 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
       console.log(`Layout style: ${layoutParams.layoutStyle}`);
 
       // Hand-crafted templates bypass algorithmic layout entirely.
+      // variant (0-3) selects within-template variations (anchor photo
+      // B&W vs color, quote-block position) → 5 templates x 4 = 20 spreads.
       const { resolveTemplateId } = require('./templates');
       const handTemplateId = resolveTemplateId(layoutParams.layoutStyle);
       if (handTemplateId) {
         return {
           isHandTemplate: true,
           templateId: handTemplateId,
+          variant: layoutParams.templateVariant || 0,
           pageContent,
           pageType,
           background: theme && theme.background ? theme.background : null,

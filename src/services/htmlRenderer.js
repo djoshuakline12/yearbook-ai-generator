@@ -16,6 +16,7 @@ function renderLayoutToHtml(layout, photos, { dpi: dpiOverride } = {}) {
   if (layout && layout.isHandTemplate && hasHandTemplate(layout.templateId)) {
     return renderHandTemplate(layout.templateId, layout.pageContent, photos, {
       dpi: dpiOverride || PAGE.DPI,
+      variant: layout.variant || 0,
     });
   }
 

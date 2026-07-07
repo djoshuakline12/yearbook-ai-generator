@@ -4,8 +4,8 @@
  * For fast local iteration on template layout without the full export pipeline.
  *
  * Usage:
- *   node scripts/dev-render-template.js <sessionIdPrefix> [templateId] [outPath] [dpi]
- *   node scripts/dev-render-template.js 257ed9e5 cross-gutter-mosaic /tmp/out.png 120
+ *   node scripts/dev-render-template.js <sessionIdPrefix> [templateId] [outPath] [dpi] [variant]
+ *   node scripts/dev-render-template.js 257ed9e5 cross-gutter-mosaic /tmp/out.png 120 3
  */
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
@@ -18,6 +18,7 @@ const SESSION_ID = process.argv[2];
 const TEMPLATE_ID = process.argv[3] || 'cross-gutter-mosaic';
 const OUT = process.argv[4] || '/tmp/template-render.png';
 const DPI = parseInt(process.argv[5], 10) || 120;
+const VARIANT = parseInt(process.argv[6], 10) || 0;
 
 async function main() {
   if (!SESSION_ID) {
@@ -38,7 +39,7 @@ async function main() {
   const session = store.getSession(match.sessionId);
   console.log(`Session: ${match.sessionId.slice(0, 8)} (${session.pageContent?.section || 'untitled'}), ${session.photos?.length || 0} photos`);
 
-  const html = renderHandTemplate(TEMPLATE_ID, session.pageContent, session.photos, { dpi: DPI });
+  const html = renderHandTemplate(TEMPLATE_ID, session.pageContent, session.photos, { dpi: DPI, variant: VARIANT });
 
   const browser = await puppeteer.launch({ headless: 'new' });
   const page = await browser.newPage();

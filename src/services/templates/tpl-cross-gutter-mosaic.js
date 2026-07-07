@@ -6,16 +6,21 @@
 //
 // Spread: 16" wide × 10.5" tall.
 // Left page: x=0 to x=8. Right page: x=8 to x=16.
-// Colors: DCHS purple #523D73.
+// Colors: DCHS purple #563D82.
 
 const {
+  BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri,
   isPlaceholder, pickCaption, splitQuoteIntoLines, wrapToLines, dedupCaption,
 } = require('./utils');
 
 function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   const dpi = options.dpi || 450;
-  const PURPLE = '#523D73';
+  const variant = options.variant || 0;
+  const anchorColor = !!(variant & 1);   // bit0: anchor photo color vs B&W
+  const flipQuote = !!(variant & 2);     // bit1: quote-block position flip
+  const bwFilter = anchorColor ? '' : 'filter: grayscale(1) contrast(1.05);';
+  const PURPLE = BRAND.purple;
   const DARK = '#1A1A1A';
   const MUTED = '#666666';
   const spreadWpx = inToPx(16, dpi);
@@ -103,14 +108,14 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
 <html>
 <head>
 <meta charset="utf-8">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Source+Sans+Pro:ital,wght@0,300;0,400;0,600;0,700&display=swap" rel="stylesheet">
+${BRAND.fontLink}
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     width: ${spreadWpx}px;
     height: ${spreadHpx}px;
     background: white;
-    font-family: 'Source Sans Pro', sans-serif;
+    font-family: 'Bodoni Moda', serif;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     overflow: hidden;
@@ -127,7 +132,7 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
     display: flex; align-items: center;
   }
   .title-box .title-text {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Bodoni Moda', serif;
     font-weight: 900;
     font-size: ${pt(26)};
     line-height: 1.05;
@@ -141,7 +146,7 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
     position: absolute;
     left: ${px(0.5)}; top: ${px(2.0)};
     width: ${px(2.5)}; height: ${px(4.5)};
-    font-family: 'Source Sans Pro', sans-serif;
+    font-family: 'Bodoni Moda', serif;
     font-size: ${pt(10)};
     line-height: 1.42;
     color: ${DARK};
@@ -155,14 +160,14 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
     position: absolute;
     left: ${px(0.5)}; top: ${px(6.75)};
     width: ${px(2.5)}; height: ${px(1.0)};
-    font-family: 'Playfair Display', serif;
+    font-family: 'Bodoni Moda', serif;
     font-style: italic;
     font-size: ${pt(9.5)};
     line-height: 1.35;
     color: ${DARK};
   }
   .attr-quote .attr-name {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Bodoni Moda', serif;
     font-style: italic;
     font-size: ${pt(8.5)};
     color: ${MUTED};
@@ -183,7 +188,7 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
     position: absolute;
     left: ${px(0.5)}; top: ${px(9.85)};
     width: ${px(2.5)}; height: ${px(0.55)};
-    font-family: 'Source Sans Pro', sans-serif;
+    font-family: 'Bodoni Moda', serif;
     font-size: ${pt(7.5)};
     line-height: 1.3;
     color: ${DARK};
@@ -203,13 +208,13 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
     width: ${px(6.6)}; height: ${px(10.0)};
     object-fit: cover;
     object-position: center 60%;
-    filter: grayscale(1) contrast(1.05);
+    ${bwFilter}
   }
   .hero-num {
     position: absolute;
     left: ${px(3.25)}; top: ${px(9.9)};
     color: white;
-    font-family: 'Source Sans Pro', sans-serif;
+    font-family: 'Bodoni Moda', serif;
     font-size: ${pt(10)};
     font-weight: 700;
     padding: ${px(0.03)} ${px(0.09)};
@@ -228,7 +233,7 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
     display: block;
     background: ${PURPLE};
     color: white;
-    font-family: 'Source Sans Pro', sans-serif;
+    font-family: 'Bodoni Moda', serif;
     font-weight: 700;
     font-size: ${pt(quoteFontPt)};
     text-transform: uppercase;
@@ -243,7 +248,7 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
     display: inline-block;
     color: white;
     background: rgba(26, 26, 26, 0.75);
-    font-family: 'Playfair Display', serif;
+    font-family: 'Bodoni Moda', serif;
     font-style: italic;
     font-size: ${pt(10)};
     padding: ${px(0.03)} ${px(0.1)};
@@ -266,7 +271,7 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
     position: absolute;
     left: ${px(0.08)}; bottom: ${px(0.08)};
     color: white;
-    font-family: 'Source Sans Pro', sans-serif;
+    font-family: 'Bodoni Moda', serif;
     font-weight: 700;
     font-size: ${pt(9)};
     padding: 0 ${px(0.06)};
@@ -278,7 +283,7 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
     position: absolute;
     left: ${px(10.0)}; top: ${px(5.52)};
     width: ${px(5.5)}; height: ${px(0.75)};
-    font-family: 'Source Sans Pro', sans-serif;
+    font-family: 'Bodoni Moda', serif;
     font-size: ${pt(7.5)};
     line-height: 1.35;
     color: ${DARK};
@@ -300,7 +305,7 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
     width: ${px(2.55)};
   }
   .featured .headline-black {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Bodoni Moda', serif;
     font-weight: 900;
     font-size: ${pt(15)};
     color: ${DARK};
@@ -317,7 +322,7 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
     display: inline-block;
     background: ${PURPLE};
     color: white;
-    font-family: 'Source Sans Pro', sans-serif;
+    font-family: 'Bodoni Moda', serif;
     font-weight: 700;
     font-size: ${pt(10)};
     padding: ${px(0.05)} ${px(0.1)};
@@ -346,7 +351,7 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   }
   .mini-1 .cap, .mini-2 .cap {
     flex: 1;
-    font-family: 'Source Sans Pro', sans-serif;
+    font-family: 'Bodoni Moda', serif;
     font-size: ${pt(7.5)};
     line-height: 1.35;
     color: ${DARK};

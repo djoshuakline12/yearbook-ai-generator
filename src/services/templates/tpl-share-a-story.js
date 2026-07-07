@@ -15,6 +15,7 @@
 // Spread: 16" x 10.5".
 
 const {
+  BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri,
   isPlaceholder, pickCaption, splitQuoteIntoLines, dedupCaption,
   estimateTextHeightIn,
@@ -22,7 +23,11 @@ const {
 
 function renderShareAStory(pageContent, photos, options = {}) {
   const dpi = options.dpi || 450;
-  const PURPLE = '#523D73';
+  const variant = options.variant || 0;
+  const anchorColor = !!(variant & 1);   // bit0: anchor photo color vs B&W
+  const flipQuote = !!(variant & 2);     // bit1: quote-block position flip
+  const bwFilter = anchorColor ? '' : 'filter: grayscale(1) contrast(1.05);';
+  const PURPLE = BRAND.purple;
   const DARK = '#1A1A1A';
   const spreadWpx = inToPx(16, dpi);
   const spreadHpx = inToPx(10.5, dpi);
@@ -40,8 +45,11 @@ function renderShareAStory(pageContent, photos, options = {}) {
   const headSrcs = [7, 8, 9].map(i => photoDataUri(photos[i]));
 
   // ---- Text ----
-  const scriptWord = (pageContent.pageTitleThemeWord || pageContent.section || '').trim();
   const titleRaw = (pageContent.pageTitle || pageContent.section || '').toUpperCase();
+  // Script accent only when it adds something — never echo the title.
+  const scriptWordRaw = (pageContent.pageTitleThemeWord || pageContent.section || '').trim();
+  const scriptWord = (scriptWordRaw && scriptWordRaw.toUpperCase() !== titleRaw.trim()
+    && !titleRaw.startsWith(scriptWordRaw.toUpperCase())) ? scriptWordRaw : '';
   const subtitleCandidates = [
     pageContent.subheadline,
     pageContent.record,
@@ -85,28 +93,45 @@ function renderShareAStory(pageContent, photos, options = {}) {
   }).filter(Boolean).join('\n');
 
   // ---- Dynamic vertical layout (kills fixed-gap negative space) ----
+  // Title block flows: script → title (measured) → subtitle bar → body.
+  const titleY = scriptWord ? 0.78 : 0.55;
+  const titleCharsPerLine = 28; // ~26pt serif in 6.6in
+  const titleLineCount = Math.max(1, Math.ceil(titleRaw.length / titleCharsPerLine));
+  const subtitleY = titleY + titleLineCount * 0.42 + 0.08;
+  const bodyY = subtitleText ? subtitleY + 0.42 : subtitleY + 0.08;
   // Left block: photos start right below the measured body copy and stretch
   // down to the caption anchor (or further when there are no captions).
   const bodyEstH = estimateTextHeightIn(pageContent.bodyCopy, 3.08, 9, { columns: 2 });
-  const crowdY = Math.min(4.0, Math.max(2.6, 2.0 + bodyEstH + 0.25));
+  const crowdY = Math.min(4.3, Math.max(2.4, bodyY + bodyEstH + 0.25));
   const leftBlockBottom = leftCaps ? 7.12 : 7.9;
   const crowdH = leftBlockBottom - 0.05 - crowdY;
   const stackH = (crowdH - 0.12) / 2;
   const stack2Y = crowdY + stackH + 0.12;
+  // Rail stack order (bit1 flips photo above bars). ~0.37in per Bodoni bar.
+  const railBarsH = railQuoteLines.length * 0.37 + (railQuote && railQuote.attribution ? 0.35 : 0.1);
+  const railQuoteTop = flipQuote && railSrc ? 0.4 + 2.55 : 0.4;
+  const railPhotoTop = flipQuote ? 0.4 : 0.4 + railBarsH + 0.35;
+  const railStackBottom = 0.4 + railBarsH + 0.35 + (railSrc ? 2.55 : 0);
   // Right pair: taller when there are no captions to show beneath them.
   const rightPairH = rightCaps ? 2.2 : 3.55;
+  // Bottom band: fewer talking heads get wider slots so the band stays full.
+  const headModW = headQuotes.length <= 2 ? 5.6 : 3.6;
+  const headModStride = headQuotes.length <= 2 ? 5.85 : 3.85;
+  // Angle bar: only if it says something new (never repeat the title).
+  const angleBarRaw = [pageContent.headline, subtitleText, pageContent.section]
+    .find(t => t && t.toUpperCase().trim() !== titleRaw.trim()) || '';
 
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=Source+Sans+Pro:ital,wght@0,300;0,400;0,600;0,700&family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
+${BRAND.fontLink}
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     width: ${spreadWpx}px; height: ${spreadHpx}px;
     background: white;
-    font-family: 'Source Sans Pro', sans-serif;
+    font-family: 'Bodoni Moda', serif;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
     overflow: hidden;
   }
@@ -116,7 +141,7 @@ function renderShareAStory(pageContent, photos, options = {}) {
   .script-accent {
     position: absolute;
     left: ${px(0.85)}; top: ${px(0.28)};
-    font-family: 'Dancing Script', cursive;
+    font-family: 'Caveat', cursive;
     font-size: ${pt(22)};
     color: ${PURPLE};
     transform: rotate(-3deg);
@@ -124,9 +149,9 @@ function renderShareAStory(pageContent, photos, options = {}) {
   }
   .big-title {
     position: absolute;
-    left: ${px(0.75)}; top: ${px(0.78)};
+    left: ${px(0.75)}; top: ${px(titleY)};
     width: ${px(6.6)};
-    font-family: 'Playfair Display', serif;
+    font-family: 'Bodoni Moda', serif;
     font-weight: 900;
     font-size: ${pt(26)};
     line-height: 1.05;
@@ -134,7 +159,7 @@ function renderShareAStory(pageContent, photos, options = {}) {
   }
   .subtitle-bar {
     position: absolute;
-    left: ${px(0.75)}; top: ${px(1.42)};
+    left: ${px(0.75)}; top: ${px(subtitleY)};
     display: inline-block;
     background: ${PURPLE};
     color: white;
@@ -149,8 +174,8 @@ function renderShareAStory(pageContent, photos, options = {}) {
   /* Body copy 2-col */
   .body-copy {
     position: absolute;
-    left: ${px(0.75)}; top: ${px(2.0)};
-    width: ${px(6.4)}; height: ${px(1.85)};
+    left: ${px(0.75)}; top: ${px(bodyY)};
+    width: ${px(6.4)}; height: ${px(crowdY - bodyY - 0.15)};
     font-size: ${pt(9)};
     line-height: 1.42;
     color: ${DARK};
@@ -166,7 +191,7 @@ function renderShareAStory(pageContent, photos, options = {}) {
     left: ${px(0.75)}; top: ${px(crowdY)};
     width: ${px(4.3)}; height: ${px(crowdH)};
     object-fit: cover;
-    filter: grayscale(1) contrast(1.05);
+    ${bwFilter}
   }
   .stack-1, .stack-2 {
     position: absolute;
@@ -203,7 +228,7 @@ function renderShareAStory(pageContent, photos, options = {}) {
   .angle-header {
     position: absolute;
     left: ${px(0.75)}; top: ${px(8.05)};
-    font-family: 'Playfair Display', serif;
+    font-family: 'Bodoni Moda', serif;
     font-weight: 900;
     font-size: ${pt(14)};
     color: ${DARK};
@@ -226,7 +251,7 @@ function renderShareAStory(pageContent, photos, options = {}) {
   .head-mod {
     position: absolute;
     top: ${px(8.6)};
-    width: ${px(3.6)}; height: ${px(1.7)};
+    width: ${px(headModW)}; height: ${px(1.7)};
     display: flex;
     gap: ${px(0.12)};
   }
@@ -245,7 +270,7 @@ function renderShareAStory(pageContent, photos, options = {}) {
   .head-mod .quote .attr {
     display: block;
     margin-top: ${px(0.04)};
-    font-family: 'Playfair Display', serif;
+    font-family: 'Bodoni Moda', serif;
     font-style: italic;
     font-size: ${pt(7.5)};
     color: ${PURPLE};
@@ -281,7 +306,7 @@ function renderShareAStory(pageContent, photos, options = {}) {
   /* Right rail */
   .rail-quote {
     position: absolute;
-    left: ${px(13.1)}; top: ${px(0.4)};
+    left: ${px(13.1)}; top: ${px(railQuoteTop)};
     width: ${px(2.4)};
     z-index: 3;
   }
@@ -299,7 +324,7 @@ function renderShareAStory(pageContent, photos, options = {}) {
     overflow: hidden;
   }
   .rail-quote .quote-attr {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Bodoni Moda', serif;
     font-style: italic;
     font-size: ${pt(9)};
     color: ${DARK};
@@ -317,7 +342,7 @@ function renderShareAStory(pageContent, photos, options = {}) {
     width: ${px(2.4)};
   }
   .rail-highlights .hl-header {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Bodoni Moda', serif;
     font-weight: 900;
     font-size: ${pt(11)};
     color: ${DARK};
@@ -361,9 +386,9 @@ function renderShareAStory(pageContent, photos, options = {}) {
 
   <!-- BOTTOM TALKING-HEADS BAND -->
   <div class="angle-header">THIS IS <span class="accent">MY</span> ANGLE</div>
-  ${subtitleText || pageContent.section ? `<div class="angle-bar">${escapeHtml(((pageContent.headline || pageContent.section || '')).toUpperCase())}</div>` : ''}
+  ${angleBarRaw ? `<div class="angle-bar">${escapeHtml(angleBarRaw.toUpperCase())}</div>` : ''}
   ${headQuotes.map((q, i) => {
-    const x = 0.75 + i * 3.85;
+    const x = 0.75 + i * headModStride;
     const img = headSrcs[i] ? `<img src="${headSrcs[i]}" alt="">` : '';
     const attr = q.attribution && !isPlaceholder(q.attribution)
       ? `<span class="attr">— ${escapeHtml(q.attribution)}</span>` : '';
@@ -382,9 +407,9 @@ function renderShareAStory(pageContent, photos, options = {}) {
     ${railQuoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}
     ${railQuote.attribution && !isPlaceholder(railQuote.attribution) ? `<div class="quote-attr">— ${escapeHtml(railQuote.attribution)}</div>` : ''}
   </div>` : ''}
-  ${railSrc ? `<img class="rail-photo" src="${railSrc}" style="top:${px(0.4 + railQuoteLines.length * 0.31 + 0.45)}" alt="">` : ''}
+  ${railSrc ? `<img class="rail-photo" src="${railSrc}" style="top:${px(railPhotoTop)}" alt="">` : ''}
   ${highlights.length > 0 ? `
-  <div class="rail-highlights" style="top:${px(0.4 + railQuoteLines.length * 0.31 + 0.45 + (railSrc ? 2.5 : 0))}">
+  <div class="rail-highlights" style="top:${px(railStackBottom)}">
     <div class="hl-header">More to the story</div>
     ${highlights.map(h => `<div class="hl-item">${escapeHtml(h)}</div>`).join('\n')}
   </div>` : ''}
