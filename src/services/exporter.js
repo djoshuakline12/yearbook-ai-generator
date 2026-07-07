@@ -158,12 +158,10 @@ async function doExport(html, format, pageType, options) {
       '--safebrowsing-disable-auto-update',
       `--js-flags=--max-old-space-size=${memoryMb}`,
     ],
-    // Containers have no dbus; pointing the bus at /dev/null stops Chromium
-    // from trying (and failing) to connect. HOME/XDG dirs must be writable
-    // for crashpad/prefs even when disabled.
+    // HOME/XDG dirs must be writable for Chromium prefs. (dbus errors in
+    // stderr are normal in containers and non-fatal — don't chase them.)
     env: {
       ...process.env,
-      DBUS_SESSION_BUS_ADDRESS: 'unix:path=/dev/null',
       HOME: process.env.HOME || '/tmp',
       XDG_CONFIG_HOME: '/tmp/.chromium-config',
       XDG_CACHE_HOME: '/tmp/.chromium-cache',

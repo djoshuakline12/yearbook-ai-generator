@@ -169,6 +169,65 @@ app.get('/api/admin/errors', (req, res) => {
   res.json({ errors: getRecentErrors(limit) });
 });
 
+// Diagnostic: report the container's Chrome situation and try several
+// launch variants, returning which (if any) works and the full stderr of
+// each failure. Read-only; used to debug "Failed to launch browser" errors.
+app.get('/api/admin/chrome-debug', async (req, res) => {
+  const fs = require('fs');
+  const { execSync } = require('child_process');
+  const puppeteer = require('puppeteer');
+  const report = { env: {}, binaries: {}, system: {}, variants: [] };
+
+  report.env.PUPPETEER_EXECUTABLE_PATH = process.env.PUPPETEER_EXECUTABLE_PATH || null;
+  report.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD || null;
+
+  for (const p of ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome', '/nix', '/etc/debian_version']) {
+    report.binaries[p] = fs.existsSync(p);
+  }
+  try { report.binaries.pathChromium = execSync('command -v chromium || true', { encoding: 'utf8' }).trim() || null; } catch (e) { report.binaries.pathChromium = null; }
+  try { report.binaries.puppeteerBundled = puppeteer.executablePath(); } catch (e) { report.binaries.puppeteerBundled = `unavailable: ${e.message}`; }
+
+  // Which binary would the exporter pick, and what version is it?
+  let execPath = null;
+  for (const p of [process.env.PUPPETEER_EXECUTABLE_PATH, '/usr/bin/chromium', '/usr/bin/chromium-browser', report.binaries.pathChromium].filter(Boolean)) {
+    if (fs.existsSync(p)) { execPath = p; break; }
+  }
+  report.system.resolvedExecutable = execPath;
+  if (execPath) {
+    try { report.system.chromeVersion = execSync(`"${execPath}" --version 2>&1`, { encoding: 'utf8', timeout: 15000 }).trim(); }
+    catch (e) { report.system.chromeVersion = `FAILED: ${(e.stdout || '') + (e.stderr || '') || e.message}`; }
+  }
+  try { report.system.memCgroupMax = fs.readFileSync('/sys/fs/cgroup/memory.max', 'utf8').trim(); } catch (e) {}
+  try { report.system.memAvailable = (fs.readFileSync('/proc/meminfo', 'utf8').match(/MemAvailable:\s*(\d+ kB)/) || [])[1]; } catch (e) {}
+  report.system.uid = process.getuid ? process.getuid() : null;
+
+  const variants = [
+    { name: 'minimal', opts: { headless: 'new', args: ['--no-sandbox', '--disable-dev-shm-usage'] } },
+    { name: 'container-set', opts: { headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--no-zygote'] } },
+    { name: 'old-headless', opts: { headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] } },
+  ];
+
+  for (const v of variants) {
+    const entry = { name: v.name };
+    try {
+      const opts = { ...v.opts, timeout: 30000 };
+      if (execPath) opts.executablePath = execPath;
+      const browser = await puppeteer.launch(opts);
+      const version = await browser.version();
+      await browser.close();
+      entry.ok = true;
+      entry.version = version;
+    } catch (e) {
+      entry.ok = false;
+      entry.error = String(e.message).slice(0, 3000);
+    }
+    report.variants.push(entry);
+    if (entry.ok) break; // first success is enough
+  }
+
+  res.json(report);
+});
+
 // Spread generation routes
 app.use('/api', spreadRoutes);
 
