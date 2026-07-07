@@ -10,7 +10,7 @@
 
 const {
   inToPx, ptToPx, escapeHtml, photoDataUri,
-  isPlaceholder, pickCaption, splitQuoteIntoLines,
+  isPlaceholder, pickCaption, splitQuoteIntoLines, wrapToLines, dedupCaption,
 } = require('./utils');
 
 function renderCrossGutterMosaic(pageContent, photos, options = {}) {
@@ -33,20 +33,30 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   const attrQuote = quotes[0] || null;
   const overlayQuote = quotes[1] || quotes[0] || null;
 
-  // Photo slots (fallback gracefully)
+  // Photo slots — fixed assignment matching the reference, no photo reuse:
+  // hero=0, mosaic=1-4, small preview=5, minis=6-7. Slots without a photo
+  // simply don't render.
   const heroSrc = photoDataUri(photos[0]);
   const mosaicSrcs = [1, 2, 3, 4].map(i => photoDataUri(photos[i]));
-  const miniSrcs = [5, 6].map(i => photoDataUri(photos[i]));
-  const smallPreviewIdx = Math.min(photos.length - 1, 7);
-  const smallSrc = photos.length > 1 ? photoDataUri(photos[smallPreviewIdx]) : '';
+  const smallPreviewIdx = 5;
+  const smallSrc = photoDataUri(photos[smallPreviewIdx]);
+  const miniSrcs = [6, 7].map(i => photoDataUri(photos[i]));
 
-  const smallCap = pickCaption(pageContent.photoCaptions, smallPreviewIdx);
-  const mosaicCaps = [1, 2, 3, 4].map(i => pickCaption(pageContent.photoCaptions, i));
-  const miniCaps = [5, 6].map(i => pickCaption(pageContent.photoCaptions, i));
+  const smallCap = dedupCaption(pickCaption(pageContent.photoCaptions, smallPreviewIdx));
+  const miniCaps = [6, 7].map(i => dedupCaption(pickCaption(pageContent.photoCaptions, i)));
 
-  // Featured moments block content
-  const featuredHeadline = escapeHtml(pageContent.headline || pageContent.section || 'THE MOMENTS');
-  const featuredTagline = escapeHtml(pageContent.subheadline || pageContent.record || '');
+  // Featured moments block: black serif headline (2nd word italic, matching
+  // the reference's "THE *BEST* MOMENTS") + tagline split across purple bars.
+  const featuredHeadlineRaw = (pageContent.headline || pageContent.section || 'The Moments').toUpperCase();
+  const headlineWords = featuredHeadlineRaw.split(/\s+/);
+  const featuredHeadlineHtml = headlineWords
+    .map((w, i) => (i === 1 && headlineWords.length >= 3)
+      ? `<span class="accent">${escapeHtml(w)}</span>`
+      : escapeHtml(w))
+    .join(' ');
+  const firstHighlight = ((pageContent.highlights || []).find(h => h && !h.includes('['))) || '';
+  const taglineRaw = pageContent.subheadline || pageContent.record || firstHighlight;
+  const taglineLines = taglineRaw ? wrapToLines(taglineRaw, 2.3, 10) : [];
 
   // Split overlay quote into fitted lines (bar is 3.8" wide, minus padding)
   const quoteFontPt = 12;
@@ -199,12 +209,14 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
     opacity: 0.95;
   }
   .quote-overlay .quote-attr {
+    display: inline-block;
     color: white;
+    background: rgba(26, 26, 26, 0.75);
     font-family: 'Playfair Display', serif;
     font-style: italic;
     font-size: ${pt(10)};
-    padding-left: ${px(0.16)};
-    margin-top: ${px(0.08)};
+    padding: ${px(0.03)} ${px(0.1)};
+    margin-top: ${px(0.04)};
   }
 
   /* 2x2 photo mosaic top-right */
@@ -221,7 +233,7 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   .mosaic-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .mosaic-cell .num-badge {
     position: absolute;
-    right: ${px(0.08)}; bottom: ${px(0.08)};
+    left: ${px(0.08)}; bottom: ${px(0.08)};
     color: white;
     font-family: 'Source Sans Pro', sans-serif;
     font-weight: 700;
@@ -230,64 +242,67 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
     background: rgba(0, 0, 0, 0.55);
   }
 
-  /* Featured moments title block (2 stacked purple bars) */
+  /* Featured moments title block: black serif headline + purple tagline bars */
   .featured {
     position: absolute;
-    left: ${px(13.2)}; top: ${px(5.9)};
+    left: ${px(13.2)}; top: ${px(5.85)};
     width: ${px(2.55)};
   }
-  .featured .headline-bar {
-    display: block;
-    background: ${PURPLE};
-    color: white;
+  .featured .headline-black {
     font-family: 'Playfair Display', serif;
-    font-weight: 700;
-    font-size: ${pt(13)};
-    padding: ${px(0.09)} ${px(0.14)};
-    text-transform: uppercase;
-    margin-bottom: ${px(0.05)};
-    letter-spacing: 0.02em;
-  }
-  .featured .headline-bar .accent {
-    font-family: 'Playfair Display', serif;
-    font-style: italic;
     font-weight: 900;
+    font-size: ${pt(15)};
+    color: ${DARK};
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    line-height: 1.1;
+    margin-bottom: ${px(0.07)};
+  }
+  .featured .headline-black .accent {
+    font-style: italic;
+    font-weight: 700;
   }
   .featured .tagline-bar {
-    display: block;
+    display: inline-block;
     background: ${PURPLE};
     color: white;
     font-family: 'Source Sans Pro', sans-serif;
     font-weight: 700;
     font-size: ${pt(10)};
-    padding: ${px(0.07)} ${px(0.14)};
+    padding: ${px(0.05)} ${px(0.1)};
     text-transform: uppercase;
     letter-spacing: 0.03em;
+    margin-bottom: ${px(0.04)};
+    white-space: nowrap;
   }
 
-  /* Bottom-right vertical mini stack (2 small photos with left-side captions) */
+  /* Bottom-right vertical mini stack (photo left, caption right — matching
+     the reference's alternating photo/caption arrangement) */
   .mini-1, .mini-2 {
     position: absolute;
     width: ${px(2.55)};
     display: flex;
-    gap: ${px(0.1)};
+    gap: ${px(0.12)};
   }
-  .mini-1 { left: ${px(13.2)}; top: ${px(7.5)}; height: ${px(1.4)}; }
-  .mini-2 { left: ${px(13.2)}; top: ${px(9.05)}; height: ${px(1.2)}; }
-  .mini-1 .cap, .mini-2 .cap {
-    width: ${px(0.75)};
-    font-family: 'Source Sans Pro', sans-serif;
-    font-size: ${pt(7.5)};
-    line-height: 1.3;
-    color: ${DARK};
-    overflow: hidden;
-  }
-  .mini-1 .cap .name, .mini-2 .cap .name { font-weight: 700; display: block; }
+  .mini-1 { left: ${px(13.2)}; top: ${px(7.45)}; height: ${px(1.45)}; }
+  .mini-2 { left: ${px(13.2)}; top: ${px(9.1)}; height: ${px(1.25)}; }
   .mini-1 img, .mini-2 img {
-    flex: 1;
+    width: ${px(1.5)};
+    height: 100%;
     object-fit: cover;
     display: block;
+    flex: none;
   }
+  .mini-1 .cap, .mini-2 .cap {
+    flex: 1;
+    font-family: 'Source Sans Pro', sans-serif;
+    font-size: ${pt(7.5)};
+    line-height: 1.35;
+    color: ${DARK};
+    overflow: hidden;
+    overflow-wrap: break-word;
+  }
+  .mini-1 .cap .name, .mini-2 .cap .name { font-weight: 700; }
 </style>
 </head>
 <body>
@@ -306,9 +321,9 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   </div>` : ''}
 
   ${smallSrc ? `<img class="small-photo" src="${smallSrc}" alt="">` : ''}
-  ${smallCap && (smallCap.title || smallCap.body || smallCap.people) ? `
+  ${smallCap && (smallCap.lead || smallCap.body) ? `
   <div class="small-caption">
-    ${smallCap.title ? `<span class="cap-title">${escapeHtml(smallCap.title.toUpperCase())}</span> ` : ''}${escapeHtml([smallCap.people, smallCap.body].filter(Boolean).join(' '))}
+    ${smallCap.lead ? `<span class="cap-title">${escapeHtml(smallCap.lead.toUpperCase())}</span> ` : ''}${escapeHtml(smallCap.body)}
   </div>` : ''}
 
   <!-- ============ CENTER HERO ============ -->
@@ -339,25 +354,23 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   <!-- ============ FEATURED MOMENTS TITLE ============ -->
 
   <div class="featured">
-    <span class="headline-bar">${featuredHeadline}</span>
-    ${featuredTagline ? `<span class="tagline-bar">${featuredTagline}</span>` : ''}
+    <div class="headline-black">${featuredHeadlineHtml}</div>
+    ${taglineLines.map(l => `<span class="tagline-bar">${escapeHtml(l)}</span>`).join('\n')}
   </div>
 
   <!-- ============ RIGHT-COLUMN MINI STACK ============ -->
 
   <div class="mini-1">
-    <div class="cap">
-      ${miniCaps[0] && miniCaps[0].people ? `<span class="name">${escapeHtml(miniCaps[0].people)}</span>` : ''}
-      ${miniCaps[0] && miniCaps[0].body ? escapeHtml(miniCaps[0].body) : ''}
-    </div>
     ${miniSrcs[0] ? `<img src="${miniSrcs[0]}" alt="">` : ''}
+    <div class="cap">
+      ${miniCaps[0] && miniCaps[0].lead ? `<span class="name">${escapeHtml(miniCaps[0].lead)}</span> ` : ''}${miniCaps[0] && miniCaps[0].body ? escapeHtml(miniCaps[0].body) : ''}
+    </div>
   </div>
   <div class="mini-2">
-    <div class="cap">
-      ${miniCaps[1] && miniCaps[1].people ? `<span class="name">${escapeHtml(miniCaps[1].people)}</span>` : ''}
-      ${miniCaps[1] && miniCaps[1].body ? escapeHtml(miniCaps[1].body) : ''}
-    </div>
     ${miniSrcs[1] ? `<img src="${miniSrcs[1]}" alt="">` : ''}
+    <div class="cap">
+      ${miniCaps[1] && miniCaps[1].lead ? `<span class="name">${escapeHtml(miniCaps[1].lead)}</span> ` : ''}${miniCaps[1] && miniCaps[1].body ? escapeHtml(miniCaps[1].body) : ''}
+    </div>
   </div>
 
 </div>
