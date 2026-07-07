@@ -1,6 +1,34 @@
+const fs = require('fs');
 const puppeteer = require('puppeteer');
 const { PAGE } = require('../utils/constants');
 const { logError, logInfo } = require('./errorLogger');
+
+// Resolve a usable Chromium binary. PUPPETEER_EXECUTABLE_PATH may point at a
+// path that doesn't exist (e.g. the literal '/nix/store/chromium/bin/chromium'
+// from nixpacks.toml) — in that case fall back to well-known system locations,
+// and finally to Puppeteer's own bundled browser.
+function resolveExecutablePath() {
+  const candidates = [
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+  ].filter(Boolean);
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return p;
+    } catch (e) { /* keep looking */ }
+  }
+  // Nix-style installs put chromium on PATH at a hashed store path.
+  try {
+    const found = require('child_process')
+      .execSync('command -v chromium || command -v chromium-browser', { encoding: 'utf8' })
+      .trim();
+    if (found) return found;
+  } catch (e) { /* not on PATH */ }
+  return null; // let Puppeteer use its bundled browser
+}
 
 // ============================================================================
 // CONCURRENCY QUEUE
@@ -115,6 +143,10 @@ async function doExport(html, format, pageType, options) {
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
+      '--no-zygote',
+      '--disable-crashpad',
+      '--disable-breakpad',
+      '--disable-crash-reporter',
       '--font-render-hinting=none',
       '--disable-extensions',
       '--disable-background-networking',
@@ -126,14 +158,36 @@ async function doExport(html, format, pageType, options) {
       '--safebrowsing-disable-auto-update',
       `--js-flags=--max-old-space-size=${memoryMb}`,
     ],
+    // Containers have no dbus; pointing the bus at /dev/null stops Chromium
+    // from trying (and failing) to connect. HOME/XDG dirs must be writable
+    // for crashpad/prefs even when disabled.
+    env: {
+      ...process.env,
+      DBUS_SESSION_BUS_ADDRESS: 'unix:path=/dev/null',
+      HOME: process.env.HOME || '/tmp',
+      XDG_CONFIG_HOME: '/tmp/.chromium-config',
+      XDG_CACHE_HOME: '/tmp/.chromium-cache',
+    },
   };
 
-  // Use system Chromium on Railway/Docker if available
-  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-    launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  const execPath = resolveExecutablePath();
+  if (execPath) {
+    launchOptions.executablePath = execPath;
   }
+  logInfo(`Puppeteer launch: executablePath=${execPath || '(bundled)'}`);
 
-  const browser = await puppeteer.launch(launchOptions);
+  let browser;
+  try {
+    browser = await puppeteer.launch(launchOptions);
+  } catch (launchErr) {
+    // Retry once with --single-process — slower but survives the most
+    // restrictive container environments.
+    logError('Puppeteer launch failed, retrying with --single-process', launchErr);
+    browser = await puppeteer.launch({
+      ...launchOptions,
+      args: [...launchOptions.args, '--single-process'],
+    });
+  }
 
   try {
     const page = await browser.newPage();

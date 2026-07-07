@@ -9,4 +9,5 @@ cmd = 'node src/server.js'
 
 [variables]
 PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = 'true'
-PUPPETEER_EXECUTABLE_PATH = '/nix/store/chromium/bin/chromium'
+# No PUPPETEER_EXECUTABLE_PATH here — nix store paths are hashed, so a literal
+# path is always wrong. exporter.js resolves chromium from PATH at runtime.
