@@ -133,6 +133,8 @@ ${BRAND.fontLink}
   }
   .title-box .title-text {
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-weight: 900;
     font-size: ${pt(26)};
     line-height: 1.05;
@@ -146,7 +148,7 @@ ${BRAND.fontLink}
     position: absolute;
     left: ${px(0.5)}; top: ${px(2.0)};
     width: ${px(2.5)}; height: ${px(4.5)};
-    font-family: 'Bodoni Moda', serif;
+    font-family: ${BRAND.body};
     font-size: ${pt(10)};
     line-height: 1.42;
     color: ${DARK};
@@ -161,6 +163,8 @@ ${BRAND.fontLink}
     left: ${px(0.5)}; top: ${px(6.75)};
     width: ${px(2.5)}; height: ${px(1.0)};
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-style: italic;
     font-size: ${pt(9.5)};
     line-height: 1.35;
@@ -168,6 +172,8 @@ ${BRAND.fontLink}
   }
   .attr-quote .attr-name {
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-style: italic;
     font-size: ${pt(8.5)};
     color: ${MUTED};
@@ -188,7 +194,7 @@ ${BRAND.fontLink}
     position: absolute;
     left: ${px(0.5)}; top: ${px(9.85)};
     width: ${px(2.5)}; height: ${px(0.55)};
-    font-family: 'Bodoni Moda', serif;
+    font-family: ${BRAND.body};
     font-size: ${pt(7.5)};
     line-height: 1.3;
     color: ${DARK};
@@ -214,7 +220,7 @@ ${BRAND.fontLink}
     position: absolute;
     left: ${px(3.25)}; top: ${px(9.9)};
     color: white;
-    font-family: 'Bodoni Moda', serif;
+    font-family: ${BRAND.body};
     font-size: ${pt(10)};
     font-weight: 700;
     padding: ${px(0.03)} ${px(0.09)};
@@ -233,7 +239,7 @@ ${BRAND.fontLink}
     display: block;
     background: ${PURPLE};
     color: white;
-    font-family: 'Bodoni Moda', serif;
+    font-family: ${BRAND.body};
     font-weight: 700;
     font-size: ${pt(quoteFontPt)};
     text-transform: uppercase;
@@ -249,6 +255,8 @@ ${BRAND.fontLink}
     color: white;
     background: rgba(26, 26, 26, 0.75);
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-style: italic;
     font-size: ${pt(10)};
     padding: ${px(0.03)} ${px(0.1)};
@@ -271,7 +279,7 @@ ${BRAND.fontLink}
     position: absolute;
     left: ${px(0.08)}; bottom: ${px(0.08)};
     color: white;
-    font-family: 'Bodoni Moda', serif;
+    font-family: ${BRAND.body};
     font-weight: 700;
     font-size: ${pt(9)};
     padding: 0 ${px(0.06)};
@@ -283,7 +291,7 @@ ${BRAND.fontLink}
     position: absolute;
     left: ${px(10.0)}; top: ${px(5.52)};
     width: ${px(5.5)}; height: ${px(0.75)};
-    font-family: 'Bodoni Moda', serif;
+    font-family: ${BRAND.body};
     font-size: ${pt(7.5)};
     line-height: 1.35;
     color: ${DARK};
@@ -306,6 +314,8 @@ ${BRAND.fontLink}
   }
   .featured .headline-black {
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-weight: 900;
     font-size: ${pt(15)};
     color: ${DARK};
@@ -322,7 +332,7 @@ ${BRAND.fontLink}
     display: inline-block;
     background: ${PURPLE};
     color: white;
-    font-family: 'Bodoni Moda', serif;
+    font-family: ${BRAND.body};
     font-weight: 700;
     font-size: ${pt(10)};
     padding: ${px(0.05)} ${px(0.1)};
@@ -351,7 +361,7 @@ ${BRAND.fontLink}
   }
   .mini-1 .cap, .mini-2 .cap {
     flex: 1;
-    font-family: 'Bodoni Moda', serif;
+    font-family: ${BRAND.body};
     font-size: ${pt(7.5)};
     line-height: 1.35;
     color: ${DARK};

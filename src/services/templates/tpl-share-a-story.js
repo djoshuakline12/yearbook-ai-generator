@@ -128,8 +128,12 @@ function renderShareAStory(pageContent, photos, options = {}) {
     railPhotoTop = 0.4 + railBarsH + 0.35;
     railPhotoH = Math.max(1.2, railContentBottom - railPhotoTop);
   }
-  // Right pair: taller when there are no captions to show beneath them.
-  const rightPairH = rightCaps ? 2.2 : 3.55;
+  // Right page photos fill the full column height down to the band. Hero (4)
+  // top, pair (5,6) below, captions, ending just above the talking-heads band.
+  const rightBigH = 4.0;
+  const rightPairY = 0.4 + rightBigH + 0.15;
+  const rightCapsY = rightCaps ? 7.55 : 7.85;
+  const rightPairH = (rightCaps ? rightCapsY - 0.15 : 7.85) - rightPairY;
   // Bottom band: quotes first, then caption-based photo mods (photos 7-9),
   // distributed edge-to-edge across the band (stops before the rail) so the
   // bottom of the spread is always full.
@@ -183,6 +187,8 @@ ${BRAND.fontLink}
     left: ${px(0.75)}; top: ${px(titleY)};
     width: ${px(6.6)};
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-weight: 900;
     font-size: ${pt(26)};
     line-height: 1.05;
@@ -260,6 +266,8 @@ ${BRAND.fontLink}
     position: absolute;
     left: ${px(0.75)}; top: ${px(8.05)};
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-weight: 900;
     font-size: ${pt(14)};
     color: ${DARK};
@@ -281,8 +289,8 @@ ${BRAND.fontLink}
   }
   .head-mod {
     position: absolute;
-    top: ${px(8.6)};
-    width: ${px(headModW)}; height: ${px(1.7)};
+    top: ${px(8.5)};
+    width: ${px(headModW)}; height: ${px(1.95)};
     display: flex;
     gap: ${px(0.12)};
   }
@@ -302,6 +310,8 @@ ${BRAND.fontLink}
     display: block;
     margin-top: ${px(0.04)};
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-style: italic;
     font-size: ${pt(7.5)};
     color: ${PURPLE};
@@ -311,12 +321,12 @@ ${BRAND.fontLink}
   .right-big {
     position: absolute;
     left: ${px(8.2)}; top: ${px(0.4)};
-    width: ${px(4.55)}; height: ${px(3.3)};
+    width: ${px(4.55)}; height: ${px(rightBigH)};
     object-fit: cover;
   }
   .right-pair-1, .right-pair-2 {
     position: absolute;
-    top: ${px(3.84)};
+    top: ${px(rightPairY)};
     width: ${px(2.21)}; height: ${px(rightPairH)};
     object-fit: cover;
   }
@@ -324,8 +334,8 @@ ${BRAND.fontLink}
   .right-pair-2 { left: ${px(10.54)}; }
   .right-caps {
     position: absolute;
-    left: ${px(8.2)}; top: ${px(6.2)};
-    width: ${px(4.55)}; height: ${px(1.4)};
+    left: ${px(8.2)}; top: ${px(rightCapsY)};
+    width: ${px(4.55)}; height: ${px(0.7)};
     font-size: ${pt(7.5)};
     line-height: 1.35;
     color: ${DARK};
@@ -356,6 +366,8 @@ ${BRAND.fontLink}
   }
   .rail-quote .quote-attr {
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-style: italic;
     font-size: ${pt(9)};
     color: ${DARK};
@@ -374,6 +386,8 @@ ${BRAND.fontLink}
   }
   .rail-highlights .hl-header {
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-weight: 900;
     font-size: ${pt(11)};
     color: ${DARK};
@@ -435,10 +449,10 @@ ${BRAND.fontLink}
   }).join('\n')}
 
   <!-- RIGHT PAGE PHOTOS -->
-  ${rightBigSrc ? `<img class="right-big" src="${rightBigSrc}" alt=""><span class="num-badge" style="left:${px(8.28)};top:${px(3.38)}">4</span>` : ''}
-  ${rightPairSrcs[0] ? `<img class="right-pair-1" src="${rightPairSrcs[0]}" alt=""><span class="num-badge" style="left:${px(8.28)};top:${px(3.84 + rightPairH - 0.32)}">5</span>` : ''}
-  ${rightPairSrcs[1] ? `<img class="right-pair-2" src="${rightPairSrcs[1]}" alt=""><span class="num-badge" style="left:${px(10.62)};top:${px(3.84 + rightPairH - 0.32)}">6</span>` : ''}
-  ${rightCaps ? `<div class="right-caps" style="top:${px(3.84 + rightPairH + 0.15)}">${rightCaps}</div>` : ''}
+  ${rightBigSrc ? `<img class="right-big" src="${rightBigSrc}" alt=""><span class="num-badge" style="left:${px(8.28)};top:${px(0.4 + rightBigH - 0.32)}">4</span>` : ''}
+  ${rightPairSrcs[0] ? `<img class="right-pair-1" src="${rightPairSrcs[0]}" alt=""><span class="num-badge" style="left:${px(8.28)};top:${px(rightPairY + rightPairH - 0.32)}">5</span>` : ''}
+  ${rightPairSrcs[1] ? `<img class="right-pair-2" src="${rightPairSrcs[1]}" alt=""><span class="num-badge" style="left:${px(10.62)};top:${px(rightPairY + rightPairH - 0.32)}">6</span>` : ''}
+  ${rightCaps ? `<div class="right-caps">${rightCaps}</div>` : ''}
 
   <!-- RIGHT RAIL -->
   ${railQuoteLines.length > 0 ? `

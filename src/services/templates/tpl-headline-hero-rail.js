@@ -124,6 +124,8 @@ ${BRAND.fontLink}
     left: ${px(0.75)}; top: ${px(0.5)};
     width: ${px(5.5)};
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-weight: 900;
     font-size: ${pt(26)};
     line-height: 1.08;
@@ -176,6 +178,8 @@ ${BRAND.fontLink}
   }
   .pull-quote .quote-attr {
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-style: italic;
     font-size: ${pt(9)};
     color: ${DARK};
@@ -240,6 +244,8 @@ ${BRAND.fontLink}
     left: ${px(12.4)}; top: ${px(0.4)};
     width: ${px(3.1)};
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-weight: 900;
     font-size: ${pt(12)};
     line-height: 1.2;
@@ -267,6 +273,8 @@ ${BRAND.fontLink}
     display: block;
     margin-top: ${px(0.03)};
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-style: italic;
     font-size: ${pt(7)};
     color: ${PURPLE};

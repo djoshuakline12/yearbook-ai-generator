@@ -155,6 +155,8 @@ ${BRAND.fontLink}
     display: block;
     margin-top: ${px(0.03)};
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-style: italic;
     font-size: ${pt(7)};
     color: ${PURPLE};
@@ -180,6 +182,8 @@ ${BRAND.fontLink}
     left: ${px(2.8)}; top: ${px(0.75)};
     width: ${px(4.7)};
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-weight: 900;
     font-size: ${pt(24)};
     line-height: 1.08;
@@ -292,6 +296,8 @@ ${BRAND.fontLink}
     color: white;
     background: rgba(26,26,26,0.75);
     font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
     font-style: italic;
     font-size: ${pt(9.5)};
     padding: ${px(0.03)} ${px(0.1)};
