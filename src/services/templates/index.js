@@ -5,9 +5,11 @@
 // routes to the matching renderer instead of the algorithmic path.
 
 const { renderCrossGutterMosaic } = require('./tpl-cross-gutter-mosaic');
+const { renderMainHeadlineBleed } = require('./tpl-main-headline-bleed');
 
 const TEMPLATES = {
   'cross-gutter-mosaic': renderCrossGutterMosaic,
+  'sidebar-mods-bleed': renderMainHeadlineBleed,
 };
 
 function hasHandTemplate(styleId) {

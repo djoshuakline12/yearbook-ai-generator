@@ -293,7 +293,14 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
       } else if (layoutParams.layoutStyle === 'hero-dominant-sidebar') {
         buildHeroDominantSidebarLayout(elements, photos, pageContent, bounds, layoutParams);
       } else if (layoutParams.layoutStyle === 'sidebar-mods-bleed') {
-        buildSidebarModsBleedLayout(elements, photos, pageContent, bounds, layoutParams);
+        // Hand-crafted template — bypass algorithmic layout entirely.
+        return {
+          isHandTemplate: true,
+          templateId: 'sidebar-mods-bleed',
+          pageContent,
+          pageType,
+          background: theme && theme.background ? theme.background : null,
+        };
       } else if (layoutParams.layoutStyle === 'cross-gutter-mosaic') {
         // Hand-crafted template — bypass algorithmic layout entirely.
         return {
