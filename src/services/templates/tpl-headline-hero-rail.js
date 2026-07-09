@@ -14,7 +14,7 @@ const {
   BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri,
   isPlaceholder, pickCaption, splitQuoteIntoLines, dedupCaption,
-  estimateTextHeightIn,
+  estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderHeadlineHeroRail(pageContent, photos, options = {}) {
@@ -31,11 +31,13 @@ function renderHeadlineHeroRail(pageContent, photos, options = {}) {
   const pt = (n) => `${ptToPx(n, dpi)}px`;
 
   // ---- Photo slots ----
-  // hero=0, under-hero wide=1, rail heads=2,3,4, left insets=5,6
+  // hero=0, under-hero wide=1, rail heads=2,3,4, left insets=5,6,
+  // quote-column filler=7
   const heroSrc = photoDataUri(photos[0]);
   const underSrc = photoDataUri(photos[1]);
   const railSrcs = [2, 3, 4].map(i => photoDataUri(photos[i]));
   const insetSrcs = [5, 6].map(i => photoDataUri(photos[i]));
+  const quoteColSrc = photoDataUri(photos[7]);
 
   // ---- Text ----
   const titleRaw = (pageContent.pageTitle || pageContent.section || '');
@@ -82,7 +84,7 @@ function renderHeadlineHeroRail(pageContent, photos, options = {}) {
   // Title height drives the left column flow. The pull-quote/inset row
   // starts right below the measured body copy — no fixed-position gap.
   const titleCharsPerLine = 16; // ~26pt serif in 5.5in
-  const titleLineCount = Math.max(1, Math.ceil(titleRaw.length / titleCharsPerLine));
+  const titleLineCount = wrapLineCount(titleRaw, titleCharsPerLine) || 1;
   const modBarY = 0.5 + titleLineCount * 0.42 + 0.1;
   const bodyY = modBarText ? modBarY + 0.42 : modBarY + 0.08;
   const bodyEstH = estimateTextHeightIn(pageContent.bodyCopy, 2.62, 9, { columns: 2 });
@@ -95,6 +97,16 @@ function renderHeadlineHeroRail(pageContent, photos, options = {}) {
   // bit1 swaps the pull-quote column and the inset-photo column.
   const pullX = flipQuote ? 0.75 : 3.5;
   const insetX = flipQuote ? 3.5 : 0.75;
+  // The quote column fills below its bars with a photo (or the inset-2
+  // caption) so it never runs empty to the page bottom.
+  const pullBarsH = pullQuoteLines.length * 0.34 + (pullQuote && pullQuote.attribution ? 0.35 : 0.1);
+  const quoteColPhotoY = rowY + pullBarsH + 0.2;
+  const quoteColPhotoH = Math.max(0, 10.05 - quoteColPhotoY);
+  const showQuoteColPhoto = quoteColSrc && quoteColPhotoH >= 1.2;
+  // Under-hero photo spans the full hero width when there are no captions
+  // to fill the column beside it.
+  const underX = heroCaps ? 8.25 : 6.6;
+  const underW = 12.0 - underX;
   // Rail mods: quotes first, then caption fallbacks so the rail fills.
   const railMods = [];
   for (let i = 0; i < 3; i++) {
@@ -203,6 +215,13 @@ ${BRAND.fontLink}
     color: ${DARK};
   }
 
+  .quote-col-photo {
+    position: absolute;
+    left: ${px(pullX)}; top: ${px(quoteColPhotoY)};
+    width: ${px(2.75)}; height: ${px(quoteColPhotoH)};
+    object-fit: cover;
+  }
+
   /* CENTER HERO */
   .hero {
     position: absolute;
@@ -223,8 +242,8 @@ ${BRAND.fontLink}
   .gcap b { font-weight: 700; }
   .under-hero {
     position: absolute;
-    left: ${px(8.25)}; top: ${px(6.85)};
-    width: ${px(3.75)}; height: ${px(3.3)};
+    left: ${px(underX)}; top: ${px(6.85)};
+    width: ${px(underW)}; height: ${px(3.3)};
     object-fit: cover;
     ${bwFilter}
   }
@@ -298,10 +317,12 @@ ${BRAND.fontLink}
   ${insetSrcs[1] ? `<img class="inset-2" src="${insetSrcs[1]}" alt="">` : ''}
   ${insetSrcs[1] && capText(6) ? `<div class="inset-2-cap">${escapeHtml(capText(6))}</div>` : ''}
 
+  ${showQuoteColPhoto ? `<img class="quote-col-photo" src="${quoteColSrc}" alt="">` : ''}
+
   <!-- CENTER HERO -->
   ${heroSrc ? `<img class="hero" src="${heroSrc}" alt=""><span class="num-badge" style="left:${px(6.68)};top:${px(6.38)}">1</span>` : ''}
   ${heroCaps ? `<div class="hero-caps">${heroCaps}</div>` : ''}
-  ${underSrc ? `<img class="under-hero" src="${underSrc}" alt=""><span class="num-badge" style="left:${px(8.33)};top:${px(9.83)}">2</span>` : ''}
+  ${underSrc ? `<img class="under-hero" src="${underSrc}" alt=""><span class="num-badge" style="left:${px(underX + 0.08)};top:${px(9.83)}">2</span>` : ''}
 
   <!-- RIGHT RAIL -->
   <div class="rail-header">${escapeHtml(railHeader)}</div>

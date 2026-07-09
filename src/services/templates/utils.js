@@ -163,6 +163,22 @@ function dedupCaption(cap) {
   return { lead, body: body || '' };
 }
 
+// Exact line count for a greedy word-wrap at a given chars-per-line budget.
+// Char-count estimates undercount when long words force early breaks
+// ("CONSTRUCTING CHAMPIONS AT THE PLATE" wraps to 4 lines, not 3).
+function wrapLineCount(text, charsPerLine) {
+  const words = (text || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return 0;
+  let lines = 1;
+  let cur = 0;
+  for (const w of words) {
+    if (cur === 0) cur = w.length;
+    else if (cur + 1 + w.length <= charsPerLine) cur += 1 + w.length;
+    else { lines++; cur = w.length; }
+  }
+  return lines;
+}
+
 // Estimate rendered height (inches) of body text at a given column width,
 // font size, and column count. Used to position blocks below text without
 // leaving a fixed-layout gap when the text is short.
@@ -185,5 +201,5 @@ module.exports = {
   inToPx, ptToPx, escapeHtml, photoDataUri,
   cleanCaption, isPlaceholder, pickCaption,
   splitQuoteIntoLines, wrapToLines, dedupCaption,
-  estimateTextHeightIn,
+  estimateTextHeightIn, wrapLineCount,
 };

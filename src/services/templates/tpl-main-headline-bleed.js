@@ -16,6 +16,7 @@ const {
   BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri,
   isPlaceholder, pickCaption, splitQuoteIntoLines, wrapToLines, dedupCaption,
+  wrapLineCount,
 } = require('./utils');
 
 function renderMainHeadlineBleed(pageContent, photos, options = {}) {
@@ -107,10 +108,17 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
   const leftBH = 2.1;
   // headline
   const titleY = (leftBSrc ? leftBY + leftBH : (leftASrc ? leftBY : 0.4)) + 0.3;
-  const titleCharsPerLine = 9; // ~30pt serif in 2.7in
-  const titleLineCount = Math.max(1, Math.ceil(titleRaw.length / titleCharsPerLine));
-  const modBarY = titleY + titleLineCount * 0.48 + 0.12;
-  const bodyY = modBarText ? modBarY + 0.42 : modBarY + 0.05;
+  // Title font shrinks so the longest word always fits the 2.7in column
+  // (Bodoni ~(120/pt - 0.4) chars per inch, with margin). Floor at 20pt.
+  const longestWord = titleRaw.split(/\s+/).reduce((a, w) => Math.max(a, w.length), 1);
+  const titleFontPt = Math.max(20, Math.min(30, Math.floor(120 / (longestWord / 2.7 + 0.4))));
+  const titleCharsPerLine = Math.max(6, Math.floor(2.7 * (120 / titleFontPt - 0.4)));
+  const titleLineCount = wrapLineCount(titleRaw, titleCharsPerLine) || 1;
+  const titleLineIn = titleFontPt * 1.15 / 72;
+  const modBarY = titleY + titleLineCount * titleLineIn + 0.12;
+  // Mod bar can wrap — count its lines exactly so the body never overlaps.
+  const modBarLines = modBarText ? wrapLineCount(modBarText, 27) : 0;
+  const bodyY = modBarText ? modBarY + modBarLines * 0.24 + 0.18 : modBarY + 0.05;
   // Reserve the bottom of the column for the filler quote when one exists.
   const fillerH = fillerQuote ? 1.15 : 0;
   const bodyH = Math.max(1.0, 10.1 - bodyY - fillerH);
@@ -172,7 +180,7 @@ ${BRAND.fontLink}
     font-optical-sizing: none;
     font-variation-settings: 'opsz' 9;
     font-weight: 900;
-    font-size: ${pt(30)};
+    font-size: ${pt(titleFontPt)};
     line-height: 1.08;
     color: ${DARK};
     letter-spacing: 0.01em;

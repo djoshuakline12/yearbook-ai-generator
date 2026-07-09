@@ -18,7 +18,7 @@ const {
   BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri,
   isPlaceholder, pickCaption, splitQuoteIntoLines, dedupCaption,
-  estimateTextHeightIn,
+  estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderShareAStory(pageContent, photos, options = {}) {
@@ -96,7 +96,7 @@ function renderShareAStory(pageContent, photos, options = {}) {
   // Title block flows: script → title (measured) → subtitle bar → body.
   const titleY = scriptWord ? 0.78 : 0.55;
   const titleCharsPerLine = 28; // ~26pt serif in 6.6in
-  const titleLineCount = Math.max(1, Math.ceil(titleRaw.length / titleCharsPerLine));
+  const titleLineCount = wrapLineCount(titleRaw, titleCharsPerLine) || 1;
   const subtitleY = titleY + titleLineCount * 0.42 + 0.08;
   const bodyY = subtitleText ? subtitleY + 0.42 : subtitleY + 0.08;
   // Left block: photos start right below the measured body copy and stretch

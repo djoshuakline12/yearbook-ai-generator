@@ -16,7 +16,7 @@ const {
   BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri,
   isPlaceholder, pickCaption, splitQuoteIntoLines, dedupCaption,
-  estimateTextHeightIn,
+  estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderModSidebarGroup(pageContent, photos, options = {}) {
@@ -40,8 +40,12 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
   const modSrcs = [5, 6, 7, 8].map(i => photoDataUri(photos[i]));
 
   // ---- Text ----
-  const scriptWord = (pageContent.pageTitleThemeWord || '').trim();
   const titleRaw = (pageContent.pageTitle || pageContent.section || '');
+  // Script accent only when it adds something — never echo the title.
+  const scriptWordRaw = (pageContent.pageTitleThemeWord || '').trim();
+  const scriptWord = (scriptWordRaw
+    && scriptWordRaw.toUpperCase() !== titleRaw.toUpperCase().trim()
+    && !titleRaw.toUpperCase().startsWith(scriptWordRaw.toUpperCase())) ? scriptWordRaw : '';
   const subheadCandidates = [
     pageContent.subheadline,
     pageContent.record,
@@ -100,12 +104,22 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
     }
   }
 
-  // Center column: photos start right below the measured body copy and
-  // stretch down to the caption block.
+  // Center column flows: title (measured) → subhead bar → body → photos.
+  const titleCharsPerLine = 15; // ~24pt serif in 4.7in
+  const titleLineCount = wrapLineCount(titleRaw, titleCharsPerLine) || 1;
+  const subheadY = 0.75 + titleLineCount * 0.4 + 0.1;
+  const centerBodyY = subheadText ? subheadY + 0.42 : subheadY + 0.08;
   const bodyEstH = estimateTextHeightIn(pageContent.bodyCopy, 2.22, 9, { columns: 2 });
-  const centerPhotosY = Math.min(6.0, Math.max(3.4, 2.5 + bodyEstH + 0.25));
+  const centerPhotosY = Math.min(6.0, Math.max(centerBodyY + 0.9, centerBodyY + bodyEstH + 0.25));
   const centerCapsY = 8.9;
   const centerPhotoH = centerCapsY - 0.15 - centerPhotosY;
+
+  // Right page: when the top photos are missing, the group hero grows upward
+  // to fill the page; the stray caption column is dropped with them.
+  const hasRightTop = !!(rightSrcs[0] || rightSrcs[1]);
+  const heroTop = hasRightTop ? 2.85 : 0.4;
+  const heroH = 10.5 - heroTop;
+  const showRightCaps = hasRightTop && rightCaps;
 
   return `<!DOCTYPE html>
 <html>
@@ -191,7 +205,7 @@ ${BRAND.fontLink}
   }
   .subhead-bar {
     position: absolute;
-    left: ${px(2.8)}; top: ${px(1.95)};
+    left: ${px(2.8)}; top: ${px(subheadY)};
     display: inline-block;
     background: ${PURPLE};
     color: white;
@@ -204,8 +218,8 @@ ${BRAND.fontLink}
   }
   .center-body {
     position: absolute;
-    left: ${px(2.8)}; top: ${px(2.5)};
-    width: ${px(4.7)}; height: ${px(centerPhotosY - 2.5 - 0.15)};
+    left: ${px(2.8)}; top: ${px(centerBodyY)};
+    width: ${px(4.7)}; height: ${px(centerPhotosY - centerBodyY - 0.15)};
     font-size: ${pt(9)};
     line-height: 1.45;
     color: ${DARK};
@@ -266,8 +280,8 @@ ${BRAND.fontLink}
   /* GROUP HERO */
   .hero {
     position: absolute;
-    left: ${px(7.95)}; top: ${px(2.85)};
-    width: ${px(8.05)}; height: ${px(7.65)};
+    left: ${px(7.95)}; top: ${px(heroTop)};
+    width: ${px(8.05)}; height: ${px(heroH)};
     object-fit: cover;
     ${bwFilter}
   }
@@ -340,14 +354,14 @@ ${BRAND.fontLink}
   ${centerCaps ? `<div class="center-caps">${centerCaps}</div>` : ''}
 
   <!-- RIGHT TOP -->
-  ${rightCaps ? `<div class="right-caps">${rightCaps}</div>` : ''}
+  ${showRightCaps ? `<div class="right-caps">${rightCaps}</div>` : ''}
   ${rightSrcs[0] ? `<img class="right-1" src="${rightSrcs[0]}" alt=""><span class="num-badge" style="left:${px(9.63)};top:${px(2.28)}">3</span>` : ''}
   ${rightSrcs[1] ? `<img class="right-2" src="${rightSrcs[1]}" alt=""><span class="num-badge" style="left:${px(12.16)};top:${px(2.28)}">4</span>` : ''}
 
   <!-- GROUP HERO -->
   ${heroSrc ? `<img class="hero" src="${heroSrc}" alt=""><span class="num-badge" style="left:${px(8.03)};top:${px(10.1)}">5</span>` : ''}
   ${heroQuoteLines.length > 0 ? `
-  <div class="quote-overlay" style="top:${px(flipQuote ? 3.25 : 10.1 - heroQuoteLines.length * 0.32 - (heroQuote.attribution ? 0.35 : 0.1))}">
+  <div class="quote-overlay" style="top:${px(flipQuote ? 3.25 : 10.05 - heroQuoteLines.length * 0.375 - (heroQuote.attribution ? 0.4 : 0.1))}">
     ${heroQuoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}
     ${heroQuote.attribution && !isPlaceholder(heroQuote.attribution) ? `<div class="quote-attr">—${escapeHtml(heroQuote.attribution)}</div>` : ''}
   </div>` : ''}

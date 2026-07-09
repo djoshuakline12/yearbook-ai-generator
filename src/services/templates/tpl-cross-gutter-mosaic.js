@@ -12,6 +12,7 @@ const {
   BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri,
   isPlaceholder, pickCaption, splitQuoteIntoLines, wrapToLines, dedupCaption,
+  estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderCrossGutterMosaic(pageContent, photos, options = {}) {
@@ -60,7 +61,8 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
 
   // Featured moments block: black serif headline (2nd word italic, matching
   // the reference's "THE *BEST* MOMENTS") + tagline split across purple bars.
-  const featuredHeadlineRaw = (pageContent.headline || pageContent.section || 'The Moments').toUpperCase();
+  let featuredHeadlineRaw = (pageContent.headline || pageContent.section || 'The Best Moments').toUpperCase();
+  if (featuredHeadlineRaw.trim() === (pageContent.pageTitle || '').toUpperCase().trim()) featuredHeadlineRaw = 'THE BEST MOMENTS';
   const headlineWords = featuredHeadlineRaw.split(/\s+/);
   const featuredHeadlineHtml = headlineWords
     .map((w, i) => (i === 1 && headlineWords.length >= 3)
@@ -84,21 +86,34 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   // Vertical layout of the right rail, computed so blocks can never overlap:
   // mosaic ends at 5.4; grouped captions (if any) 5.5-6.25; featured block
   // below that; mini stack below the featured block.
-  const featuredTop = mosaicCapEntries ? 6.4 : 5.85;
+  const featuredTopMin = mosaicCapEntries ? 6.4 : 5.85;
   const headlineCharsPerLine = 19; // ~15pt Playfair in a 2.55in column
-  const headlineLineCount = Math.max(1, Math.ceil(featuredHeadlineRaw.length / headlineCharsPerLine));
+  const headlineLineCount = wrapLineCount(featuredHeadlineRaw, headlineCharsPerLine) || 1;
   const featuredHeight = headlineLineCount * 0.24 + 0.1 + taglineLines.length * 0.29;
-  const mini1Top = Math.max(7.55, featuredTop + featuredHeight + 0.22);
-  const mini1H = 1.35;
-  const mini2Top = mini1Top + mini1H + 0.18;
-  const mini2H = Math.max(0.8, Math.min(1.2, 10.4 - mini2Top));
-  const showMini2 = (10.4 - mini2Top) >= 0.8;
+  // Mini stack bottom-anchors at 10.4; the featured block sits directly
+  // above it so the rail has no floating gaps.
+  const mini2H = 1.2;
+  const mini1H = 1.4;
+  const mini2Top = 10.4 - mini2H;
+  const mini1Top = mini2Top - 0.18 - mini1H;
+  const showMini2 = !!miniSrcs[1];
+  const railAnchor = miniSrcs[0] ? mini1Top : (showMini2 ? mini2Top : 10.4);
+  const featuredTop = Math.max(featuredTopMin, railAnchor - featuredHeight - 0.25);
 
   // Split overlay quote into fitted lines (bar is 3.8" wide, minus padding)
   const quoteFontPt = 12;
   const quoteLines = overlayQuote
     ? splitQuoteIntoLines(overlayQuote.text, 3.5, quoteFontPt)
     : [];
+
+  // Left column flows: body (measured) → attribution quote → small photo
+  // that stretches down to its caption anchor at 9.85.
+  const bodyEstH = estimateTextHeightIn(pageContent.bodyCopy, 2.5, 10, { columns: 1, lineHeight: 1.42 });
+  const bodyH = Math.min(4.6, Math.max(1.2, bodyEstH + 0.1));
+  const attrY = 2.0 + bodyH + 0.3;
+  const attrEstH = attrQuote ? Math.min(1.3, estimateTextHeightIn(attrQuote.text, 2.5, 9.5, { columns: 1, lineHeight: 1.35 }) + 0.35) : 0;
+  const smallY = Math.min(8.15, attrY + attrEstH + 0.3);
+  const smallH = 9.79 - smallY;
 
   // === POSITIONING (all in inches, converted to px for CSS) ===
   const px = (n) => `${inToPx(n, dpi)}px`;
@@ -147,7 +162,7 @@ ${BRAND.fontLink}
   .body-copy {
     position: absolute;
     left: ${px(0.5)}; top: ${px(2.0)};
-    width: ${px(2.5)}; height: ${px(4.5)};
+    width: ${px(2.5)}; height: ${px(bodyH)};
     font-family: ${BRAND.body};
     font-size: ${pt(10)};
     line-height: 1.42;
@@ -160,7 +175,7 @@ ${BRAND.fontLink}
   /* T3 — Italic attribution quote */
   .attr-quote {
     position: absolute;
-    left: ${px(0.5)}; top: ${px(6.75)};
+    left: ${px(0.5)}; top: ${px(attrY)};
     width: ${px(2.5)}; height: ${px(1.0)};
     font-family: 'Bodoni Moda', serif;
     font-optical-sizing: none;
@@ -183,8 +198,8 @@ ${BRAND.fontLink}
   /* P_small — small preview photo bottom-left */
   .small-photo {
     position: absolute;
-    left: ${px(0.5)}; top: ${px(8.15)};
-    width: ${px(2.5)}; height: ${px(1.6)};
+    left: ${px(0.5)}; top: ${px(smallY)};
+    width: ${px(2.5)}; height: ${px(smallH)};
     object-fit: cover;
     object-position: center center;
   }
