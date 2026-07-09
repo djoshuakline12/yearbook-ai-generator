@@ -14,7 +14,7 @@ const {
   BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri,
   isPlaceholder, pickCaption, splitQuoteIntoLines, dedupCaption,
-  estimateTextHeightIn, wrapLineCount,
+  cleanAttribution, estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderHeadlineHeroRail(pageContent, photos, options = {}) {
@@ -31,13 +31,23 @@ function renderHeadlineHeroRail(pageContent, photos, options = {}) {
   const pt = (n) => `${ptToPx(n, dpi)}px`;
 
   // ---- Photo slots ----
-  // hero=0, under-hero wide=1, rail heads=2,3,4, left insets=5,6,
-  // quote-column filler=7
-  const heroSrc = photoDataUri(photos[0]);
-  const underSrc = photoDataUri(photos[1]);
-  const railSrcs = [2, 3, 4].map(i => photoDataUri(photos[i]));
-  const insetSrcs = [5, 6].map(i => photoDataUri(photos[i]));
-  const quoteColSrc = photoDataUri(photos[7]);
+  // Full sessions: hero=0, under-hero wide=1, rail heads=2,3,4, left
+  // insets=5,6, quote-column filler=7.
+  // Sparse sessions route the spare photos to the left-column inset (which
+  // stretches to the page bottom) before the rail, so the left page never
+  // ends in a half-page of white.
+  const N = Array.isArray(photos) ? photos.length : 0;
+  const idx = {};
+  const slotNames = N >= 8
+    ? ['hero', 'under', 'rail0', 'rail1', 'rail2', 'inset1', 'inset2', 'quoteCol']
+    : ['hero', 'inset2', 'under', 'inset1', 'rail0', 'rail1', 'rail2', 'quoteCol'];
+  slotNames.forEach((k, i) => { idx[k] = i < N ? i : -1; });
+  const at = (i) => (i >= 0 ? photoDataUri(photos[i]) : '');
+  const heroSrc = at(idx.hero);
+  const underSrc = at(idx.under);
+  const railSrcs = [at(idx.rail0), at(idx.rail1), at(idx.rail2)];
+  const insetSrcs = [at(idx.inset1), at(idx.inset2)];
+  const quoteColSrc = at(idx.quoteCol);
 
   // ---- Text ----
   const titleRaw = (pageContent.pageTitle || pageContent.section || '');
@@ -75,11 +85,12 @@ function renderHeadlineHeroRail(pageContent, photos, options = {}) {
     const c = dedupCaption(pickCaption(pageContent.photoCaptions, i));
     return c && (c.lead || c.body) ? [c.lead, c.body].filter(Boolean).join(' ') : null;
   };
-  const heroCaps = [0, 1].map((photoIdx, i) => {
+  const heroCaps = [idx.hero, idx.under].map((photoIdx, i) => {
+    if (photoIdx < 0) return null;
     const t = capText(photoIdx);
     return t ? `<span class="gcap"><b>${i + 1}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null;
   }).filter(Boolean).join('\n');
-  const railCapTexts = [2, 3, 4].map(i => capText(i));
+  const railCapTexts = [idx.rail0, idx.rail1, idx.rail2].map(i => (i >= 0 ? capText(i) : null));
 
   // Title height drives the left column flow. The pull-quote/inset row
   // starts right below the measured body copy — no fixed-position gap.
@@ -91,8 +102,17 @@ function renderHeadlineHeroRail(pageContent, photos, options = {}) {
   const bodyH = Math.min(Math.max(1.2, bodyEstH + 0.1), 6.5 - bodyY);
   const rowY = bodyY + bodyH + 0.25;
   const inset1H = Math.min(2.6, (10.05 - rowY - 0.15) * 0.52);
-  const inset2Y = rowY + inset1H + 0.15;
+  // Without an inset-1 photo, inset-2 starts at the row top and takes the
+  // full remaining column height.
+  const inset2Y = insetSrcs[0] ? rowY + inset1H + 0.15 : rowY;
   const inset2H = 10.05 - inset2Y;
+
+  // Hero grows into the under-hero band when that photo is missing; the
+  // caption column becomes a wide band directly beneath it.
+  const heroH = underSrc ? 6.3 : (heroCaps ? 8.5 : 9.65);
+  const heroCapsTop = underSrc ? 6.85 : 0.4 + heroH + 0.2;
+  const heroCapsW = underSrc ? 1.5 : 5.4;
+  const heroCapsH = Math.max(0.4, 10.05 - heroCapsTop);
 
   // bit1 swaps the pull-quote column and the inset-photo column.
   const pullX = flipQuote ? 0.75 : 3.5;
@@ -103,6 +123,9 @@ function renderHeadlineHeroRail(pageContent, photos, options = {}) {
   const quoteColPhotoY = rowY + pullBarsH + 0.2;
   const quoteColPhotoH = Math.max(0, 10.05 - quoteColPhotoY);
   const showQuoteColPhoto = quoteColSrc && quoteColPhotoH >= 1.2;
+  // Inset-2 caption lives in the quote column; when inset-2 starts at the
+  // row top (no inset-1) the caption must clear the pull-quote bars.
+  const inset2CapY = insetSrcs[0] ? inset2Y : Math.min(9.65, rowY + pullBarsH + 0.35);
   // Under-hero photo spans the full hero width when there are no captions
   // to fill the column beside it.
   const underX = heroCaps ? 8.25 : 6.6;
@@ -113,6 +136,13 @@ function renderHeadlineHeroRail(pageContent, photos, options = {}) {
     if (railQuotes[i]) railMods.push({ quoteObj: railQuotes[i], src: railSrcs[i] });
     else if (railSrcs[i] && railCapTexts[i]) railMods.push({ capOnly: railCapTexts[i], src: railSrcs[i] });
   }
+  // Distribute the mods over the rail height — text-only mods are short and
+  // would otherwise bunch at the top with a dead zone below.
+  const anyRailImg = railMods.some(m => m.src);
+  const railUnit = anyRailImg ? 2.95 : 1.5;
+  const railGap = railMods.length > 1
+    ? Math.min(2.6, Math.max(0, (9.9 - 1.15 - railMods.length * railUnit) / (railMods.length - 1)))
+    : 0;
 
   return `<!DOCTYPE html>
 <html>
@@ -208,7 +238,7 @@ ${BRAND.fontLink}
   .inset-2 { top: ${px(inset2Y)}; height: ${px(inset2H)}; }
   .inset-2-cap {
     position: absolute;
-    left: ${px(pullX)}; top: ${px(inset2Y)};
+    left: ${px(pullX)}; top: ${px(inset2CapY)};
     width: ${px(2.75)};
     font-size: ${pt(7.5)};
     line-height: 1.35;
@@ -226,13 +256,13 @@ ${BRAND.fontLink}
   .hero {
     position: absolute;
     left: ${px(6.6)}; top: ${px(0.4)};
-    width: ${px(5.4)}; height: ${px(6.3)};
+    width: ${px(5.4)}; height: ${px(heroH)};
     object-fit: cover;
   }
   .hero-caps {
     position: absolute;
-    left: ${px(6.6)}; top: ${px(6.85)};
-    width: ${px(1.5)}; height: ${px(3.3)};
+    left: ${px(6.6)}; top: ${px(heroCapsTop)};
+    width: ${px(heroCapsW)}; height: ${px(heroCapsH)};
     font-size: ${pt(7.5)};
     line-height: 1.35;
     color: ${DARK};
@@ -311,28 +341,29 @@ ${BRAND.fontLink}
   ${pullQuoteLines.length > 0 ? `
   <div class="pull-quote">
     ${pullQuoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}
-    ${pullQuote.attribution && !isPlaceholder(pullQuote.attribution) ? `<div class="quote-attr">— ${escapeHtml(pullQuote.attribution)}</div>` : ''}
+    ${cleanAttribution(pullQuote.attribution) && !isPlaceholder(cleanAttribution(pullQuote.attribution)) ? `<div class="quote-attr">— ${escapeHtml(cleanAttribution(pullQuote.attribution))}</div>` : ''}
   </div>` : ''}
   ${insetSrcs[0] ? `<img class="inset-1" src="${insetSrcs[0]}" alt="">` : ''}
   ${insetSrcs[1] ? `<img class="inset-2" src="${insetSrcs[1]}" alt="">` : ''}
-  ${insetSrcs[1] && capText(6) ? `<div class="inset-2-cap">${escapeHtml(capText(6))}</div>` : ''}
+  ${insetSrcs[1] && idx.inset2 >= 0 && capText(idx.inset2) ? `<div class="inset-2-cap">${escapeHtml(capText(idx.inset2))}</div>` : ''}
 
   ${showQuoteColPhoto ? `<img class="quote-col-photo" src="${quoteColSrc}" alt="">` : ''}
 
   <!-- CENTER HERO -->
-  ${heroSrc ? `<img class="hero" src="${heroSrc}" alt=""><span class="num-badge" style="left:${px(6.68)};top:${px(6.38)}">1</span>` : ''}
+  ${heroSrc ? `<img class="hero" src="${heroSrc}" alt="">${heroCaps ? `<span class="num-badge" style="left:${px(6.68)};top:${px(0.4 + heroH - 0.32)}">1</span>` : ''}` : ''}
   ${heroCaps ? `<div class="hero-caps">${heroCaps}</div>` : ''}
-  ${underSrc ? `<img class="under-hero" src="${underSrc}" alt=""><span class="num-badge" style="left:${px(underX + 0.08)};top:${px(9.83)}">2</span>` : ''}
+  ${underSrc ? `<img class="under-hero" src="${underSrc}" alt="">${heroCaps ? `<span class="num-badge" style="left:${px(underX + 0.08)};top:${px(9.83)}">2</span>` : ''}` : ''}
 
   <!-- RIGHT RAIL -->
-  <div class="rail-header">${escapeHtml(railHeader)}</div>
+  ${railMods.length > 0 ? `<div class="rail-header">${escapeHtml(railHeader)}</div>` : ''}
   ${railMods.map((m, i) => {
-    const top = 1.15 + i * 2.95;
+    const top = 1.15 + i * (railUnit + railGap);
     const img = m.src ? `<img src="${m.src}" alt="">` : '';
     let body;
     if (m.quoteObj) {
-      const attr = m.quoteObj.attribution && !isPlaceholder(m.quoteObj.attribution)
-        ? `<span class="attr">— ${escapeHtml(m.quoteObj.attribution)}</span>` : '';
+      const attrName = cleanAttribution(m.quoteObj.attribution);
+      const attr = attrName && !isPlaceholder(attrName)
+        ? `<span class="attr">— ${escapeHtml(attrName)}</span>` : '';
       body = `"${escapeHtml(m.quoteObj.text.replace(/^["']|["']$/g, ''))}"${attr}`;
     } else {
       body = escapeHtml(m.capOnly);

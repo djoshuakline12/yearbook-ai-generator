@@ -80,8 +80,24 @@ function photoDataUri(photo) {
 function cleanCaption(str) {
   return (str || '')
     .replace(/https?:\/\/\S+/gi, '')
+    // filename-ish date/batch tokens: "4.25.26js", "IMG_0234.JPG"
+    .replace(/\b\d{1,2}\.\d{1,2}\.\d{2,4}[a-z]*\b/gi, '')
+    .replace(/\b[\w-]+\.(jpe?g|png|heic|gif|webp)\b/gi, '')
+    // trailing frame counter "(92)" — grades run (9)–(12), leave those
+    .replace(/\((\d+)\)\s*$/, (m, n) => (Number(n) >= 9 && Number(n) <= 12 ? m : ''))
     .replace(/^[\s:]+|[\s:]+$/g, '')
+    .replace(/\s{2,}/g, ' ')
     .trim();
+}
+
+// Filenames and export artifacts masquerading as captions:
+// "A7104110.JPG", "A7104079", "IMG_1234", "DSC01234 (2)".
+function isFilenameLike(str) {
+  const s = (str || '').trim();
+  if (!s) return false;
+  if (/\.(jpe?g|png|heic|gif|webp)\s*$/i.test(s)) return true;
+  const words = s.split(/\s+/).filter(w => !/^\(\d+\)$/.test(w));
+  return words.length > 0 && words.every(w => /^[A-Za-z_-]*\d{3,}[A-Za-z_-]*$/.test(w));
 }
 
 function isPlaceholder(str) {
@@ -91,18 +107,23 @@ function isPlaceholder(str) {
     lower.includes('names needed') ||
     lower.includes('tbd') ||
     lower.includes('placeholder') ||
-    str.includes('[');
+    str.includes('[') ||
+    isFilenameLike(str);
 }
 
 function pickCaption(photoCaptions, idx) {
   if (!photoCaptions || photoCaptions.length === 0) return null;
   const cap = photoCaptions.find(c => c.photoIndex === idx) || photoCaptions[idx];
   if (!cap) return null;
-  return {
-    title: cleanCaption(cap.captionTitle),
-    people: cleanCaption(cap.people),
-    body: cleanCaption(cap.caption),
+  // A filename is worse than no caption at all — blank the field so the
+  // template's fallback (hide caption / grow photo / use a quote) kicks in.
+  const field = (v) => {
+    const c = cleanCaption(v);
+    return isFilenameLike(c) ? '' : c;
   };
+  const out = { title: field(cap.captionTitle), people: field(cap.people), body: field(cap.caption) };
+  if (!out.title && !out.people && !out.body) return null;
+  return out;
 }
 
 // Wrap text into uppercase lines that fit a given width at a given font size.
@@ -141,26 +162,57 @@ function splitQuoteIntoLines(quoteText, barInWidth, fontSizePt) {
 // body = "Niko Diakos (10) worships on stage").
 // Returns { lead, body }: lead is the bold intro (people if present, else
 // title), body is the remaining text with any repeated name prefix removed.
+// Remove a leading repetition of a name list from body text, tolerating
+// separator drift: "A (11); B (11); C (11)" vs "A (11), B (11) and C (11)".
+function stripLeadingNames(body, names) {
+  if (!body || !names) return body;
+  const tok = (w) => w.toLowerCase().replace(/[;,.]+$/g, '');
+  const target = names.split(/\s+/).map(tok).filter(t => t && t !== 'and' && t !== '&');
+  if (!target.length) return body;
+  const words = body.split(/\s+/);
+  let ti = 0, wi = 0;
+  while (wi < words.length && ti < target.length) {
+    const w = tok(words[wi]);
+    if (!w || w === 'and' || w === '&') { wi++; continue; }
+    if (w === target[ti]) { ti++; wi++; continue; }
+    break;
+  }
+  if (ti < target.length) return body;
+  return words.slice(wi).join(' ').replace(/^[\s,.:;—–-]+/, '');
+}
+
 function dedupCaption(cap) {
   if (!cap) return null;
   const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
   let { title, people, body } = cap;
 
-  // Strip a leading repetition of people from the body.
-  if (people && body && norm(body).startsWith(norm(people))) {
-    body = body.slice(people.length).replace(/^[\s,.:—–-]+/, '');
-  }
+  // Strip a leading repetition of people from the body (exact or with
+  // "; " vs ", "/"and" separator drift in name lists).
+  if (people && body) body = stripLeadingNames(body, people);
   // Title that's just the person's name again adds nothing.
   if (title && people && (norm(people).startsWith(norm(title)) || norm(title).startsWith(norm(people)))) {
     title = '';
   }
   // Strip a leading repetition of title from the body.
-  if (title && body && norm(body).startsWith(norm(title))) {
-    body = body.slice(title.length).replace(/^[\s,.:—–-]+/, '');
-  }
+  if (title && body) body = stripLeadingNames(body, title);
 
-  const lead = people || title || '';
+  let lead = people || title || '';
+  // Collapse a doubled grade token: "Kate Dougherty (10) (10)"
+  lead = lead.replace(/(\(\d+\))(\s+\1)+/g, '$1');
+  if (/^\(\d+\)$/.test((body || '').trim())) body = '';
   return { lead, body: body || '' };
+}
+
+// Attributions sometimes arrive spliced: "— lasting memories. — Allie
+// Bennett". Keep only the final "— Name" segment when one exists.
+function cleanAttribution(attr) {
+  const s = cleanCaption(attr);
+  if (!s) return '';
+  const parts = s.split(/\s*[—–]\s*/).map(p => p.trim()).filter(Boolean);
+  if (parts.length <= 1) return s.replace(/^[\s—–-]+/, '').trim();
+  const last = parts[parts.length - 1];
+  // Only prefer the last segment if it looks like a name/credit, not a clause.
+  return /^[A-Z][\w.'-]*(\s+[\w.'()-]+){0,5}$/.test(last) ? last : s;
 }
 
 // Exact line count for a greedy word-wrap at a given chars-per-line budget.
@@ -199,7 +251,7 @@ function estimateTextHeightIn(text, colWidthIn, fontPt, { lineHeight = 1.45, col
 module.exports = {
   BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri,
-  cleanCaption, isPlaceholder, pickCaption,
-  splitQuoteIntoLines, wrapToLines, dedupCaption,
+  cleanCaption, isPlaceholder, isFilenameLike, pickCaption,
+  splitQuoteIntoLines, wrapToLines, dedupCaption, cleanAttribution,
   estimateTextHeightIn, wrapLineCount,
 };

@@ -38,11 +38,43 @@ function hasHandTemplate(styleId) {
   return resolveTemplateId(styleId) !== null;
 }
 
+// Sessions sometimes contain the same file uploaded twice; showing one
+// photo in two slots is an instant tell. Drop byte-identical duplicates
+// (signature: base64 length + head/tail samples) before slotting, and
+// remap photoCaptions so caption↔photo pairing survives the index shift.
+function dedupePhotosAndCaptions(photos, photoCaptions) {
+  if (!Array.isArray(photos)) return { photos, captions: photoCaptions };
+  const seen = new Set();
+  const kept = [];
+  photos.forEach((p, origIdx) => {
+    const b = p && p.base64;
+    if (b) {
+      const sig = `${b.length}:${b.slice(0, 256)}:${b.slice(-256)}`;
+      if (seen.has(sig)) return;
+      seen.add(sig);
+    }
+    kept.push({ photo: p, origIdx });
+  });
+  if (kept.length === photos.length) return { photos, captions: photoCaptions };
+  let captions = photoCaptions;
+  if (Array.isArray(photoCaptions)) {
+    captions = kept.map(({ origIdx }, newIdx) => {
+      const cap = photoCaptions.find(c => c && c.photoIndex === origIdx) || photoCaptions[origIdx];
+      return cap ? { ...cap, photoIndex: newIdx } : null;
+    }).filter(Boolean);
+  }
+  return { photos: kept.map(k => k.photo), captions };
+}
+
 function renderHandTemplate(templateId, pageContent, photos, options) {
   const resolved = resolveTemplateId(templateId);
   const fn = resolved && TEMPLATES[resolved];
   if (!fn) throw new Error(`Unknown hand template: ${templateId}`);
-  return fn(pageContent, photos, options);
+  const { photos: uniquePhotos, captions } = dedupePhotosAndCaptions(photos, pageContent && pageContent.photoCaptions);
+  const content = (captions !== (pageContent && pageContent.photoCaptions))
+    ? { ...pageContent, photoCaptions: captions }
+    : pageContent;
+  return fn(content, uniquePhotos, options);
 }
 
 module.exports = { hasHandTemplate, renderHandTemplate, resolveTemplateId };

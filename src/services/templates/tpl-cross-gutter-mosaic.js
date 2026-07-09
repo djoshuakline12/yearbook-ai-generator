@@ -12,7 +12,7 @@ const {
   BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri,
   isPlaceholder, pickCaption, splitQuoteIntoLines, wrapToLines, dedupCaption,
-  estimateTextHeightIn, wrapLineCount,
+  cleanAttribution, estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderCrossGutterMosaic(pageContent, photos, options = {}) {
@@ -29,6 +29,16 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
 
   // Content pulls
   const title = escapeHtml(pageContent.pageTitle || '');
+  // Title auto-shrink: the outlined box is 2.5" wide (2.1" usable). A fixed
+  // 26pt clips long words ("BROADCASTING", "FOUNDATION") at the border.
+  const titleRaw = (pageContent.pageTitle || '').trim();
+  const longestTitleWord = titleRaw.split(/\s+/).reduce((m, w) => Math.max(m, w.length), 1);
+  // 1.9" effective width: 900-weight Bodoni caps run wider than the average
+  // char estimate, so leave margin against the box border.
+  const titleFontPt = Math.max(15, Math.min(26, Math.floor(120 / (longestTitleWord / 1.9 + 0.4))));
+  const titleCharsPerLine = Math.max(4, Math.floor(1.9 * (120 / titleFontPt - 0.4)));
+  const titleLineCount = wrapLineCount(titleRaw, titleCharsPerLine) || 1;
+  const titleBoxH = Math.max(1.35, titleLineCount * (titleFontPt * 1.1) / 72 + 0.36);
   const bodyParagraphs = (pageContent.bodyCopy || '')
     .split(/\n\s*\n/)
     .filter(p => p.trim())
@@ -53,11 +63,13 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
 
   // Grouped numbered captions for the 2x2 mosaic (photos 2-5).
   const mosaicCapEntries = [1, 2, 3, 4].map((photoIdx, i) => {
+    if (!mosaicSrcs[i]) return null;
     const c = dedupCaption(pickCaption(pageContent.photoCaptions, photoIdx));
     if (!c || (!c.lead && !c.body)) return null;
     const text = [c.lead, c.body].filter(Boolean).join(' ');
     return `<span class="mcap"><b>${i + 2}</b>&nbsp;&nbsp;${escapeHtml(text)}</span>`;
   }).filter(Boolean).join('\n');
+  const mosaicCount = mosaicSrcs.filter(Boolean).length;
 
   // Featured moments block: black serif headline (2nd word italic, matching
   // the reference's "THE *BEST* MOMENTS") + tagline split across purple bars.
@@ -100,17 +112,37 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   const railAnchor = miniSrcs[0] ? mini1Top : (showMini2 ? mini2Top : 10.4);
   const featuredTop = Math.max(featuredTopMin, railAnchor - featuredHeight - 0.25);
 
+  // Sparse degradation: with 1-2 mosaic photos a fixed 2x2 grid leaves the
+  // right page mostly white. Reshape the grid (1 col) and stretch it down
+  // toward the featured block so the photos carry the page instead.
+  let mosaicCols = 2, mosaicRows = 2;
+  let mosaicH = 5.0;
+  if (mosaicCount === 1) { mosaicCols = 1; mosaicRows = 1; }
+  else if (mosaicCount === 2) { mosaicCols = 1; mosaicRows = 2; }
+  if (mosaicCount >= 1 && mosaicCount <= 2) {
+    mosaicH = Math.max(5.0, featuredTop - 0.7 - (mosaicCapEntries ? 0.87 : 0));
+  }
+  const mosaicCapsTop = 0.4 + mosaicH + 0.12;
+
   // Split overlay quote into fitted lines (bar is 3.8" wide, minus padding)
   const quoteFontPt = 12;
   const quoteLines = overlayQuote
     ? splitQuoteIntoLines(overlayQuote.text, 3.5, quoteFontPt)
     : [];
+  const overlayAttr = overlayQuote ? cleanAttribution(overlayQuote.attribution) : '';
+  // flipQuote variant moves the overlay to the top of the hero; otherwise it
+  // bottom-anchors so a long quote never pushes the attribution chip off the
+  // photo's bottom edge.
+  const quoteBarH = 0.5; // rendered bar pitch: 12pt line + 2×0.09 padding + margin
+  const quoteBlockH = quoteLines.length * quoteBarH + (overlayAttr ? 0.35 : 0);
+  const quoteTop = flipQuote ? 0.55 : Math.min(7.7, 9.95 - quoteBlockH);
 
-  // Left column flows: body (measured) → attribution quote → small photo
-  // that stretches down to its caption anchor at 9.85.
+  // Left column flows: title box (measured) → body (measured) → attribution
+  // quote → small photo that stretches down to its caption anchor at 9.85.
+  const bodyTop = Math.max(2.0, 0.4 + titleBoxH + 0.25);
   const bodyEstH = estimateTextHeightIn(pageContent.bodyCopy, 2.5, 10, { columns: 1, lineHeight: 1.42 });
   const bodyH = Math.min(4.6, Math.max(1.2, bodyEstH + 0.1));
-  const attrY = 2.0 + bodyH + 0.3;
+  const attrY = bodyTop + bodyH + 0.3;
   const attrEstH = attrQuote ? Math.min(1.3, estimateTextHeightIn(attrQuote.text, 2.5, 9.5, { columns: 1, lineHeight: 1.35 }) + 0.35) : 0;
   const smallY = Math.min(8.15, attrY + attrEstH + 0.3);
   const smallH = 9.79 - smallY;
@@ -141,7 +173,7 @@ ${BRAND.fontLink}
   .title-box {
     position: absolute;
     left: ${px(0.5)}; top: ${px(0.4)};
-    width: ${px(2.5)}; height: ${px(1.35)};
+    width: ${px(2.5)}; height: ${px(titleBoxH)};
     border: ${px(0.03)} solid ${PURPLE};
     padding: ${px(0.15)} ${px(0.2)};
     display: flex; align-items: center;
@@ -151,7 +183,7 @@ ${BRAND.fontLink}
     font-optical-sizing: none;
     font-variation-settings: 'opsz' 9;
     font-weight: 900;
-    font-size: ${pt(26)};
+    font-size: ${pt(titleFontPt)};
     line-height: 1.05;
     color: ${DARK};
     text-transform: uppercase;
@@ -161,7 +193,7 @@ ${BRAND.fontLink}
   /* T2 — Body copy, single column */
   .body-copy {
     position: absolute;
-    left: ${px(0.5)}; top: ${px(2.0)};
+    left: ${px(0.5)}; top: ${px(bodyTop)};
     width: ${px(2.5)}; height: ${px(bodyH)};
     font-family: ${BRAND.body};
     font-size: ${pt(10)};
@@ -222,11 +254,12 @@ ${BRAND.fontLink}
     color: ${DARK};
   }
 
-  /* P_hero — massive cross-gutter hero */
+  /* P_hero — massive cross-gutter hero. With no mosaic photos the right
+     page would be blank, so the hero bleeds across it instead. */
   .hero-photo {
     position: absolute;
     left: ${px(3.15)}; top: ${px(0.25)};
-    width: ${px(6.6)}; height: ${px(10.0)};
+    width: ${px(mosaicCount === 0 ? 12.35 : 6.6)}; height: ${px(10.0)};
     object-fit: cover;
     object-position: center 60%;
     ${bwFilter}
@@ -246,7 +279,7 @@ ${BRAND.fontLink}
   /* Q_overlay — 4-bar purple pull quote over lower hero */
   .quote-overlay {
     position: absolute;
-    left: ${px(3.4)}; top: ${px(7.7)};
+    left: ${px(3.4)}; top: ${px(quoteTop)};
     width: ${px(3.8)};
     z-index: 3;
   }
@@ -282,10 +315,10 @@ ${BRAND.fontLink}
   .mosaic {
     position: absolute;
     left: ${px(10.0)}; top: ${px(0.4)};
-    width: ${px(5.5)}; height: ${px(5.0)};
+    width: ${px(5.5)}; height: ${px(mosaicH)};
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 1fr 1fr;
+    grid-template-columns: ${mosaicCols === 1 ? '1fr' : '1fr 1fr'};
+    grid-template-rows: ${mosaicRows === 1 ? '1fr' : '1fr 1fr'};
     gap: ${px(0.12)};
   }
   .mosaic-cell { position: relative; overflow: hidden; }
@@ -304,7 +337,7 @@ ${BRAND.fontLink}
   /* Grouped numbered captions for the mosaic */
   .mosaic-captions {
     position: absolute;
-    left: ${px(10.0)}; top: ${px(5.52)};
+    left: ${px(10.0)}; top: ${px(mosaicCapsTop)};
     width: ${px(5.5)}; height: ${px(0.75)};
     font-family: ${BRAND.body};
     font-size: ${pt(7.5)};
@@ -398,7 +431,7 @@ ${BRAND.fontLink}
   ${attrQuote ? `
   <div class="attr-quote">
     <div>'${escapeHtml(attrQuote.text.replace(/^["']|["']$/g, ''))}'</div>
-    ${attrQuote.attribution && !isPlaceholder(attrQuote.attribution) ? `<div class="attr-name">— ${escapeHtml(attrQuote.attribution)}</div>` : ''}
+    ${cleanAttribution(attrQuote.attribution) && !isPlaceholder(cleanAttribution(attrQuote.attribution)) ? `<div class="attr-name">— ${escapeHtml(cleanAttribution(attrQuote.attribution))}</div>` : ''}
   </div>` : ''}
 
   ${smallSrc ? `<img class="small-photo" src="${smallSrc}" alt="">` : ''}
@@ -410,27 +443,26 @@ ${BRAND.fontLink}
   <!-- ============ CENTER HERO ============ -->
 
   ${heroSrc ? `<img class="hero-photo" src="${heroSrc}" alt="">` : ''}
-  ${heroSrc ? `<div class="hero-num">1</div>` : ''}
+  ${heroSrc && mosaicCapEntries ? `<div class="hero-num">1</div>` : ''}
 
   <!-- ============ QUOTE OVERLAY ON HERO ============ -->
 
   ${quoteLines.length > 0 ? `
   <div class="quote-overlay">
     ${quoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}
-    ${overlayQuote.attribution && !isPlaceholder(overlayQuote.attribution) ? `<div class="quote-attr">${escapeHtml(overlayQuote.attribution)}</div>` : ''}
+    ${overlayAttr && !isPlaceholder(overlayAttr) ? `<div class="quote-attr">—${escapeHtml(overlayAttr)}</div>` : ''}
   </div>` : ''}
 
   <!-- ============ RIGHT PAGE — 2x2 MOSAIC ============ -->
 
-  <div class="mosaic">
-    ${[0, 1, 2, 3].map(i => {
-      const src = mosaicSrcs[i];
+  ${mosaicCount > 0 ? `<div class="mosaic">
+    ${[0, 1, 2, 3].filter(i => mosaicSrcs[i]).map((i, pos) => {
       const badge = i + 2;
-      return src
-        ? `<div class="mosaic-cell"><img src="${src}" alt=""><span class="num-badge">${badge}</span></div>`
-        : `<div class="mosaic-cell"></div>`;
+      // With 3 photos the last cell spans both columns so no dead cell shows.
+      const span = (mosaicCount === 3 && pos === 2) ? ' style="grid-column: 1 / -1;"' : '';
+      return `<div class="mosaic-cell"${span}><img src="${mosaicSrcs[i]}" alt=""><span class="num-badge">${badge}</span></div>`;
     }).join('\n')}
-  </div>
+  </div>` : ''}
 
   <!-- ============ MOSAIC GROUPED CAPTIONS ============ -->
 
@@ -438,19 +470,19 @@ ${BRAND.fontLink}
 
   <!-- ============ FEATURED MOMENTS TITLE ============ -->
 
-  <div class="featured">
+  ${mosaicCount > 0 ? `<div class="featured">
     <div class="headline-black">${featuredHeadlineHtml}</div>
     ${taglineLines.map(l => `<span class="tagline-bar">${escapeHtml(l)}</span>`).join('\n')}
-  </div>
+  </div>` : ''}
 
   <!-- ============ RIGHT-COLUMN MINI STACK ============ -->
 
-  <div class="mini-1">
-    ${miniSrcs[0] ? `<img src="${miniSrcs[0]}" alt="">` : ''}
+  ${miniSrcs[0] ? `<div class="mini-1">
+    <img src="${miniSrcs[0]}" alt="">
     <div class="cap">
       ${miniCaps[0] && miniCaps[0].lead ? `<span class="name">${escapeHtml(miniCaps[0].lead)}</span> ` : ''}${miniCaps[0] && miniCaps[0].body ? escapeHtml(miniCaps[0].body) : ''}
     </div>
-  </div>
+  </div>` : ''}
   ${showMini2 ? `<div class="mini-2">
     ${miniSrcs[1] ? `<img src="${miniSrcs[1]}" alt="">` : ''}
     <div class="cap">

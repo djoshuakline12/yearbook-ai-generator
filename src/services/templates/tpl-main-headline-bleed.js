@@ -16,7 +16,7 @@ const {
   BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri,
   isPlaceholder, pickCaption, splitQuoteIntoLines, wrapToLines, dedupCaption,
-  wrapLineCount,
+  cleanAttribution, estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderMainHeadlineBleed(pageContent, photos, options = {}) {
@@ -33,14 +33,23 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
   const px = (n) => `${inToPx(n, dpi)}px`;
   const pt = (n) => `${ptToPx(n, dpi)}px`;
 
-  // ---- Photo slots (priority order; missing slots simply don't render) ----
-  // hero=0, top strip=1-3, crowd=4, under-crowd=5-6, left column=7-8
-  const heroSrc = photoDataUri(photos[0]);
-  const stripSrcs = [1, 2, 3].map(i => photoDataUri(photos[i]));
-  const crowdSrc = photoDataUri(photos[4]);
-  const underSrcs = [5, 6].map(i => photoDataUri(photos[i]));
-  const leftASrc = photoDataUri(photos[7]);
-  const leftBSrc = photoDataUri(photos[8]);
+  // ---- Photo slots ----
+  // Full sessions: hero=0, top strip=1-3, crowd=4, under-crowd=5-6, left
+  // column=7-8. Sparse sessions fill the two anchor slots (hero, crowd)
+  // first so the spread's structure survives with few photos.
+  const N = Array.isArray(photos) ? photos.length : 0;
+  const assign = {};
+  const slotNames = N >= 9
+    ? ['hero', 'strip0', 'strip1', 'strip2', 'crowd', 'under0', 'under1', 'leftA', 'leftB']
+    : ['hero', 'crowd', 'strip0', 'strip1', 'strip2', 'under0', 'under1', 'leftA', 'leftB'];
+  slotNames.forEach((k, i) => { assign[k] = i < N ? i : -1; });
+  const at = (i) => (i >= 0 ? photoDataUri(photos[i]) : '');
+  const heroSrc = at(assign.hero);
+  const stripSrcs = [at(assign.strip0), at(assign.strip1), at(assign.strip2)];
+  const crowdSrc = at(assign.crowd);
+  const underSrcs = [at(assign.under0), at(assign.under1)];
+  const leftASrc = at(assign.leftA);
+  const leftBSrc = at(assign.leftB);
 
   // ---- Text content ----
   const titleRaw = (pageContent.pageTitle || pageContent.section || '').toUpperCase();
@@ -75,27 +84,35 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
     ? [c.lead, c.body].filter(Boolean).join(' ')
     : null;
 
-  // Top strip grouped captions (photos 1-3, numbered 1-3)
-  const stripCapEntries = [1, 2, 3].map((photoIdx, i) => {
-    const t = capText(dedupCaption(pickCaption(pageContent.photoCaptions, photoIdx)));
+  const capAt = (i) => (i >= 0 ? capText(dedupCaption(pickCaption(pageContent.photoCaptions, i))) : null);
+
+  // Top strip grouped captions, numbered by visual order over present photos
+  const stripCapEntries = ['strip0', 'strip1', 'strip2'].map((k, i) => {
+    if (!stripSrcs[i]) return null;
+    const t = capAt(assign[k]);
     return t ? `<span class="gcap"><b>${i + 1}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null;
   }).filter(Boolean).join('\n');
 
-  // Middle grouped captions: crowd=1, under-crowd=2,3, hero=4
-  const midCapDefs = [
-    { photoIdx: 4, num: 1 },
-    { photoIdx: 5, num: 2 },
-    { photoIdx: 6, num: 3 },
-    { photoIdx: 0, num: 4 },
+  // Middle group: crowd, under-crowd pair, hero — numbered over the photos
+  // that actually rendered so a lone hero is "1", not a floating "4".
+  const midSlots = [
+    { key: 'crowd', src: crowdSrc },
+    { key: 'under0', src: underSrcs[0] },
+    { key: 'under1', src: underSrcs[1] },
+    { key: 'hero', src: heroSrc },
   ];
-  const midCapEntries = midCapDefs.map(({ photoIdx, num }) => {
-    const t = capText(dedupCaption(pickCaption(pageContent.photoCaptions, photoIdx)));
-    return t ? `<span class="gcap"><b>${num}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null;
+  const midNums = {};
+  let midN = 0;
+  midSlots.forEach(s => { if (s.src) midNums[s.key] = ++midN; });
+  const midCapEntries = midSlots.map(({ key, src }) => {
+    if (!src) return null;
+    const t = capAt(assign[key]);
+    return t ? `<span class="gcap"><b>${midNums[key]}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null;
   }).filter(Boolean).join('\n');
 
   // Left column captions
-  const leftACap = capText(dedupCaption(pickCaption(pageContent.photoCaptions, 7)));
-  const leftBCap = capText(dedupCaption(pickCaption(pageContent.photoCaptions, 8)));
+  const leftACap = capAt(assign.leftA);
+  const leftBCap = capAt(assign.leftB);
 
   // ---- Left column vertical layout (computed so nothing collides) ----
   const leftColX = 0.5;
@@ -119,10 +136,32 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
   // Mod bar can wrap — count its lines exactly so the body never overlaps.
   const modBarLines = modBarText ? wrapLineCount(modBarText, 27) : 0;
   const bodyY = modBarText ? modBarY + modBarLines * 0.24 + 0.18 : modBarY + 0.05;
-  // Reserve the bottom of the column for the filler quote when one exists.
+  // Filler quote follows the measured body copy instead of bottom-anchoring
+  // (a short body would otherwise leave a stranded quote below a long gap).
   const fillerH = fillerQuote ? 1.15 : 0;
-  const bodyH = Math.max(1.0, 10.1 - bodyY - fillerH);
-  const fillerY = bodyY + bodyH + 0.12;
+  const bodyEstH = estimateTextHeightIn(pageContent.bodyCopy, 2.7, 9.5, { columns: 1, lineHeight: 1.5 });
+  const fillerY = fillerQuote ? Math.min(10.1 - fillerH, bodyY + Math.max(0.9, bodyEstH) + 0.2) : 10.1;
+  const bodyH = Math.max(1.0, fillerY - bodyY - 0.12);
+  // Truncate the filler so it never clips mid-sentence inside its box
+  // (~6 lines at 9.5pt italic in a 2.7in column).
+  let fillerText = fillerQuote ? fillerQuote.text.replace(/^["']|["']$/g, '') : '';
+  if (fillerText.length > 185) fillerText = fillerText.slice(0, 182).replace(/\s+\S*$/, '') + '…';
+  const fillerAttr = fillerQuote ? cleanAttribution(fillerQuote.attribution) : '';
+
+  // ---- Adaptive photo geometry (sparse sessions) ----
+  // No top strip → hero and crowd rise to the top margin. No crowd → the
+  // hero bleeds left across the empty middle column.
+  const stripAny = !!(stripSrcs[0] || stripSrcs[1] || stripSrcs[2]);
+  const underAny = !!(underSrcs[0] || underSrcs[1]);
+  const heroTop = stripAny ? 3.1 : 0.4;
+  const heroX = crowdSrc ? 8.0 : 3.5;
+  const heroW = 16 - heroX;
+  const heroH = 10.5 - heroTop;
+  const crowdTop = stripAny ? 3.1 : 0.4;
+  const crowdH = (underAny ? 7.1 : 8.95) - crowdTop;
+  // With no crowd column the grouped captions would sit on the widened
+  // hero — render them as a white chip over its bottom-left instead.
+  const midCapsOverlay = !crowdSrc;
 
   return `<!DOCTYPE html>
 <html>
@@ -261,8 +300,8 @@ ${BRAND.fontLink}
   /* ---------- MIDDLE-LEFT BLOCK ---------- */
   .crowd {
     position: absolute;
-    left: ${px(3.5)}; top: ${px(3.1)};
-    width: ${px(3.7)}; height: ${px(4.0)};
+    left: ${px(3.5)}; top: ${px(crowdTop)};
+    width: ${px(3.7)}; height: ${px(crowdH)};
     object-fit: cover;
     filter: grayscale(1) contrast(1.05);
   }
@@ -276,14 +315,20 @@ ${BRAND.fontLink}
   .under-2 { left: ${px(5.4)}; }
   .mid-caps {
     position: absolute;
-    left: ${px(3.5)}; top: ${px(9.1)};
+    ${midCapsOverlay
+      ? `left: ${px(heroX + 0.35)}; bottom: ${px(0.75)};
+    width: ${px(3.7)};
+    background: rgba(255,255,255,0.92);
+    padding: ${px(0.08)} ${px(0.12)};
+    z-index: 3;`
+      : `left: ${px(3.5)}; top: ${px(9.1)};
     width: ${px(3.7)}; height: ${px(1.1)};
+    column-count: 2;
+    column-gap: ${px(0.15)};
+    overflow: hidden;`}
     font-size: ${pt(7.5)};
     line-height: 1.35;
     color: ${DARK};
-    column-count: 2;
-    column-gap: ${px(0.15)};
-    overflow: hidden;
   }
   .num-badge {
     position: absolute;
@@ -298,14 +343,14 @@ ${BRAND.fontLink}
   /* ---------- HERO ---------- */
   .hero {
     position: absolute;
-    left: ${px(8.0)}; top: ${px(3.1)};
-    width: ${px(8.0)}; height: ${px(7.4)};
+    left: ${px(heroX)}; top: ${px(heroTop)};
+    width: ${px(heroW)}; height: ${px(heroH)};
     object-fit: cover;
     ${bwFilter}
   }
   .quote-overlay {
     position: absolute;
-    left: ${px(8.4)}; top: ${px(flipQuote ? Math.max(3.5, 10.0 - quoteLines.length * 0.41 - 0.6) : 3.5)};
+    left: ${px(8.4)}; top: ${px(flipQuote ? Math.max(heroTop + 0.4, 10.0 - quoteLines.length * 0.41 - 0.6) : heroTop + 0.4)};
     width: ${px(3.7)};
     z-index: 3;
   }
@@ -351,28 +396,28 @@ ${BRAND.fontLink}
   <div class="left-body">${bodyParagraphs}</div>
   ${fillerQuote ? `
   <div class="left-quote">
-    <div>'${escapeHtml(fillerQuote.text.replace(/^["']|["']$/g, ''))}'</div>
-    ${fillerQuote.attribution && !isPlaceholder(fillerQuote.attribution) ? `<div class="attr">— ${escapeHtml(fillerQuote.attribution)}</div>` : ''}
+    <div>'${escapeHtml(fillerText)}'</div>
+    ${fillerAttr && !isPlaceholder(fillerAttr) ? `<div class="attr">— ${escapeHtml(fillerAttr)}</div>` : ''}
   </div>` : ''}
 
   <!-- TOP STRIP -->
-  ${stripSrcs[0] ? `<img class="strip-1" src="${stripSrcs[0]}" alt=""><span class="strip-num" style="left:${px(3.58)}">1</span>` : ''}
-  ${stripSrcs[1] ? `<img class="strip-2" src="${stripSrcs[1]}" alt=""><span class="strip-num" style="left:${px(7.3)}">2</span>` : ''}
-  ${stripSrcs[2] ? `<img class="strip-3" src="${stripSrcs[2]}" alt=""><span class="strip-num" style="left:${px(10.32)}">3</span>` : ''}
+  ${stripSrcs[0] ? `<img class="strip-1" src="${stripSrcs[0]}" alt="">${stripCapEntries ? `<span class="strip-num" style="left:${px(3.58)}">1</span>` : ''}` : ''}
+  ${stripSrcs[1] ? `<img class="strip-2" src="${stripSrcs[1]}" alt="">${stripCapEntries ? `<span class="strip-num" style="left:${px(7.3)}">2</span>` : ''}` : ''}
+  ${stripSrcs[2] ? `<img class="strip-3" src="${stripSrcs[2]}" alt="">${stripCapEntries ? `<span class="strip-num" style="left:${px(10.32)}">3</span>` : ''}` : ''}
   ${stripCapEntries ? `<div class="strip-caps">${stripCapEntries}</div>` : ''}
 
   <!-- MIDDLE-LEFT BLOCK -->
-  ${crowdSrc ? `<img class="crowd" src="${crowdSrc}" alt=""><span class="num-badge" style="left:${px(3.58)};top:${px(6.78)}">1</span>` : ''}
-  ${underSrcs[0] ? `<img class="under-1" src="${underSrcs[0]}" alt=""><span class="num-badge" style="left:${px(3.58)};top:${px(8.63)}">2</span>` : ''}
-  ${underSrcs[1] ? `<img class="under-2" src="${underSrcs[1]}" alt=""><span class="num-badge" style="left:${px(5.48)};top:${px(8.63)}">3</span>` : ''}
+  ${crowdSrc ? `<img class="crowd" src="${crowdSrc}" alt="">${midCapEntries ? `<span class="num-badge" style="left:${px(3.58)};top:${px(crowdTop + crowdH - 0.32)}">${midNums.crowd}</span>` : ''}` : ''}
+  ${underSrcs[0] ? `<img class="under-1" src="${underSrcs[0]}" alt="">${midCapEntries ? `<span class="num-badge" style="left:${px(3.58)};top:${px(8.63)}">${midNums.under0}</span>` : ''}` : ''}
+  ${underSrcs[1] ? `<img class="under-2" src="${underSrcs[1]}" alt="">${midCapEntries ? `<span class="num-badge" style="left:${px(5.48)};top:${px(8.63)}">${midNums.under1}</span>` : ''}` : ''}
   ${midCapEntries ? `<div class="mid-caps">${midCapEntries}</div>` : ''}
 
   <!-- HERO -->
-  ${heroSrc ? `<img class="hero" src="${heroSrc}" alt=""><span class="num-badge" style="left:${px(8.15)};top:${px(10.05)}">4</span>` : ''}
+  ${heroSrc ? `<img class="hero" src="${heroSrc}" alt="">${midCapEntries ? `<span class="num-badge" style="left:${px(heroX + 0.15)};top:${px(10.05)}">${midNums.hero}</span>` : ''}` : ''}
   ${quoteLines.length > 0 ? `
   <div class="quote-overlay">
     ${quoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}
-    ${heroQuote.attribution && !isPlaceholder(heroQuote.attribution) ? `<div class="quote-attr">—${escapeHtml(heroQuote.attribution)}</div>` : ''}
+    ${cleanAttribution(heroQuote.attribution) && !isPlaceholder(cleanAttribution(heroQuote.attribution)) ? `<div class="quote-attr">—${escapeHtml(cleanAttribution(heroQuote.attribution))}</div>` : ''}
   </div>` : ''}
 
 </div>

@@ -16,7 +16,7 @@ const {
   BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri,
   isPlaceholder, pickCaption, splitQuoteIntoLines, dedupCaption,
-  estimateTextHeightIn, wrapLineCount,
+  cleanAttribution, estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderModSidebarGroup(pageContent, photos, options = {}) {
@@ -93,26 +93,63 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
   // caption) to fill remaining slots so the rail never runs dry.
   const modTop = 1.55;
   const modH = 1.75;
-  const modGap = 0.22;
   const sideMods = [];
   for (let i = 0; i < 4; i++) {
     if (modQuotes[i]) {
       sideMods.push({ quoteObj: modQuotes[i], src: modSrcs[i] });
     } else if (modSrcs[i]) {
+      // Caption text may be junk (suppressed); a photo-only mod still
+      // fills the rail better than a blank column.
       const t = capText(5 + i);
-      if (t) sideMods.push({ capOnly: t, src: modSrcs[i] });
+      sideMods.push(t ? { capOnly: t, src: modSrcs[i] } : { photoOnly: true, src: modSrcs[i] });
     }
   }
+  // Distribute however many mods exist over the rail height instead of
+  // clustering them at the top with a dead zone below.
+  const modGap = sideMods.length > 1
+    ? Math.min(2.2, Math.max(0.22, (9.7 - modTop - sideMods.length * modH) / (sideMods.length - 1)))
+    : 0.22;
 
   // Center column flows: title (measured) → subhead bar → body → photos.
   const titleCharsPerLine = 15; // ~24pt serif in 4.7in
   const titleLineCount = wrapLineCount(titleRaw, titleCharsPerLine) || 1;
   const subheadY = 0.75 + titleLineCount * 0.4 + 0.1;
-  const centerBodyY = subheadText ? subheadY + 0.42 : subheadY + 0.08;
+  // The subhead bar wraps inside its 4.7" max-width — measure it, a fixed
+  // one-line offset runs the body copy into the bar's second line.
+  const subheadLineCount = subheadText ? wrapLineCount(subheadText, Math.floor(4.4 * (120 / 10 - 0.3))) : 0;
+  const centerBodyY = subheadText ? subheadY + 0.14 + subheadLineCount * 0.28 : subheadY + 0.08;
   const bodyEstH = estimateTextHeightIn(pageContent.bodyCopy, 2.22, 9, { columns: 2 });
   const centerPhotosY = Math.min(6.0, Math.max(centerBodyY + 0.9, centerBodyY + bodyEstH + 0.25));
   const centerCapsY = 8.9;
-  const centerPhotoH = centerCapsY - 0.15 - centerPhotosY;
+  const centerCapsPresent = !!centerCaps;
+  // No captions → photos run to the bottom margin instead of the caption anchor.
+  const centerPhotoH = (centerCapsPresent ? centerCapsY - 0.15 : 10.4) - centerPhotosY;
+
+  // Sparse fallback: no center photos leaves a hole under the body copy.
+  // Fill it with an unused quote (big italic serif) or leftover highlights.
+  const hasCenterPhotos = !!(centerSrcs[0] || centerSrcs[1]);
+  let centerFiller = '';
+  if (!hasCenterPhotos) {
+    const used = new Set([heroQuote, ...sideMods.map(m => m.quoteObj).filter(Boolean)]);
+    const spare = quotes.find(q => !used.has(q));
+    if (spare) {
+      const attr = cleanAttribution(spare.attribution);
+      centerFiller = `<div class="center-filler">
+        <div class="cf-quote">'${escapeHtml(spare.text.replace(/^["']|["']$/g, ''))}'</div>
+        ${attr && !isPlaceholder(attr) ? `<div class="cf-attr">— ${escapeHtml(attr)}</div>` : ''}
+      </div>`;
+    } else {
+      const spareHl = (pageContent.highlights || [])
+        .filter(h => h && !h.includes('[') && h.toUpperCase().trim() !== subheadText)
+        .slice(0, 3);
+      if (spareHl.length) {
+        centerFiller = `<div class="center-filler">
+          <div class="cf-head">MORE TO THE STORY</div>
+          ${spareHl.map(h => `<div class="cf-item">${escapeHtml(h)}</div>`).join('\n')}
+        </div>`;
+      }
+    }
+  }
 
   // Right page: when the top photos are missing, the group hero grows upward
   // to fill the page; the stray caption column is dropped with them.
@@ -248,6 +285,53 @@ ${BRAND.fontLink}
   }
   .gcap { display: block; margin-bottom: ${px(0.05)}; break-inside: avoid; }
   .gcap b { font-weight: 700; }
+  .center-filler {
+    position: absolute;
+    left: ${px(2.8)}; top: ${px(centerPhotosY + 0.2)};
+    width: ${px(4.2)};
+  }
+  .center-filler .cf-quote {
+    font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
+    font-style: italic;
+    font-size: ${pt(13)};
+    line-height: 1.45;
+    color: ${DARK};
+  }
+  .center-filler .cf-attr {
+    margin-top: ${px(0.1)};
+    font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
+    font-style: italic;
+    font-size: ${pt(10)};
+    color: ${PURPLE};
+  }
+  .center-filler .cf-head {
+    font-family: 'Bodoni Moda', serif;
+    font-optical-sizing: none;
+    font-variation-settings: 'opsz' 9;
+    font-weight: 900;
+    font-size: ${pt(13)};
+    color: ${DARK};
+    margin-bottom: ${px(0.12)};
+  }
+  .center-filler .cf-item {
+    font-size: ${pt(9)};
+    line-height: 1.4;
+    color: ${DARK};
+    padding-left: ${px(0.22)};
+    position: relative;
+    margin-bottom: ${px(0.09)};
+  }
+  .center-filler .cf-item::before {
+    content: '';
+    position: absolute;
+    left: 0; top: ${px(0.045)};
+    width: ${px(0.1)}; height: ${px(0.1)};
+    background: ${PURPLE};
+  }
   .num-badge {
     position: absolute;
     color: white;
@@ -326,6 +410,9 @@ ${BRAND.fontLink}
   <div class="mod-question">${escapeHtml(modQuestion)}</div>
   ${sideMods.map((m, i) => {
     const top = modTop + i * (modH + modGap);
+    if (m.photoOnly) {
+      return `<div class="side-mod" style="top:${px(top)};height:${px(modH)}"><img src="${m.src}" alt="" style="width:100%;height:100%;object-fit:cover;flex:none;"></div>`;
+    }
     const img = m.src ? `<img src="${m.src}" alt="">` : '';
     let body;
     if (m.quoteObj) {
@@ -333,8 +420,9 @@ ${BRAND.fontLink}
       // (~170 chars at 7.5pt in a 0.95in column over ~11 lines).
       let text = m.quoteObj.text.replace(/^["']|["']$/g, '');
       if (text.length > 170) text = text.slice(0, 167).replace(/\s+\S*$/, '') + '…';
-      const attr = m.quoteObj.attribution && !isPlaceholder(m.quoteObj.attribution)
-        ? `<span class="attr">— ${escapeHtml(m.quoteObj.attribution)}</span>` : '';
+      const attrName = cleanAttribution(m.quoteObj.attribution);
+      const attr = attrName && !isPlaceholder(attrName)
+        ? `<span class="attr">— ${escapeHtml(attrName)}</span>` : '';
       body = `"${escapeHtml(text)}"${attr}`;
     } else {
       let text = m.capOnly;
@@ -349,21 +437,22 @@ ${BRAND.fontLink}
   ${titleRaw ? `<div class="center-title">${escapeHtml(titleRaw)}</div>` : ''}
   ${subheadText ? `<div class="subhead-bar">${escapeHtml(subheadText)}</div>` : ''}
   <div class="center-body">${bodyParagraphs}</div>
-  ${centerSrcs[0] ? `<img class="center-1" src="${centerSrcs[0]}" alt=""><span class="num-badge" style="left:${px(2.88)};top:${px(centerPhotosY + centerPhotoH - 0.32)}">1</span>` : ''}
-  ${centerSrcs[1] ? `<img class="center-2" src="${centerSrcs[1]}" alt=""><span class="num-badge" style="left:${px(5.3)};top:${px(centerPhotosY + centerPhotoH - 0.32)}">2</span>` : ''}
+  ${centerSrcs[0] ? `<img class="center-1" src="${centerSrcs[0]}" alt="">${centerCaps ? `<span class="num-badge" style="left:${px(2.88)};top:${px(centerPhotosY + centerPhotoH - 0.32)}">1</span>` : ''}` : ''}
+  ${centerSrcs[1] ? `<img class="center-2" src="${centerSrcs[1]}" alt="">${centerCaps ? `<span class="num-badge" style="left:${px(5.3)};top:${px(centerPhotosY + centerPhotoH - 0.32)}">2</span>` : ''}` : ''}
   ${centerCaps ? `<div class="center-caps">${centerCaps}</div>` : ''}
+  ${centerFiller}
 
   <!-- RIGHT TOP -->
   ${showRightCaps ? `<div class="right-caps">${rightCaps}</div>` : ''}
-  ${rightSrcs[0] ? `<img class="right-1" src="${rightSrcs[0]}" alt=""><span class="num-badge" style="left:${px(9.63)};top:${px(2.28)}">3</span>` : ''}
-  ${rightSrcs[1] ? `<img class="right-2" src="${rightSrcs[1]}" alt=""><span class="num-badge" style="left:${px(12.16)};top:${px(2.28)}">4</span>` : ''}
+  ${rightSrcs[0] ? `<img class="right-1" src="${rightSrcs[0]}" alt="">${showRightCaps ? `<span class="num-badge" style="left:${px(9.63)};top:${px(2.28)}">3</span>` : ''}` : ''}
+  ${rightSrcs[1] ? `<img class="right-2" src="${rightSrcs[1]}" alt="">${showRightCaps ? `<span class="num-badge" style="left:${px(12.16)};top:${px(2.28)}">4</span>` : ''}` : ''}
 
   <!-- GROUP HERO -->
-  ${heroSrc ? `<img class="hero" src="${heroSrc}" alt=""><span class="num-badge" style="left:${px(8.03)};top:${px(10.1)}">5</span>` : ''}
+  ${heroSrc ? `<img class="hero" src="${heroSrc}" alt="">${showRightCaps ? `<span class="num-badge" style="left:${px(8.03)};top:${px(10.1)}">5</span>` : ''}` : ''}
   ${heroQuoteLines.length > 0 ? `
   <div class="quote-overlay" style="top:${px(flipQuote ? 3.25 : 10.05 - heroQuoteLines.length * 0.375 - (heroQuote.attribution ? 0.4 : 0.1))}">
     ${heroQuoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}
-    ${heroQuote.attribution && !isPlaceholder(heroQuote.attribution) ? `<div class="quote-attr">—${escapeHtml(heroQuote.attribution)}</div>` : ''}
+    ${cleanAttribution(heroQuote.attribution) && !isPlaceholder(cleanAttribution(heroQuote.attribution)) ? `<div class="quote-attr">—${escapeHtml(cleanAttribution(heroQuote.attribution))}</div>` : ''}
   </div>` : ''}
 
 </div>

@@ -18,7 +18,7 @@ const {
   BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri,
   isPlaceholder, pickCaption, splitQuoteIntoLines, dedupCaption,
-  estimateTextHeightIn, wrapLineCount,
+  cleanAttribution, estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderShareAStory(pageContent, photos, options = {}) {
@@ -35,14 +35,32 @@ function renderShareAStory(pageContent, photos, options = {}) {
   const pt = (n) => `${ptToPx(n, dpi)}px`;
 
   // ---- Photo slots ----
-  // crowd=0 (B&W anchor), stacked=1,2, right big=3, right pair=4,5, rail=6,
-  // talking heads=7,8,9
-  const crowdSrc = photoDataUri(photos[0]);
-  const stackSrcs = [1, 2].map(i => photoDataUri(photos[i]));
-  const rightBigSrc = photoDataUri(photos[3]);
-  const rightPairSrcs = [4, 5].map(i => photoDataUri(photos[i]));
-  const railSrc = photoDataUri(photos[6]);
-  const headSrcs = [7, 8, 9].map(i => photoDataUri(photos[i]));
+  // Full sessions: crowd=0 (B&W anchor), stacked=1,2, right big=3, right
+  // pair=4,5, rail=6, talking heads=7,8,9.
+  // Sparse sessions fill the two page-anchor slots FIRST (crowd, then right
+  // big) so neither page ever goes photo-less while a secondary slot eats
+  // the only spare photo.
+  const N = Array.isArray(photos) ? photos.length : 0;
+  let slotIdx;
+  if (N >= 6) {
+    slotIdx = { crowd: 0, stack1: 1, stack2: 2, rightBig: 3, rightPair1: 4, rightPair2: 5, rail: 6, heads: [7, 8, 9] };
+  } else {
+    slotIdx = { crowd: -1, stack1: -1, stack2: -1, rightBig: -1, rightPair1: -1, rightPair2: -1, rail: -1, heads: [] };
+    ['crowd', 'rightBig', 'stack1', 'stack2', 'rightPair1'].forEach((s, i) => { if (i < N) slotIdx[s] = i; });
+  }
+  const at = (i) => (i >= 0 ? photoDataUri(photos[i]) : '');
+  const crowdSrc = at(slotIdx.crowd);
+  const stackSrcs = [at(slotIdx.stack1), at(slotIdx.stack2)];
+  const rightBigSrc = at(slotIdx.rightBig);
+  const rightPairSrcs = [at(slotIdx.rightPair1), at(slotIdx.rightPair2)];
+  const railSrc = at(slotIdx.rail);
+  const headSrcs = [0, 1, 2].map(i => (slotIdx.heads[i] != null ? photoDataUri(photos[slotIdx.heads[i]]) : ''));
+  // Badge numbers follow visual order over slots that actually have a photo.
+  const badgeNums = {};
+  let bn = 0;
+  for (const s of ['crowd', 'stack1', 'stack2', 'rightBig', 'rightPair1', 'rightPair2']) {
+    if (slotIdx[s] >= 0) badgeNums[s] = ++bn;
+  }
 
   // ---- Text ----
   const titleRaw = (pageContent.pageTitle || pageContent.section || '').toUpperCase();
@@ -75,22 +93,24 @@ function renderShareAStory(pageContent, photos, options = {}) {
   // Talking heads pair remaining quotes with photos 7-9 (photo optional).
   const headQuotes = quotes.filter(q => q !== railQuote).slice(0, 3);
 
-  const highlights = (pageContent.highlights || []).filter(h => h && !h.includes('[')).slice(0, 3);
+  // Highlights feed both the subtitle bar and the rail list — never show the
+  // same line in both places.
+  const highlights = (pageContent.highlights || [])
+    .filter(h => h && !h.includes('[') && h.toUpperCase().trim() !== subtitleText.trim())
+    .slice(0, 3);
 
   // ---- Captions ----
   const capText = (i) => {
     const c = dedupCaption(pickCaption(pageContent.photoCaptions, i));
     return c && (c.lead || c.body) ? [c.lead, c.body].filter(Boolean).join(' ') : null;
   };
-  const groupCaps = (idxs) => idxs.map((photoIdx, i) => {
-    const t = capText(photoIdx);
-    return t ? `<span class="gcap"><b>${i + 1}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null;
+  const groupCaps = (slots) => slots.map((s) => {
+    if (slotIdx[s] < 0) return null;
+    const t = capText(slotIdx[s]);
+    return t ? `<span class="gcap"><b>${badgeNums[s]}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null;
   }).filter(Boolean).join('\n');
-  const leftCaps = groupCaps([0, 1, 2]);
-  const rightCaps = [3, 4, 5].map((photoIdx, i) => {
-    const t = capText(photoIdx);
-    return t ? `<span class="gcap"><b>${i + 4}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null;
-  }).filter(Boolean).join('\n');
+  const leftCaps = groupCaps(['crowd', 'stack1', 'stack2']);
+  const rightCaps = groupCaps(['rightBig', 'rightPair1', 'rightPair2']);
 
   // ---- Dynamic vertical layout (kills fixed-gap negative space) ----
   // Title block flows: script → title (measured) → subtitle bar → body.
@@ -98,7 +118,8 @@ function renderShareAStory(pageContent, photos, options = {}) {
   const titleCharsPerLine = 28; // ~26pt serif in 6.6in
   const titleLineCount = wrapLineCount(titleRaw, titleCharsPerLine) || 1;
   const subtitleY = titleY + titleLineCount * 0.42 + 0.08;
-  const bodyY = subtitleText ? subtitleY + 0.42 : subtitleY + 0.08;
+  const subtitleLineCount = subtitleText ? wrapLineCount(subtitleText, Math.floor(6.35 * (120 / 10.5 - 0.3))) : 0;
+  const bodyY = subtitleText ? subtitleY + 0.14 + subtitleLineCount * 0.29 : subtitleY + 0.08;
   // Left block: photos start right below the measured body copy and stretch
   // down to the caption anchor (or further when there are no captions).
   const bodyEstH = estimateTextHeightIn(pageContent.bodyCopy, 3.08, 9, { columns: 2 });
@@ -129,11 +150,16 @@ function renderShareAStory(pageContent, photos, options = {}) {
     railPhotoH = Math.max(1.2, railContentBottom - railPhotoTop);
   }
   // Right page photos fill the full column height down to the band. Hero (4)
-  // top, pair (5,6) below, captions, ending just above the talking-heads band.
-  const rightBigH = 4.0;
-  const rightPairY = 0.4 + rightBigH + 0.15;
+  // top, pair (5,6) below, captions, ending just above the talking-heads
+  // band. With no pair photos the hero takes the full column height.
+  const hasRightPair = !!(rightPairSrcs[0] || rightPairSrcs[1]);
   const rightCapsY = rightCaps ? 7.55 : 7.85;
+  const rightBigH = hasRightPair ? 4.0 : (rightCaps ? rightCapsY - 0.15 : 7.85) - 0.4;
+  const rightPairY = 0.4 + rightBigH + 0.15;
   const rightPairH = (rightCaps ? rightCapsY - 0.15 : 7.85) - rightPairY;
+  // With no stacked photos the crowd photo takes the full left-block width.
+  const hasStack = !!(stackSrcs[0] || stackSrcs[1]);
+  const crowdW = hasStack ? 4.3 : 6.4;
   // Bottom band: quotes first, then caption-based photo mods (photos 7-9),
   // distributed edge-to-edge across the band (stops before the rail) so the
   // bottom of the spread is always full.
@@ -141,7 +167,7 @@ function renderShareAStory(pageContent, photos, options = {}) {
   headQuotes.forEach((q, i) => headMods.push({ quoteObj: q, src: headSrcs[i] }));
   for (let i = 0; i < 3 && headMods.length < 4; i++) {
     if (headSrcs[i] && !headMods.some(m => m.src === headSrcs[i])) {
-      const t = capText(7 + i);
+      const t = slotIdx.heads[i] != null ? capText(slotIdx.heads[i]) : null;
       if (t) headMods.push({ capOnly: t, src: headSrcs[i] });
     }
   }
@@ -227,7 +253,7 @@ ${BRAND.fontLink}
   .crowd {
     position: absolute;
     left: ${px(0.75)}; top: ${px(crowdY)};
-    width: ${px(4.3)}; height: ${px(crowdH)};
+    width: ${px(crowdW)}; height: ${px(crowdH)};
     object-fit: cover;
     ${bwFilter}
   }
@@ -425,9 +451,9 @@ ${BRAND.fontLink}
   <div class="body-copy">${bodyParagraphs}</div>
 
   <!-- LEFT PHOTO BLOCK -->
-  ${crowdSrc ? `<img class="crowd" src="${crowdSrc}" alt=""><span class="num-badge" style="left:${px(0.83)};top:${px(crowdY + crowdH - 0.32)}">1</span>` : ''}
-  ${stackSrcs[0] ? `<img class="stack-1" src="${stackSrcs[0]}" alt=""><span class="num-badge" style="left:${px(5.28)};top:${px(crowdY + stackH - 0.32)}">2</span>` : ''}
-  ${stackSrcs[1] ? `<img class="stack-2" src="${stackSrcs[1]}" alt=""><span class="num-badge" style="left:${px(5.28)};top:${px(stack2Y + stackH - 0.32)}">3</span>` : ''}
+  ${crowdSrc ? `<img class="crowd" src="${crowdSrc}" alt="">${leftCaps ? `<span class="num-badge" style="left:${px(0.83)};top:${px(crowdY + crowdH - 0.32)}">${badgeNums.crowd}</span>` : ''}` : ''}
+  ${stackSrcs[0] ? `<img class="stack-1" src="${stackSrcs[0]}" alt="">${leftCaps ? `<span class="num-badge" style="left:${px(5.28)};top:${px(crowdY + stackH - 0.32)}">${badgeNums.stack1}</span>` : ''}` : ''}
+  ${stackSrcs[1] ? `<img class="stack-2" src="${stackSrcs[1]}" alt="">${leftCaps ? `<span class="num-badge" style="left:${px(5.28)};top:${px(stack2Y + stackH - 0.32)}">${badgeNums.stack2}</span>` : ''}` : ''}
   ${leftCaps ? `<div class="left-caps">${leftCaps}</div>` : ''}
 
   <!-- BOTTOM TALKING-HEADS BAND -->
@@ -440,8 +466,9 @@ ${BRAND.fontLink}
     if (m.quoteObj) {
       let text = m.quoteObj.text.replace(/^["']|["']$/g, '');
       if (text.length > 260) text = text.slice(0, 257).replace(/\s+\S*$/, '') + '…';
-      const attr = m.quoteObj.attribution && !isPlaceholder(m.quoteObj.attribution)
-        ? `<span class="attr">— ${escapeHtml(m.quoteObj.attribution)}</span>` : '';
+      const attrName = cleanAttribution(m.quoteObj.attribution);
+      const attr = attrName && !isPlaceholder(attrName)
+        ? `<span class="attr">— ${escapeHtml(attrName)}</span>` : '';
       body = `"${escapeHtml(text)}"${attr}`;
     } else {
       body = escapeHtml(m.capOnly);
@@ -450,16 +477,16 @@ ${BRAND.fontLink}
   }).join('\n')}
 
   <!-- RIGHT PAGE PHOTOS -->
-  ${rightBigSrc ? `<img class="right-big" src="${rightBigSrc}" alt=""><span class="num-badge" style="left:${px(8.28)};top:${px(0.4 + rightBigH - 0.32)}">4</span>` : ''}
-  ${rightPairSrcs[0] ? `<img class="right-pair-1" src="${rightPairSrcs[0]}" alt=""><span class="num-badge" style="left:${px(8.28)};top:${px(rightPairY + rightPairH - 0.32)}">5</span>` : ''}
-  ${rightPairSrcs[1] ? `<img class="right-pair-2" src="${rightPairSrcs[1]}" alt=""><span class="num-badge" style="left:${px(10.62)};top:${px(rightPairY + rightPairH - 0.32)}">6</span>` : ''}
+  ${rightBigSrc ? `<img class="right-big" src="${rightBigSrc}" alt="">${rightCaps ? `<span class="num-badge" style="left:${px(8.28)};top:${px(0.4 + rightBigH - 0.32)}">${badgeNums.rightBig}</span>` : ''}` : ''}
+  ${rightPairSrcs[0] ? `<img class="right-pair-1" src="${rightPairSrcs[0]}" alt="">${rightCaps ? `<span class="num-badge" style="left:${px(8.28)};top:${px(rightPairY + rightPairH - 0.32)}">${badgeNums.rightPair1}</span>` : ''}` : ''}
+  ${rightPairSrcs[1] ? `<img class="right-pair-2" src="${rightPairSrcs[1]}" alt="">${rightCaps ? `<span class="num-badge" style="left:${px(10.62)};top:${px(rightPairY + rightPairH - 0.32)}">${badgeNums.rightPair2}</span>` : ''}` : ''}
   ${rightCaps ? `<div class="right-caps">${rightCaps}</div>` : ''}
 
   <!-- RIGHT RAIL -->
   ${railQuoteLines.length > 0 ? `
   <div class="rail-quote">
     ${railQuoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}
-    ${railQuote.attribution && !isPlaceholder(railQuote.attribution) ? `<div class="quote-attr">— ${escapeHtml(railQuote.attribution)}</div>` : ''}
+    ${cleanAttribution(railQuote.attribution) && !isPlaceholder(cleanAttribution(railQuote.attribution)) ? `<div class="quote-attr">— ${escapeHtml(cleanAttribution(railQuote.attribution))}</div>` : ''}
   </div>` : ''}
   ${railSrc ? `<img class="rail-photo" src="${railSrc}" style="top:${px(railPhotoTop)}" alt="">` : ''}
   ${highlights.length > 0 ? `
