@@ -17,8 +17,16 @@ const path = require('path');
 const os = require('os');
 
 const PACK_DIR = path.join(os.homedir(), 'Downloads', 'yearbook_import_pack');
-const COMPILED_TXT = process.env.COMPILED_TXT
-  || '/private/tmp/claude-501/-Users-joshkline-Downloads-AI-Yearbook/4c21352d-b981-48ef-ba94-1b846a8ec450/scratchpad/compiled.txt';
+// Plain-text copy of the compiled doc, cached beside the pack; regenerated
+// from the docx (via macOS textutil) when missing.
+const COMPILED_DOCX = path.join(os.homedir(), 'Downloads', 'Yearbook_2025-2026_Compiled.docx');
+const COMPILED_TXT = process.env.COMPILED_TXT || path.join(PACK_DIR, '_compiled_copy.txt');
+
+function ensureCompiledTxt() {
+  if (fs.existsSync(COMPILED_TXT)) return;
+  const { execFileSync } = require('child_process');
+  execFileSync('textutil', ['-convert', 'txt', '-output', COMPILED_TXT, COMPILED_DOCX]);
+}
 
 // Folder slug → section name as it appears in the compiled doc.
 const SECTION_NAMES = {
@@ -275,6 +283,7 @@ async function main() {
   }
   const outDir = (outDirArg || path.join(os.homedir(), 'Downloads', 'finished spreads')).replace(/^~/, os.homedir());
   fs.mkdirSync(outDir, { recursive: true });
+  ensureCompiledTxt();
   const sections = parseCompiled(fs.readFileSync(COMPILED_TXT, 'utf8'));
 
   const folders = target === 'all' ? Object.keys(SECTION_NAMES) : [target];
