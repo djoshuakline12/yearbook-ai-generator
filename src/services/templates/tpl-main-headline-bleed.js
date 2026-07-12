@@ -14,9 +14,9 @@
 
 const {
   BRAND,
-  inToPx, ptToPx, escapeHtml, photoDataUri,
+  inToPx, ptToPx, escapeHtml, photoDataUri, photoObjectPosition,
   isPlaceholder, pickCaption, splitQuoteIntoLines, wrapToLines, dedupCaption,
-  cleanAttribution, estimateTextHeightIn, wrapLineCount,
+  cleanAttribution, pickOverlayQuote, estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderMainHeadlineBleed(pageContent, photos, options = {}) {
@@ -44,12 +44,19 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
     : ['hero', 'crowd', 'strip0', 'strip1', 'strip2', 'under0', 'under1', 'leftA', 'leftB'];
   slotNames.forEach((k, i) => { assign[k] = i < N ? i : -1; });
   const at = (i) => (i >= 0 ? photoDataUri(photos[i]) : '');
+  const posAt = (i) => photoObjectPosition(i >= 0 ? photos[i] : null);
   const heroSrc = at(assign.hero);
+  const heroPos = posAt(assign.hero);
   const stripSrcs = [at(assign.strip0), at(assign.strip1), at(assign.strip2)];
+  const stripPos = [posAt(assign.strip0), posAt(assign.strip1), posAt(assign.strip2)];
   const crowdSrc = at(assign.crowd);
+  const crowdPos = posAt(assign.crowd);
   const underSrcs = [at(assign.under0), at(assign.under1)];
+  const underPos = [posAt(assign.under0), posAt(assign.under1)];
   const leftASrc = at(assign.leftA);
+  const leftAPos = posAt(assign.leftA);
   const leftBSrc = at(assign.leftB);
+  const leftBPos = posAt(assign.leftB);
 
   // ---- Text content ----
   const titleRaw = (pageContent.pageTitle || pageContent.section || '').toUpperCase();
@@ -68,15 +75,13 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
     .join('');
 
   const quotes = (pageContent.quotes || []).filter(q => q && q.text && !q.text.includes('['));
-  const quoteFontPt = 12;
-  // Hero quote: first quote that fits in <= 9 bars (so bars never overrun
-  // the hero). Filler quote: any other quote, shown italic bottom-left.
-  let heroQuote = null;
-  let quoteLines = [];
-  for (const q of quotes) {
-    const lines = splitQuoteIntoLines(q.text, 3.3, quoteFontPt);
-    if (lines.length > 0 && lines.length <= 9) { heroQuote = q; quoteLines = lines; break; }
-  }
+  // Hero overlay bars sit on the photo — cap at 5 bars and favor the
+  // shortest quote so the subject stays visible. Filler quote: any other
+  // quote, shown italic bottom-left (full length is fine on white).
+  const heroPickResult = pickOverlayQuote(quotes, 3.3, 12, 5, 10.5);
+  const heroQuote = heroPickResult ? heroPickResult.quote : null;
+  const quoteFontPt = heroPickResult ? heroPickResult.fontPt : 12;
+  const quoteLines = heroPickResult ? heroPickResult.lines : [];
   const fillerQuote = quotes.find(q => q !== heroQuote) || null;
 
   // ---- Captions ----
@@ -386,9 +391,9 @@ ${BRAND.fontLink}
 <div class="spread">
 
   <!-- LEFT COLUMN -->
-  ${leftASrc ? `<img class="left-a" src="${leftASrc}" alt="">` : ''}
+  ${leftASrc ? `<img class="left-a" src="${leftASrc}" style="object-position:${leftAPos}" alt="">` : ''}
   ${leftASrc && leftACap ? `<div class="left-a-cap">${escapeHtml(leftACap)}</div>` : ''}
-  ${leftBSrc ? `<img class="left-b" src="${leftBSrc}" alt="">` : ''}
+  ${leftBSrc ? `<img class="left-b" src="${leftBSrc}" style="object-position:${leftBPos}" alt="">` : ''}
   ${leftBSrc && leftBCap ? `<div class="left-b-cap">${escapeHtml(leftBCap)}</div>` : ''}
 
   ${titleRaw ? `<div class="main-headline">${escapeHtml(titleRaw)}</div>` : ''}
@@ -401,19 +406,19 @@ ${BRAND.fontLink}
   </div>` : ''}
 
   <!-- TOP STRIP -->
-  ${stripSrcs[0] ? `<img class="strip-1" src="${stripSrcs[0]}" alt="">${stripCapEntries ? `<span class="strip-num" style="left:${px(3.58)}">1</span>` : ''}` : ''}
-  ${stripSrcs[1] ? `<img class="strip-2" src="${stripSrcs[1]}" alt="">${stripCapEntries ? `<span class="strip-num" style="left:${px(7.3)}">2</span>` : ''}` : ''}
-  ${stripSrcs[2] ? `<img class="strip-3" src="${stripSrcs[2]}" alt="">${stripCapEntries ? `<span class="strip-num" style="left:${px(10.32)}">3</span>` : ''}` : ''}
+  ${stripSrcs[0] ? `<img class="strip-1" src="${stripSrcs[0]}" style="object-position:${stripPos[0]}" alt="">${stripCapEntries ? `<span class="strip-num" style="left:${px(3.58)}">1</span>` : ''}` : ''}
+  ${stripSrcs[1] ? `<img class="strip-2" src="${stripSrcs[1]}" style="object-position:${stripPos[1]}" alt="">${stripCapEntries ? `<span class="strip-num" style="left:${px(7.3)}">2</span>` : ''}` : ''}
+  ${stripSrcs[2] ? `<img class="strip-3" src="${stripSrcs[2]}" style="object-position:${stripPos[2]}" alt="">${stripCapEntries ? `<span class="strip-num" style="left:${px(10.32)}">3</span>` : ''}` : ''}
   ${stripCapEntries ? `<div class="strip-caps">${stripCapEntries}</div>` : ''}
 
   <!-- MIDDLE-LEFT BLOCK -->
-  ${crowdSrc ? `<img class="crowd" src="${crowdSrc}" alt="">${midCapEntries ? `<span class="num-badge" style="left:${px(3.58)};top:${px(crowdTop + crowdH - 0.32)}">${midNums.crowd}</span>` : ''}` : ''}
-  ${underSrcs[0] ? `<img class="under-1" src="${underSrcs[0]}" alt="">${midCapEntries ? `<span class="num-badge" style="left:${px(3.58)};top:${px(8.63)}">${midNums.under0}</span>` : ''}` : ''}
-  ${underSrcs[1] ? `<img class="under-2" src="${underSrcs[1]}" alt="">${midCapEntries ? `<span class="num-badge" style="left:${px(5.48)};top:${px(8.63)}">${midNums.under1}</span>` : ''}` : ''}
+  ${crowdSrc ? `<img class="crowd" src="${crowdSrc}" style="object-position:${crowdPos}" alt="">${midCapEntries ? `<span class="num-badge" style="left:${px(3.58)};top:${px(crowdTop + crowdH - 0.32)}">${midNums.crowd}</span>` : ''}` : ''}
+  ${underSrcs[0] ? `<img class="under-1" src="${underSrcs[0]}" style="object-position:${underPos[0]}" alt="">${midCapEntries ? `<span class="num-badge" style="left:${px(3.58)};top:${px(8.63)}">${midNums.under0}</span>` : ''}` : ''}
+  ${underSrcs[1] ? `<img class="under-2" src="${underSrcs[1]}" style="object-position:${underPos[1]}" alt="">${midCapEntries ? `<span class="num-badge" style="left:${px(5.48)};top:${px(8.63)}">${midNums.under1}</span>` : ''}` : ''}
   ${midCapEntries ? `<div class="mid-caps">${midCapEntries}</div>` : ''}
 
   <!-- HERO -->
-  ${heroSrc ? `<img class="hero" src="${heroSrc}" alt="">${midCapEntries ? `<span class="num-badge" style="left:${px(heroX + 0.15)};top:${px(10.05)}">${midNums.hero}</span>` : ''}` : ''}
+  ${heroSrc ? `<img class="hero" src="${heroSrc}" style="object-position:${heroPos}" alt="">${midCapEntries ? `<span class="num-badge" style="left:${px(heroX + 0.15)};top:${px(10.05)}">${midNums.hero}</span>` : ''}` : ''}
   ${quoteLines.length > 0 ? `
   <div class="quote-overlay">
     ${quoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}

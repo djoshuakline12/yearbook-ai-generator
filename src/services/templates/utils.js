@@ -157,6 +157,32 @@ function splitQuoteIntoLines(quoteText, barInWidth, fontSizePt) {
   return lines;
 }
 
+// Pick the quote for a photo overlay. Overlay bars sit ON the photo, so a
+// long quote walls off the subject — prefer the quote that needs the fewest
+// bars at the base font size, dropping to minFontPt before giving up.
+// Longer quotes stay available for text-zone mods where full length is fine.
+// Returns { quote, lines, fontPt } or null.
+function pickOverlayQuote(quotes, barWidthIn, fontPt, maxLines, minFontPt) {
+  for (const pt of minFontPt && minFontPt !== fontPt ? [fontPt, minFontPt] : [fontPt]) {
+    let best = null;
+    for (const q of quotes || []) {
+      if (!q || !q.text) continue;
+      const lines = splitQuoteIntoLines(q.text, barWidthIn, pt);
+      if (lines.length > 0 && lines.length <= maxLines) {
+        if (!best || lines.length < best.lines.length) best = { quote: q, lines, fontPt: pt };
+      }
+    }
+    if (best) return best;
+  }
+  return null;
+}
+
+// Per-photo crop anchor from smart-crop analysis; safe default keeps heads
+// in frame when analysis is missing.
+function photoObjectPosition(photo) {
+  return (photo && photo.objectPosition) || 'center 35%';
+}
+
 // De-duplicate the three caption fields, which frequently repeat the
 // subject's name (title = "NIKO DIAKOS", people = "Niko Diakos (10)",
 // body = "Niko Diakos (10) worships on stage").
@@ -250,8 +276,8 @@ function estimateTextHeightIn(text, colWidthIn, fontPt, { lineHeight = 1.45, col
 
 module.exports = {
   BRAND,
-  inToPx, ptToPx, escapeHtml, photoDataUri,
+  inToPx, ptToPx, escapeHtml, photoDataUri, photoObjectPosition,
   cleanCaption, isPlaceholder, isFilenameLike, pickCaption,
   splitQuoteIntoLines, wrapToLines, dedupCaption, cleanAttribution,
-  estimateTextHeightIn, wrapLineCount,
+  pickOverlayQuote, estimateTextHeightIn, wrapLineCount,
 };

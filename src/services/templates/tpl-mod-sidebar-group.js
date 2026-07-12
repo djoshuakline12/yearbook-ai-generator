@@ -14,9 +14,9 @@
 
 const {
   BRAND,
-  inToPx, ptToPx, escapeHtml, photoDataUri,
+  inToPx, ptToPx, escapeHtml, photoDataUri, photoObjectPosition,
   isPlaceholder, pickCaption, splitQuoteIntoLines, dedupCaption,
-  cleanAttribution, estimateTextHeightIn, wrapLineCount,
+  cleanAttribution, pickOverlayQuote, estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderModSidebarGroup(pageContent, photos, options = {}) {
@@ -35,9 +35,13 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
   // ---- Photo slots ----
   // group hero=0, center row=1,2, right top=3,4, sidebar mods=5,6,7,8
   const heroSrc = photoDataUri(photos[0]);
+  const heroPos = photoObjectPosition(photos[0]);
   const centerSrcs = [1, 2].map(i => photoDataUri(photos[i]));
+  const centerPos = [1, 2].map(i => photoObjectPosition(photos[i]));
   const rightSrcs = [3, 4].map(i => photoDataUri(photos[i]));
+  const rightPos = [3, 4].map(i => photoObjectPosition(photos[i]));
   const modSrcs = [5, 6, 7, 8].map(i => photoDataUri(photos[i]));
+  const modPos = [5, 6, 7, 8].map(i => photoObjectPosition(photos[i]));
 
   // ---- Text ----
   const titleRaw = (pageContent.pageTitle || pageContent.section || '');
@@ -61,13 +65,12 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
     .join('');
 
   const quotes = (pageContent.quotes || []).filter(q => q && q.text && !q.text.includes('['));
-  const quoteFontPt = 11.5;
-  let heroQuote = null;
-  let heroQuoteLines = [];
-  for (const q of quotes) {
-    const lines = splitQuoteIntoLines(q.text, 3.2, quoteFontPt);
-    if (lines.length > 0 && lines.length <= 6) { heroQuote = q; heroQuoteLines = lines; break; }
-  }
+  // Hero overlay bars sit on the group photo — cap at 4 bars and favor the
+  // shortest quote; longer quotes go to the sidebar mods in full.
+  const heroPick = pickOverlayQuote(quotes, 3.2, 11.5, 4, 10);
+  const heroQuote = heroPick ? heroPick.quote : null;
+  const quoteFontPt = heroPick ? heroPick.fontPt : 11.5;
+  const heroQuoteLines = heroPick ? heroPick.lines : [];
   const modQuotes = quotes.filter(q => q !== heroQuote).slice(0, 4);
 
   // Mod question bar: a question-ish framing of the section
@@ -411,9 +414,9 @@ ${BRAND.fontLink}
   ${sideMods.map((m, i) => {
     const top = modTop + i * (modH + modGap);
     if (m.photoOnly) {
-      return `<div class="side-mod" style="top:${px(top)};height:${px(modH)}"><img src="${m.src}" alt="" style="width:100%;height:100%;object-fit:cover;flex:none;"></div>`;
+      return `<div class="side-mod" style="top:${px(top)};height:${px(modH)}"><img src="${m.src}" alt="" style="width:100%;height:100%;object-fit:cover;flex:none;object-position:${modPos[i]};"></div>`;
     }
-    const img = m.src ? `<img src="${m.src}" alt="">` : '';
+    const img = m.src ? `<img src="${m.src}" style="object-position:${modPos[i]}" alt="">` : '';
     let body;
     if (m.quoteObj) {
       // Truncate so the quote + attribution always fit inside the mod box
@@ -437,18 +440,18 @@ ${BRAND.fontLink}
   ${titleRaw ? `<div class="center-title">${escapeHtml(titleRaw)}</div>` : ''}
   ${subheadText ? `<div class="subhead-bar">${escapeHtml(subheadText)}</div>` : ''}
   <div class="center-body">${bodyParagraphs}</div>
-  ${centerSrcs[0] ? `<img class="center-1" src="${centerSrcs[0]}" alt="">${centerCaps ? `<span class="num-badge" style="left:${px(2.88)};top:${px(centerPhotosY + centerPhotoH - 0.32)}">1</span>` : ''}` : ''}
-  ${centerSrcs[1] ? `<img class="center-2" src="${centerSrcs[1]}" alt="">${centerCaps ? `<span class="num-badge" style="left:${px(5.3)};top:${px(centerPhotosY + centerPhotoH - 0.32)}">2</span>` : ''}` : ''}
+  ${centerSrcs[0] ? `<img class="center-1" src="${centerSrcs[0]}" style="object-position:${centerPos[0]}" alt="">${centerCaps ? `<span class="num-badge" style="left:${px(2.88)};top:${px(centerPhotosY + centerPhotoH - 0.32)}">1</span>` : ''}` : ''}
+  ${centerSrcs[1] ? `<img class="center-2" src="${centerSrcs[1]}" style="object-position:${centerPos[1]}" alt="">${centerCaps ? `<span class="num-badge" style="left:${px(5.3)};top:${px(centerPhotosY + centerPhotoH - 0.32)}">2</span>` : ''}` : ''}
   ${centerCaps ? `<div class="center-caps">${centerCaps}</div>` : ''}
   ${centerFiller}
 
   <!-- RIGHT TOP -->
   ${showRightCaps ? `<div class="right-caps">${rightCaps}</div>` : ''}
-  ${rightSrcs[0] ? `<img class="right-1" src="${rightSrcs[0]}" alt="">${showRightCaps ? `<span class="num-badge" style="left:${px(9.63)};top:${px(2.28)}">3</span>` : ''}` : ''}
-  ${rightSrcs[1] ? `<img class="right-2" src="${rightSrcs[1]}" alt="">${showRightCaps ? `<span class="num-badge" style="left:${px(12.16)};top:${px(2.28)}">4</span>` : ''}` : ''}
+  ${rightSrcs[0] ? `<img class="right-1" src="${rightSrcs[0]}" style="object-position:${rightPos[0]}" alt="">${showRightCaps ? `<span class="num-badge" style="left:${px(9.63)};top:${px(2.28)}">3</span>` : ''}` : ''}
+  ${rightSrcs[1] ? `<img class="right-2" src="${rightSrcs[1]}" style="object-position:${rightPos[1]}" alt="">${showRightCaps ? `<span class="num-badge" style="left:${px(12.16)};top:${px(2.28)}">4</span>` : ''}` : ''}
 
   <!-- GROUP HERO -->
-  ${heroSrc ? `<img class="hero" src="${heroSrc}" alt="">${showRightCaps ? `<span class="num-badge" style="left:${px(8.03)};top:${px(10.1)}">5</span>` : ''}` : ''}
+  ${heroSrc ? `<img class="hero" src="${heroSrc}" style="object-position:${heroPos}" alt="">${showRightCaps ? `<span class="num-badge" style="left:${px(8.03)};top:${px(10.1)}">5</span>` : ''}` : ''}
   ${heroQuoteLines.length > 0 ? `
   <div class="quote-overlay" style="top:${px(flipQuote ? 3.25 : 10.05 - heroQuoteLines.length * 0.375 - (heroQuote.attribution ? 0.4 : 0.1))}">
     ${heroQuoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}

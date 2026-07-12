@@ -10,9 +10,9 @@
 
 const {
   BRAND,
-  inToPx, ptToPx, escapeHtml, photoDataUri,
+  inToPx, ptToPx, escapeHtml, photoDataUri, photoObjectPosition,
   isPlaceholder, pickCaption, splitQuoteIntoLines, wrapToLines, dedupCaption,
-  cleanAttribution, estimateTextHeightIn, wrapLineCount,
+  cleanAttribution, pickOverlayQuote, estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderCrossGutterMosaic(pageContent, photos, options = {}) {
@@ -47,16 +47,22 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
 
   const quotes = (pageContent.quotes || []).filter(q => q && q.text && !q.text.includes('['));
   const attrQuote = quotes[0] || null;
-  const overlayQuote = quotes[1] || quotes[0] || null;
+  // Overlay bars sit on the hero — favor the quote needing the fewest bars
+  // (max 5); longer quotes render in full in the left text column instead.
+  const overlayCandidates = quotes.slice(1).concat(quotes[0] ? [quotes[0]] : []);
 
   // Photo slots — fixed assignment matching the reference, no photo reuse:
   // hero=0, mosaic=1-4, small preview=5, minis=6-7. Slots without a photo
   // simply don't render.
   const heroSrc = photoDataUri(photos[0]);
+  const heroPos = photoObjectPosition(photos[0]);
   const mosaicSrcs = [1, 2, 3, 4].map(i => photoDataUri(photos[i]));
+  const mosaicPos = [1, 2, 3, 4].map(i => photoObjectPosition(photos[i]));
   const smallPreviewIdx = 5;
   const smallSrc = photoDataUri(photos[smallPreviewIdx]);
+  const smallPos = photoObjectPosition(photos[smallPreviewIdx]);
   const miniSrcs = [6, 7].map(i => photoDataUri(photos[i]));
+  const miniPos = [6, 7].map(i => photoObjectPosition(photos[i]));
 
   const smallCap = dedupCaption(pickCaption(pageContent.photoCaptions, smallPreviewIdx));
   const miniCaps = [6, 7].map(i => dedupCaption(pickCaption(pageContent.photoCaptions, i)));
@@ -125,10 +131,10 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   const mosaicCapsTop = 0.4 + mosaicH + 0.12;
 
   // Split overlay quote into fitted lines (bar is 3.8" wide, minus padding)
-  const quoteFontPt = 12;
-  const quoteLines = overlayQuote
-    ? splitQuoteIntoLines(overlayQuote.text, 3.5, quoteFontPt)
-    : [];
+  const overlayPick = pickOverlayQuote(overlayCandidates, 3.5, 12, 5, 10.5);
+  const overlayQuote = overlayPick ? overlayPick.quote : null;
+  const quoteFontPt = overlayPick ? overlayPick.fontPt : 12;
+  const quoteLines = overlayPick ? overlayPick.lines : [];
   const overlayAttr = overlayQuote ? cleanAttribution(overlayQuote.attribution) : '';
   // flipQuote variant moves the overlay to the top of the hero; otherwise it
   // bottom-anchors so a long quote never pushes the attribution chip off the
@@ -434,7 +440,7 @@ ${BRAND.fontLink}
     ${cleanAttribution(attrQuote.attribution) && !isPlaceholder(cleanAttribution(attrQuote.attribution)) ? `<div class="attr-name">— ${escapeHtml(cleanAttribution(attrQuote.attribution))}</div>` : ''}
   </div>` : ''}
 
-  ${smallSrc ? `<img class="small-photo" src="${smallSrc}" alt="">` : ''}
+  ${smallSrc ? `<img class="small-photo" src="${smallSrc}" style="object-position:${smallPos}" alt="">` : ''}
   ${smallCap && (smallCap.lead || smallCap.body) ? `
   <div class="small-caption">
     ${smallCap.lead ? `<span class="cap-title">${escapeHtml(smallCap.lead.toUpperCase())}</span> ` : ''}${escapeHtml(smallCap.body)}
@@ -442,7 +448,7 @@ ${BRAND.fontLink}
 
   <!-- ============ CENTER HERO ============ -->
 
-  ${heroSrc ? `<img class="hero-photo" src="${heroSrc}" alt="">` : ''}
+  ${heroSrc ? `<img class="hero-photo" src="${heroSrc}" style="object-position:${heroPos}" alt="">` : ''}
   ${heroSrc && mosaicCapEntries ? `<div class="hero-num">1</div>` : ''}
 
   <!-- ============ QUOTE OVERLAY ON HERO ============ -->
@@ -460,7 +466,7 @@ ${BRAND.fontLink}
       const badge = i + 2;
       // With 3 photos the last cell spans both columns so no dead cell shows.
       const span = (mosaicCount === 3 && pos === 2) ? ' style="grid-column: 1 / -1;"' : '';
-      return `<div class="mosaic-cell"${span}><img src="${mosaicSrcs[i]}" alt=""><span class="num-badge">${badge}</span></div>`;
+      return `<div class="mosaic-cell"${span}><img src="${mosaicSrcs[i]}" style="object-position:${mosaicPos[i]}" alt=""><span class="num-badge">${badge}</span></div>`;
     }).join('\n')}
   </div>` : ''}
 
@@ -478,13 +484,13 @@ ${BRAND.fontLink}
   <!-- ============ RIGHT-COLUMN MINI STACK ============ -->
 
   ${miniSrcs[0] ? `<div class="mini-1">
-    <img src="${miniSrcs[0]}" alt="">
+    <img src="${miniSrcs[0]}" style="object-position:${miniPos[0]}" alt="">
     <div class="cap">
       ${miniCaps[0] && miniCaps[0].lead ? `<span class="name">${escapeHtml(miniCaps[0].lead)}</span> ` : ''}${miniCaps[0] && miniCaps[0].body ? escapeHtml(miniCaps[0].body) : ''}
     </div>
   </div>` : ''}
   ${showMini2 ? `<div class="mini-2">
-    ${miniSrcs[1] ? `<img src="${miniSrcs[1]}" alt="">` : ''}
+    ${miniSrcs[1] ? `<img src="${miniSrcs[1]}" style="object-position:${miniPos[1]}" alt="">` : ''}
     <div class="cap">
       ${miniCaps[1] && miniCaps[1].lead ? `<span class="name">${escapeHtml(miniCaps[1].lead)}</span> ` : ''}${miniCaps[1] && miniCaps[1].body ? escapeHtml(miniCaps[1].body) : ''}
     </div>

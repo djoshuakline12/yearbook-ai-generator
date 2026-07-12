@@ -12,7 +12,7 @@
 
 const {
   BRAND,
-  inToPx, ptToPx, escapeHtml, photoDataUri,
+  inToPx, ptToPx, escapeHtml, photoDataUri, photoObjectPosition,
   isPlaceholder, pickCaption, splitQuoteIntoLines, dedupCaption,
   cleanAttribution, estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
@@ -43,11 +43,17 @@ function renderHeadlineHeroRail(pageContent, photos, options = {}) {
     : ['hero', 'inset2', 'under', 'inset1', 'rail0', 'rail1', 'rail2', 'quoteCol'];
   slotNames.forEach((k, i) => { idx[k] = i < N ? i : -1; });
   const at = (i) => (i >= 0 ? photoDataUri(photos[i]) : '');
+  const posAt = (i) => photoObjectPosition(i >= 0 ? photos[i] : null);
   const heroSrc = at(idx.hero);
+  const heroPos = posAt(idx.hero);
   const underSrc = at(idx.under);
+  const underPos = posAt(idx.under);
   const railSrcs = [at(idx.rail0), at(idx.rail1), at(idx.rail2)];
+  const railPos = [posAt(idx.rail0), posAt(idx.rail1), posAt(idx.rail2)];
   const insetSrcs = [at(idx.inset1), at(idx.inset2)];
+  const insetPos = [posAt(idx.inset1), posAt(idx.inset2)];
   const quoteColSrc = at(idx.quoteCol);
+  const quoteColPos = posAt(idx.quoteCol);
 
   // ---- Text ----
   const titleRaw = (pageContent.pageTitle || pageContent.section || '');
@@ -343,22 +349,22 @@ ${BRAND.fontLink}
     ${pullQuoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}
     ${cleanAttribution(pullQuote.attribution) && !isPlaceholder(cleanAttribution(pullQuote.attribution)) ? `<div class="quote-attr">— ${escapeHtml(cleanAttribution(pullQuote.attribution))}</div>` : ''}
   </div>` : ''}
-  ${insetSrcs[0] ? `<img class="inset-1" src="${insetSrcs[0]}" alt="">` : ''}
-  ${insetSrcs[1] ? `<img class="inset-2" src="${insetSrcs[1]}" alt="">` : ''}
+  ${insetSrcs[0] ? `<img class="inset-1" src="${insetSrcs[0]}" style="object-position:${insetPos[0]}" alt="">` : ''}
+  ${insetSrcs[1] ? `<img class="inset-2" src="${insetSrcs[1]}" style="object-position:${insetPos[1]}" alt="">` : ''}
   ${insetSrcs[1] && idx.inset2 >= 0 && capText(idx.inset2) ? `<div class="inset-2-cap">${escapeHtml(capText(idx.inset2))}</div>` : ''}
 
-  ${showQuoteColPhoto ? `<img class="quote-col-photo" src="${quoteColSrc}" alt="">` : ''}
+  ${showQuoteColPhoto ? `<img class="quote-col-photo" src="${quoteColSrc}" style="object-position:${quoteColPos}" alt="">` : ''}
 
   <!-- CENTER HERO -->
-  ${heroSrc ? `<img class="hero" src="${heroSrc}" alt="">${heroCaps ? `<span class="num-badge" style="left:${px(6.68)};top:${px(0.4 + heroH - 0.32)}">1</span>` : ''}` : ''}
+  ${heroSrc ? `<img class="hero" src="${heroSrc}" style="object-position:${heroPos}" alt="">${heroCaps ? `<span class="num-badge" style="left:${px(6.68)};top:${px(0.4 + heroH - 0.32)}">1</span>` : ''}` : ''}
   ${heroCaps ? `<div class="hero-caps">${heroCaps}</div>` : ''}
-  ${underSrc ? `<img class="under-hero" src="${underSrc}" alt="">${heroCaps ? `<span class="num-badge" style="left:${px(underX + 0.08)};top:${px(9.83)}">2</span>` : ''}` : ''}
+  ${underSrc ? `<img class="under-hero" src="${underSrc}" style="object-position:${underPos}" alt="">${heroCaps ? `<span class="num-badge" style="left:${px(underX + 0.08)};top:${px(9.83)}">2</span>` : ''}` : ''}
 
   <!-- RIGHT RAIL -->
   ${railMods.length > 0 ? `<div class="rail-header">${escapeHtml(railHeader)}</div>` : ''}
   ${railMods.map((m, i) => {
     const top = 1.15 + i * (railUnit + railGap);
-    const img = m.src ? `<img src="${m.src}" alt="">` : '';
+    const img = m.src ? `<img src="${m.src}" style="object-position:${railPos[railSrcs.indexOf(m.src)] || 'center 35%'}" alt="">` : '';
     let body;
     if (m.quoteObj) {
       const attrName = cleanAttribution(m.quoteObj.attribution);

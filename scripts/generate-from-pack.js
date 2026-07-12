@@ -31,13 +31,13 @@ const SECTION_NAMES = {
   '18_baseball': 'Baseball', '19_softball': 'Softball', '21_cheer': 'Cheer',
   '22_cross_country': 'Cross Country', '23_field_hockey': 'Field Hockey',
   '24_chapel_and_community_groups': 'Chapel and Community Groups',
-  '25_see_you_at_the_pole': 'See You at the Pole',
+  '25_see_you_at_the_pole': 'See You At The Pole',
   '26_freshman_retreat': 'Freshman Retreat', '27_senior_retreat': 'Senior Retreat',
   '28_spirit_week': 'Spirit Week', '29_artist_showcase': 'Artist Showcase',
   '30_christmas_show': 'Christmas Show',
   '31_spring_production_a_week_away': 'Spring Production: A Week Away',
   '32_royal_ball': 'Royal Ball', '33_fall_fest_harvest_party': 'Fall Fest / Harvest Party',
-  '34_scholarship_banquet': 'Scholarship Banquet', '35_grandparents_day': 'Grandparents Day',
+  '34_scholarship_banquet': 'Scholarship Banquet', '35_grandparents_day': "Grandparents' Day",
   '36_community_service': 'Community Service',
   '37_student_leadership_council_slc': 'Student Leadership Council (SLC)',
   '38_ambassadors': 'Ambassadors', '39_senior_thesis_project_stp': 'Senior Thesis Project (STP)',
@@ -127,31 +127,104 @@ function manifestCaptions(spreadFolder) {
   return map;
 }
 
-async function main() {
-  const [spreadFolder, outDirArg, apiBase = 'https://api.yearbook101.com'] = process.argv.slice(2);
-  if (!spreadFolder || !SECTION_NAMES[spreadFolder]) {
-    console.error('Usage: node scripts/generate-from-pack.js <spreadFolder> [outDir] [apiBase]');
-    console.error('Known folders:', Object.keys(SECTION_NAMES).join(', '));
-    process.exit(1);
-  }
-  const outDir = (outDirArg || path.join(os.homedir(), 'Downloads', 'finished spreads')).replace(/^~/, os.homedir());
-  fs.mkdirSync(outDir, { recursive: true });
-
-  const sectionName = SECTION_NAMES[spreadFolder];
-  const sections = parseCompiled(fs.readFileSync(COMPILED_TXT, 'utf8'));
-  const sec = sections[sectionName];
-  if (!sec) { console.error(`Section "${sectionName}" not found in compiled copy`); process.exit(1); }
-
-  // Photos: top-level jpg/png files, sorted (skips _raw_originals & folder_x subdirs)
+// Photos on disk for a spread: top-level files first (caption-matched),
+// then folder_xxxx/ Drive-folder pulls (uncaptioned), capped at maxPhotos.
+function collectPhotos(spreadFolder, maxPhotos = 13) {
   const dir = path.join(PACK_DIR, spreadFolder);
-  const files = fs.readdirSync(dir)
+  if (!fs.existsSync(dir)) return [];
+  const top = fs.readdirSync(dir)
     .filter(f => /\.(jpe?g|png)$/i.test(f) && fs.statSync(path.join(dir, f)).isFile())
-    .sort();
-  if (!files.length) { console.error(`No photos in ${dir}`); process.exit(1); }
+    .sort()
+    .map(f => ({ file: path.join(dir, f), base: f.replace(/\.\w+$/, ''), captioned: true }));
+  const pulls = [];
+  for (const sub of fs.readdirSync(dir).filter(d => d.startsWith('folder_') && fs.statSync(path.join(dir, d)).isDirectory()).sort()) {
+    for (const f of fs.readdirSync(path.join(dir, sub)).filter(f => /\.(jpe?g|png)$/i.test(f)).sort()) {
+      pulls.push({ file: path.join(dir, sub, f), base: f.replace(/\.\w+$/, ''), captioned: false });
+    }
+  }
+  return [...top, ...pulls].slice(0, maxPhotos);
+}
 
+// Missing-content records from the pack's own pipeline reports.
+function missingPhotoRecords(spreadNum) {
+  const out = { noLink: 0, authErrors: 0 };
+  const npPath = path.join(PACK_DIR, 'needs_photo.csv');
+  if (fs.existsSync(npPath)) {
+    const rows = parseCsv(fs.readFileSync(npPath, 'utf8'));
+    out.noLink = rows.slice(1).filter(r => (r[0] || '').padStart(2, '0') === spreadNum).length;
+  }
+  const sumPath = path.join(PACK_DIR, 'summary.md');
+  if (fs.existsSync(sumPath)) {
+    const re = new RegExp(`^- \\*\\*Spread ${Number(spreadNum)} `, 'gm');
+    out.authErrors = (fs.readFileSync(sumPath, 'utf8').match(re) || []).length;
+  }
+  return out;
+}
+
+// Content scrutiny: is there enough material for a strong spread?
+function auditSpread(spreadFolder, sec, photos) {
+  const flags = [];
+  const captioned = photos.filter(p => p.captioned).length;
+  const missing = missingPhotoRecords(spreadFolder.slice(0, 2));
+  if (photos.length === 0) flags.push('NO PHOTOS on disk — cannot generate');
+  else if (photos.length < 3) flags.push(`NEEDS MORE PHOTOS — only ${photos.length}, not generating (5-9 ideal)`);
+  else if (photos.length <= 4) flags.push(`${photos.length} photos — usable but thin (5-9 ideal)`);
+  if (photos.length && captioned < photos.length) flags.push(`${photos.length - captioned} photo(s) have no caption (Drive folder pulls)`);
+  if (missing.noLink) flags.push(`${missing.noLink} photo(s) listed in the doc with no Drive link`);
+  if (missing.authErrors) flags.push(`${missing.authErrors} photo(s) blocked by Drive permissions (Request Access)`);
+  if (!sec) { flags.push('NO COPY found in compiled doc'); return flags; }
+  if ((sec.bodyCopy || '').length < 250) flags.push(`body copy short (${(sec.bodyCopy || '').length} chars)`);
+  if (sec.quotes.length === 0) flags.push('no quotes');
+  else if (sec.quotes.length === 1) flags.push('only 1 quote (2-3 ideal: hero pull-quote + sidebar mods)');
+  if (sec.highlights.length === 0) flags.push('no stats/facts (highlights fill rails and bands)');
+  return flags;
+}
+
+async function generateSpread(spreadFolder, sections, outDir, apiBase) {
+  const sectionName = SECTION_NAMES[spreadFolder];
+  const sec = sections[sectionName];
+  const photos = collectPhotos(spreadFolder);
+  const flags = auditSpread(spreadFolder, sec, photos);
+  const result = { spread: spreadFolder, title: sec ? sec.title : '(no copy)', photos: photos.length, quotes: sec ? sec.quotes.length : 0, flags, status: 'skipped' };
+
+  // AUDIT_ONLY=1 rebuilds the content report without re-rendering; a spread
+  // counts as done if its output file already exists.
+  if (process.env.AUDIT_ONLY) {
+    const existing = ['png', 'jpg'].map(e => path.join(outDir, `${spreadFolder}.${e}`)).find(p => fs.existsSync(p));
+    if (existing) { result.status = 'ok'; result.out = existing; }
+    return result;
+  }
+  // Under 3 photos: don't generate a half-empty spread — flag for the
+  // second content batch instead.
+  if (!sec || photos.length < 3) return result;
+
+  // Drive folder pulls contain burst shots and same-image-different-size
+  // duplicates that byte-level dedup can't catch — drop perceptual
+  // near-duplicates (8x8 average hash, hamming distance <= 6).
+  const sharp = require('sharp');
+  const ahash = async (file) => {
+    const px = await sharp(file).rotate().grayscale().resize(8, 8, { fit: 'fill' }).raw().toBuffer();
+    const avg = px.reduce((a, b) => a + b, 0) / px.length;
+    let bits = 0n;
+    for (let i = 0; i < 64; i++) bits = (bits << 1n) | (px[i] > avg ? 1n : 0n);
+    return bits;
+  };
+  const hamming = (a, b) => { let x = a ^ b, n = 0; while (x) { n += Number(x & 1n); x >>= 1n; } return n; };
+  const seen = [];
+  const unique = [];
+  for (const p of photos) {
+    const h = await ahash(p.file);
+    if (seen.some(s => hamming(s, h) <= 6)) continue;
+    seen.push(h);
+    unique.push(p);
+  }
+  if (unique.length < photos.length) result.flags.push(`dropped ${photos.length - unique.length} near-duplicate photo(s)`);
+
+  // Captions indexed against the deduped photo list.
   const capMap = manifestCaptions(spreadFolder);
-  const photoCaptions = files.map((f, i) => {
-    const cap = capMap[f.replace(/\.\w+$/, '')] || '';
+  const photoCaptions = unique.map((p, i) => {
+    if (!p.captioned) return null;
+    const cap = capMap[p.base] || '';
     return cap ? { photoIndex: i, caption: cap, people: '' } : null;
   }).filter(Boolean);
 
@@ -165,19 +238,14 @@ async function main() {
     photoCaptions,
   };
 
-  console.log(`Spread: ${spreadFolder} — "${sec.title}" | ${files.length} photos, ${sec.quotes.length} quotes, ${sec.highlights.length} highlights`);
-
-  // Pre-resize: pack photos are 20-35MB camera originals, over the API's
-  // upload cap (the server resizes to ~2000px internally anyway).
-  const sharp = require('sharp');
   const form = new FormData();
-  for (const f of files) {
-    const buf = await sharp(path.join(dir, f))
+  for (const p of unique) {
+    const buf = await sharp(p.file)
       .rotate()
       .resize(2400, 2400, { fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 88 })
       .toBuffer();
-    form.append('photos', new Blob([buf], { type: 'image/jpeg' }), f.replace(/\.\w+$/, '.jpg'));
+    form.append('photos', new Blob([buf], { type: 'image/jpeg' }), p.base + '.jpg');
   }
   form.append('pageContent', JSON.stringify(pageContent));
   form.append('pageType', 'spread');
@@ -186,15 +254,46 @@ async function main() {
   const t0 = Date.now();
   const res = await fetch(`${apiBase}/api/generate-spread`, { method: 'POST', body: form });
   if (!res.ok || (res.headers.get('content-type') || '').includes('json')) {
-    const body = await res.text();
-    console.error(`FAILED (${res.status}): ${body.slice(0, 400)}`);
-    process.exit(1);
+    result.status = `FAILED (${res.status}): ${(await res.text()).slice(0, 200)}`;
+    return result;
   }
   const buf = Buffer.from(await res.arrayBuffer());
   const ext = (res.headers.get('content-type') || '').includes('png') ? 'png' : 'jpg';
   const outPath = path.join(outDir, `${spreadFolder}.${ext}`);
   fs.writeFileSync(outPath, buf);
-  console.log(`Wrote ${outPath} (${(buf.length / 1e6).toFixed(1)} MB, ${((Date.now() - t0) / 1000).toFixed(0)}s)`);
+  result.status = 'ok';
+  result.out = outPath;
+  result.seconds = Math.round((Date.now() - t0) / 1000);
+  return result;
+}
+
+async function main() {
+  const [target, outDirArg, apiBase = 'https://api.yearbook101.com'] = process.argv.slice(2);
+  if (!target || (target !== 'all' && !SECTION_NAMES[target])) {
+    console.error('Usage: node scripts/generate-from-pack.js <spreadFolder|all> [outDir] [apiBase]');
+    process.exit(1);
+  }
+  const outDir = (outDirArg || path.join(os.homedir(), 'Downloads', 'finished spreads')).replace(/^~/, os.homedir());
+  fs.mkdirSync(outDir, { recursive: true });
+  const sections = parseCompiled(fs.readFileSync(COMPILED_TXT, 'utf8'));
+
+  const folders = target === 'all' ? Object.keys(SECTION_NAMES) : [target];
+  const results = [];
+  for (const folder of folders) {
+    process.stdout.write(`${folder} … `);
+    try {
+      const r = await generateSpread(folder, sections, outDir, apiBase);
+      results.push(r);
+      console.log(`${r.status}${r.seconds ? ` (${r.seconds}s)` : ''}${r.flags.length ? ` | FLAGS: ${r.flags.join('; ')}` : ''}`);
+    } catch (e) {
+      results.push({ spread: folder, status: 'error: ' + e.message, flags: [] });
+      console.log('error: ' + e.message);
+    }
+  }
+  const reportPath = path.join(outDir, '_content_report.json');
+  fs.writeFileSync(reportPath, JSON.stringify(results, null, 2));
+  const flagged = results.filter(r => r.flags.length);
+  console.log(`\nDone: ${results.filter(r => r.status === 'ok').length}/${results.length} generated. ${flagged.length} flagged. Report: ${reportPath}`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

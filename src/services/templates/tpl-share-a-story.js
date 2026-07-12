@@ -16,7 +16,7 @@
 
 const {
   BRAND,
-  inToPx, ptToPx, escapeHtml, photoDataUri,
+  inToPx, ptToPx, escapeHtml, photoDataUri, photoObjectPosition,
   isPlaceholder, pickCaption, splitQuoteIntoLines, dedupCaption,
   cleanAttribution, estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
@@ -49,12 +49,19 @@ function renderShareAStory(pageContent, photos, options = {}) {
     ['crowd', 'rightBig', 'stack1', 'stack2', 'rightPair1'].forEach((s, i) => { if (i < N) slotIdx[s] = i; });
   }
   const at = (i) => (i >= 0 ? photoDataUri(photos[i]) : '');
+  const posAt = (i) => photoObjectPosition(i >= 0 ? photos[i] : null);
   const crowdSrc = at(slotIdx.crowd);
+  const crowdPos = posAt(slotIdx.crowd);
   const stackSrcs = [at(slotIdx.stack1), at(slotIdx.stack2)];
+  const stackPos = [posAt(slotIdx.stack1), posAt(slotIdx.stack2)];
   const rightBigSrc = at(slotIdx.rightBig);
+  const rightBigPos = posAt(slotIdx.rightBig);
   const rightPairSrcs = [at(slotIdx.rightPair1), at(slotIdx.rightPair2)];
+  const rightPairPos = [posAt(slotIdx.rightPair1), posAt(slotIdx.rightPair2)];
   const railSrc = at(slotIdx.rail);
+  const railPos = posAt(slotIdx.rail);
   const headSrcs = [0, 1, 2].map(i => (slotIdx.heads[i] != null ? photoDataUri(photos[slotIdx.heads[i]]) : ''));
+  const headPos = [0, 1, 2].map(i => photoObjectPosition(slotIdx.heads[i] != null ? photos[slotIdx.heads[i]] : null));
   // Badge numbers follow visual order over slots that actually have a photo.
   const badgeNums = {};
   let bn = 0;
@@ -451,9 +458,9 @@ ${BRAND.fontLink}
   <div class="body-copy">${bodyParagraphs}</div>
 
   <!-- LEFT PHOTO BLOCK -->
-  ${crowdSrc ? `<img class="crowd" src="${crowdSrc}" alt="">${leftCaps ? `<span class="num-badge" style="left:${px(0.83)};top:${px(crowdY + crowdH - 0.32)}">${badgeNums.crowd}</span>` : ''}` : ''}
-  ${stackSrcs[0] ? `<img class="stack-1" src="${stackSrcs[0]}" alt="">${leftCaps ? `<span class="num-badge" style="left:${px(5.28)};top:${px(crowdY + stackH - 0.32)}">${badgeNums.stack1}</span>` : ''}` : ''}
-  ${stackSrcs[1] ? `<img class="stack-2" src="${stackSrcs[1]}" alt="">${leftCaps ? `<span class="num-badge" style="left:${px(5.28)};top:${px(stack2Y + stackH - 0.32)}">${badgeNums.stack2}</span>` : ''}` : ''}
+  ${crowdSrc ? `<img class="crowd" src="${crowdSrc}" style="object-position:${crowdPos}" alt="">${leftCaps ? `<span class="num-badge" style="left:${px(0.83)};top:${px(crowdY + crowdH - 0.32)}">${badgeNums.crowd}</span>` : ''}` : ''}
+  ${stackSrcs[0] ? `<img class="stack-1" src="${stackSrcs[0]}" style="object-position:${stackPos[0]}" alt="">${leftCaps ? `<span class="num-badge" style="left:${px(5.28)};top:${px(crowdY + stackH - 0.32)}">${badgeNums.stack1}</span>` : ''}` : ''}
+  ${stackSrcs[1] ? `<img class="stack-2" src="${stackSrcs[1]}" style="object-position:${stackPos[1]}" alt="">${leftCaps ? `<span class="num-badge" style="left:${px(5.28)};top:${px(stack2Y + stackH - 0.32)}">${badgeNums.stack2}</span>` : ''}` : ''}
   ${leftCaps ? `<div class="left-caps">${leftCaps}</div>` : ''}
 
   <!-- BOTTOM TALKING-HEADS BAND -->
@@ -461,7 +468,7 @@ ${BRAND.fontLink}
   ${angleBarRaw ? `<div class="angle-bar">${escapeHtml(angleBarRaw.toUpperCase())}</div>` : ''}
   ${headMods.map((m, i) => {
     const x = bandLeft + i * headModStride;
-    const img = m.src ? `<img src="${m.src}" alt="">` : '';
+    const img = m.src ? `<img src="${m.src}" style="object-position:${headPos[headSrcs.indexOf(m.src)] || 'center 35%'}" alt="">` : '';
     let body;
     if (m.quoteObj) {
       let text = m.quoteObj.text.replace(/^["']|["']$/g, '');
@@ -477,9 +484,9 @@ ${BRAND.fontLink}
   }).join('\n')}
 
   <!-- RIGHT PAGE PHOTOS -->
-  ${rightBigSrc ? `<img class="right-big" src="${rightBigSrc}" alt="">${rightCaps ? `<span class="num-badge" style="left:${px(8.28)};top:${px(0.4 + rightBigH - 0.32)}">${badgeNums.rightBig}</span>` : ''}` : ''}
-  ${rightPairSrcs[0] ? `<img class="right-pair-1" src="${rightPairSrcs[0]}" alt="">${rightCaps ? `<span class="num-badge" style="left:${px(8.28)};top:${px(rightPairY + rightPairH - 0.32)}">${badgeNums.rightPair1}</span>` : ''}` : ''}
-  ${rightPairSrcs[1] ? `<img class="right-pair-2" src="${rightPairSrcs[1]}" alt="">${rightCaps ? `<span class="num-badge" style="left:${px(10.62)};top:${px(rightPairY + rightPairH - 0.32)}">${badgeNums.rightPair2}</span>` : ''}` : ''}
+  ${rightBigSrc ? `<img class="right-big" src="${rightBigSrc}" style="object-position:${rightBigPos}" alt="">${rightCaps ? `<span class="num-badge" style="left:${px(8.28)};top:${px(0.4 + rightBigH - 0.32)}">${badgeNums.rightBig}</span>` : ''}` : ''}
+  ${rightPairSrcs[0] ? `<img class="right-pair-1" src="${rightPairSrcs[0]}" style="object-position:${rightPairPos[0]}" alt="">${rightCaps ? `<span class="num-badge" style="left:${px(8.28)};top:${px(rightPairY + rightPairH - 0.32)}">${badgeNums.rightPair1}</span>` : ''}` : ''}
+  ${rightPairSrcs[1] ? `<img class="right-pair-2" src="${rightPairSrcs[1]}" style="object-position:${rightPairPos[1]}" alt="">${rightCaps ? `<span class="num-badge" style="left:${px(10.62)};top:${px(rightPairY + rightPairH - 0.32)}">${badgeNums.rightPair2}</span>` : ''}` : ''}
   ${rightCaps ? `<div class="right-caps">${rightCaps}</div>` : ''}
 
   <!-- RIGHT RAIL -->
@@ -488,7 +495,7 @@ ${BRAND.fontLink}
     ${railQuoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}
     ${cleanAttribution(railQuote.attribution) && !isPlaceholder(cleanAttribution(railQuote.attribution)) ? `<div class="quote-attr">— ${escapeHtml(cleanAttribution(railQuote.attribution))}</div>` : ''}
   </div>` : ''}
-  ${railSrc ? `<img class="rail-photo" src="${railSrc}" style="top:${px(railPhotoTop)}" alt="">` : ''}
+  ${railSrc ? `<img class="rail-photo" src="${railSrc}" style="top:${px(railPhotoTop)};object-position:${railPos}" alt="">` : ''}
   ${highlights.length > 0 ? `
   <div class="rail-highlights" style="top:${px(highlightsTop)}">
     <div class="hl-header">More to the story</div>
