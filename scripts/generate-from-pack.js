@@ -146,8 +146,9 @@ function manifestCaptions(spreadFolder) {
   return map;
 }
 
-// Photos on disk for a spread: top-level files first (caption-matched),
-// then folder_xxxx/ Drive-folder pulls (uncaptioned), capped at maxPhotos.
+// Photos on disk for a spread: top-level files first (caption-matched via
+// the manifest), then EVERY subdirectory (Drive folder pulls, user-added
+// folders like "Spirit Week Photos" or "Grad Day Pics"), capped at maxPhotos.
 function collectPhotos(spreadFolder, maxPhotos = 13) {
   const dir = path.join(PACK_DIR, spreadFolder);
   if (!fs.existsSync(dir)) return [];
@@ -156,10 +157,18 @@ function collectPhotos(spreadFolder, maxPhotos = 13) {
     .sort()
     .map(f => ({ file: path.join(dir, f), base: f.replace(/\.\w+$/, ''), captioned: true }));
   const pulls = [];
-  for (const sub of fs.readdirSync(dir).filter(d => d.startsWith('folder_') && fs.statSync(path.join(dir, d)).isDirectory()).sort()) {
-    for (const f of fs.readdirSync(path.join(dir, sub)).filter(f => /\.(jpe?g|png)$/i.test(f)).sort()) {
-      pulls.push({ file: path.join(dir, sub, f), base: f.replace(/\.\w+$/, ''), captioned: false });
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d).sort()) {
+      if (e.startsWith('.') || e === '_raw_originals') continue;
+      const p = path.join(d, e);
+      const st = fs.statSync(p);
+      if (st.isDirectory()) walk(p);
+      else if (/\.(jpe?g|png)$/i.test(e)) pulls.push({ file: p, base: e.replace(/\.\w+$/, ''), captioned: false });
     }
+  };
+  for (const sub of fs.readdirSync(dir).sort()) {
+    const p = path.join(dir, sub);
+    if (!sub.startsWith('.') && sub !== '_raw_originals' && fs.statSync(p).isDirectory()) walk(p);
   }
   return [...top, ...pulls].slice(0, maxPhotos);
 }
@@ -293,13 +302,99 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// Pair mode: two subjects on one split spread (Tpl 6), rendered locally
+// through the same template engine + exporter the server uses.
+//   node scripts/generate-from-pack.js pair 01_bible+02_english [outDir]
+// ---------------------------------------------------------------------------
+async function generatePair(pairSpec, sections, outDir) {
+  const [fa, fb] = pairSpec.split('+');
+  if (!SECTION_NAMES[fa] || !SECTION_NAMES[fb]) throw new Error(`unknown pair folders: ${pairSpec}`);
+  const sharp = require('sharp');
+  const { renderHandTemplate } = require('../src/services/templates');
+  const { exportToFile } = require('../src/services/exporter');
+
+  const halves = [];
+  const allPhotos = [];
+  const flags = [];
+  for (const folder of [fa, fb]) {
+    const sec = sections[SECTION_NAMES[folder]];
+    const photosRaw = collectPhotos(folder, 6);
+    const halfFlags = auditSpread(folder, sec, photosRaw).map(f => `${folder}: ${f}`);
+    flags.push(...halfFlags);
+    if (!sec) throw new Error(`${folder}: no copy in compiled doc`);
+    if (halfFlags.some(f => f.includes('NEEDS NAME'))) {
+      return { spread: pairSpec, title: '(held)', photos: 0, quotes: 0, flags, status: 'skipped' };
+    }
+    // Perceptual dedupe within the half, then top 3 photos.
+    const seen = [];
+    const unique = [];
+    for (const p of photosRaw) {
+      const pxbuf = await sharp(p.file).rotate().grayscale().resize(8, 8, { fit: 'fill' }).raw().toBuffer();
+      const avg = pxbuf.reduce((x, y) => x + y, 0) / pxbuf.length;
+      let bits = 0n;
+      for (let i = 0; i < 64; i++) bits = (bits << 1n) | (pxbuf[i] > avg ? 1n : 0n);
+      const ham = (x, y) => { let v = x ^ y, n = 0; while (v) { n += Number(v & 1n); v >>= 1n; } return n; };
+      if (seen.some(s => ham(s, bits) <= 6)) continue;
+      seen.push(bits);
+      unique.push(p);
+      if (unique.length === 3) break;
+    }
+    const capMap = manifestCaptions(folder);
+    const photoCaptions = unique.map((p, i) => {
+      if (!p.captioned) return null;
+      const cap = capMap[p.base] || '';
+      return cap ? { photoIndex: i, caption: cap, people: '' } : null;
+    }).filter(Boolean);
+    for (const p of unique) {
+      const buf = await sharp(p.file).rotate().resize(2000, 2000, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 86 }).toBuffer();
+      allPhotos.push({ base64: buf.toString('base64'), captioned: p.captioned });
+    }
+    halves.push({
+      title: sec.title.toUpperCase(),
+      section: SECTION_NAMES[folder],
+      bodyCopy: sec.bodyCopy,
+      quotes: sec.quotes,
+      photoCaptions,
+      _photoCount: unique.length,
+    });
+  }
+  const pageContent = { split: halves, photoSplit: halves[0]._photoCount };
+  const html = renderHandTemplate('split-academic', pageContent, allPhotos, { dpi: 450, variant: 0 });
+  const t0 = Date.now();
+  const out = await exportToFile(html, 'png', 'spread');
+  const outPath = path.join(outDir, `${fa}+${fb}.${out.extension}`);
+  fs.writeFileSync(outPath, out.buffer);
+  return {
+    spread: pairSpec,
+    title: `${halves[0].title} / ${halves[1].title}`,
+    photos: allPhotos.length, quotes: halves[0].quotes.length + halves[1].quotes.length,
+    flags, status: 'ok', out: outPath, seconds: Math.round((Date.now() - t0) / 1000),
+  };
+}
+
 async function main() {
-  const [target, outDirArg, apiBase = 'https://api.yearbook101.com'] = process.argv.slice(2);
+  const [target, pairOrOutDir, outDirArg, apiBase = 'https://api.yearbook101.com'] = process.argv.slice(2);
+  if (target === 'pair') {
+    if (!pairOrOutDir || !pairOrOutDir.includes('+')) {
+      console.error('Usage: node scripts/generate-from-pack.js pair <folderA>+<folderB> [outDir]');
+      process.exit(1);
+    }
+    const outDir = (outDirArg || path.join(os.homedir(), 'Downloads', 'finished spreads')).replace(/^~/, os.homedir());
+    fs.mkdirSync(outDir, { recursive: true });
+    ensureCompiledTxt();
+    const sections = parseCompiled(fs.readFileSync(COMPILED_TXT, 'utf8'));
+    process.stdout.write(`${pairOrOutDir} … `);
+    const r = await generatePair(pairOrOutDir, sections, outDir);
+    console.log(`${r.status}${r.seconds ? ` (${r.seconds}s)` : ''}${r.flags.length ? ` | FLAGS: ${r.flags.join('; ')}` : ''}`);
+    process.exit(r.status === 'ok' ? 0 : 1);
+  }
+  const outDirLegacy = pairOrOutDir;
   if (!target || (target !== 'all' && !SECTION_NAMES[target])) {
-    console.error('Usage: node scripts/generate-from-pack.js <spreadFolder|all> [outDir] [apiBase]');
+    console.error('Usage: node scripts/generate-from-pack.js <spreadFolder|all|pair a+b> [outDir] [apiBase]');
     process.exit(1);
   }
-  const outDir = (outDirArg || path.join(os.homedir(), 'Downloads', 'finished spreads')).replace(/^~/, os.homedir());
+  const outDir = (outDirLegacy || path.join(os.homedir(), 'Downloads', 'finished spreads')).replace(/^~/, os.homedir());
   fs.mkdirSync(outDir, { recursive: true });
   ensureCompiledTxt();
   const sections = parseCompiled(fs.readFileSync(COMPILED_TXT, 'utf8'));

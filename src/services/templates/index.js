@@ -9,6 +9,7 @@ const { renderMainHeadlineBleed } = require('./tpl-main-headline-bleed');
 const { renderShareAStory } = require('./tpl-share-a-story');
 const { renderModSidebarGroup } = require('./tpl-mod-sidebar-group');
 const { renderHeadlineHeroRail } = require('./tpl-headline-hero-rail');
+const { renderSplitAcademic } = require('./tpl-split-academic');
 
 const TEMPLATES = {
   'hero-top-bleed': renderShareAStory,          // Tpl 1 — editorial "share a story"
@@ -16,6 +17,9 @@ const TEMPLATES = {
   'hero-dominant-sidebar': renderHeadlineHeroRail, // Tpl 3 — headline + hero + rail
   'sidebar-mods-bleed': renderMainHeadlineBleed,   // Tpl 4 — main headline bleed
   'cross-gutter-mosaic': renderCrossGutterMosaic,  // Tpl 5 — cross-gutter mosaic
+  // Tpl 6 — two subjects per spread; invoked explicitly (pageContent.split),
+  // never hash-assigned, so it stays out of the auto rotation.
+  'split-academic': renderSplitAcademic,
 };
 
 // Old algorithmic style names → nearest hand-crafted template. Keeps
@@ -70,6 +74,9 @@ function renderHandTemplate(templateId, pageContent, photos, options) {
   const resolved = resolveTemplateId(templateId);
   const fn = resolved && TEMPLATES[resolved];
   if (!fn) throw new Error(`Unknown hand template: ${templateId}`);
+  // Split spreads carry per-half photo slices keyed by pageContent.photoSplit;
+  // a global dedupe would shift that boundary. Pair mode dedupes per half.
+  if (pageContent && pageContent.split) return fn(pageContent, photos, options);
   const { photos: uniquePhotos, captions } = dedupePhotosAndCaptions(photos, pageContent && pageContent.photoCaptions);
   const content = (captions !== (pageContent && pageContent.photoCaptions))
     ? { ...pageContent, photoCaptions: captions }
