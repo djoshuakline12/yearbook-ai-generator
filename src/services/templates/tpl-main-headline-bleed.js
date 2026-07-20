@@ -168,6 +168,22 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
   // hero — render them as a white chip over its bottom-left instead.
   const midCapsOverlay = !crowdSrc;
 
+  // Overlay bars dodge the hero's subject: vertical side away from the
+  // detected faces (faces usually sit high, so bars default to the bottom),
+  // horizontal side away from focalX with the variant bit as tie-breaker.
+  const heroFocal = (assign.hero >= 0 && photos[assign.hero] && photos[assign.hero].focalPoint) || { focalX: 0.5, focalY: 0.35 };
+  const qBlockH = quoteLines.length * 0.41 + 0.6;
+  const overlayTop = heroFocal.focalY <= 0.5
+    ? Math.max(heroTop + 0.4, 10.0 - qBlockH)
+    : heroTop + 0.4;
+  const overlayLeft = heroFocal.focalX >= 0.55 ? heroX + 0.4
+    : heroFocal.focalX <= 0.45 ? 15.6 - 3.7
+    : (flipQuote ? 15.6 - 3.7 : heroX + 0.4);
+  // Sparse-case caption chip takes the opposite corner from the quote block.
+  const midCapsChipLeft = (quoteLines.length && overlayTop > heroTop + 1 && overlayLeft < 10)
+    ? 15.6 - 3.7
+    : heroX + 0.35;
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -321,7 +337,7 @@ ${BRAND.fontLink}
   .mid-caps {
     position: absolute;
     ${midCapsOverlay
-      ? `left: ${px(heroX + 0.35)}; bottom: ${px(0.75)};
+      ? `left: ${px(midCapsChipLeft)}; bottom: ${px(0.75)};
     width: ${px(3.7)};
     background: rgba(255,255,255,0.92);
     padding: ${px(0.08)} ${px(0.12)};
@@ -355,7 +371,7 @@ ${BRAND.fontLink}
   }
   .quote-overlay {
     position: absolute;
-    left: ${px(8.4)}; top: ${px(flipQuote ? Math.max(heroTop + 0.4, 10.0 - quoteLines.length * 0.41 - 0.6) : heroTop + 0.4)};
+    left: ${px(overlayLeft)}; top: ${px(overlayTop)};
     width: ${px(3.7)};
     z-index: 3;
   }

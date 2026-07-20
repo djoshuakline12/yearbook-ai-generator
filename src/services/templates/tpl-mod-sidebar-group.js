@@ -165,6 +165,18 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
   const heroH = 10.5 - heroTop;
   const showRightCaps = hasRightTop && rightCaps;
 
+  // Overlay bars dodge the group photo's subjects (faces sit high in most
+  // shots, so bars default to the bottom; horizontal side away from focalX).
+  const heroFocal = (photos[0] && photos[0].focalPoint) || { focalX: 0.5, focalY: 0.35 };
+  const heroOverlayTop = heroQuote
+    ? (heroFocal.focalY <= 0.5
+        ? 10.05 - heroQuoteLines.length * 0.375 - (heroQuote.attribution ? 0.4 : 0.1)
+        : heroTop + 0.45)
+    : 0;
+  const heroOverlayLeft = heroFocal.focalX >= 0.55 ? 8.35
+    : heroFocal.focalX <= 0.45 ? 12.0
+    : (flipQuote ? 12.0 : 8.35);
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -382,7 +394,6 @@ ${BRAND.fontLink}
   }
   .quote-overlay {
     position: absolute;
-    left: ${px(8.35)};
     width: ${px(3.6)};
     z-index: 3;
   }
@@ -461,7 +472,7 @@ ${BRAND.fontLink}
   <!-- GROUP HERO -->
   ${heroSrc ? `<img class="hero" src="${heroSrc}" style="object-position:${heroPos}" alt="">${showRightCaps ? `<span class="num-badge" style="left:${px(8.03)};top:${px(10.1)}">5</span>` : ''}` : ''}
   ${heroQuoteLines.length > 0 ? `
-  <div class="quote-overlay" style="top:${px(flipQuote ? 3.25 : 10.05 - heroQuoteLines.length * 0.375 - (heroQuote.attribution ? 0.4 : 0.1))}">
+  <div class="quote-overlay" style="left:${px(heroOverlayLeft)};top:${px(heroOverlayTop)}">
     ${heroQuoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}
     ${cleanAttribution(heroQuote.attribution) && !isPlaceholder(cleanAttribution(heroQuote.attribution)) ? `<div class="quote-attr">—${escapeHtml(cleanAttribution(heroQuote.attribution))}</div>` : ''}
   </div>` : ''}

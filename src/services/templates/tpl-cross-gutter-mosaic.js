@@ -141,7 +141,14 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   // photo's bottom edge.
   const quoteBarH = 0.5; // rendered bar pitch: 12pt line + 2×0.09 padding + margin
   const quoteBlockH = quoteLines.length * quoteBarH + (overlayAttr ? 0.35 : 0);
-  const quoteTop = flipQuote ? 0.55 : Math.min(7.7, 9.95 - quoteBlockH);
+  // Bars dodge the hero's subject: bottom placement when faces sit high
+  // (the common case), top only when the subject is low in the frame.
+  const heroFocal = (photos[0] && photos[0].focalPoint) || { focalX: 0.5, focalY: 0.35 };
+  const quoteTop = heroFocal.focalY > 0.5 ? 0.55 : Math.min(7.7, 9.95 - quoteBlockH);
+  const heroRight = 3.15 + (mosaicCount === 0 ? 12.35 : 6.6);
+  const quoteLeft = heroFocal.focalX >= 0.55 ? 3.4
+    : heroFocal.focalX <= 0.45 ? heroRight - 0.25 - 3.8
+    : (flipQuote ? heroRight - 0.25 - 3.8 : 3.4);
 
   // Left column flows: title box (measured) → body (measured) → attribution
   // quote → small photo that stretches down to its caption anchor at 9.85.
@@ -285,7 +292,7 @@ ${BRAND.fontLink}
   /* Q_overlay — 4-bar purple pull quote over lower hero */
   .quote-overlay {
     position: absolute;
-    left: ${px(3.4)}; top: ${px(quoteTop)};
+    left: ${px(quoteLeft)}; top: ${px(quoteTop)};
     width: ${px(3.8)};
     z-index: 3;
   }
