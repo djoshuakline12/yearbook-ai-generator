@@ -36,6 +36,14 @@ const NAME_FIXES = {
   'Niko': 'Niko Diakos',
 };
 
+// Doc sections with no pack folder yet — they still BOUND the previous
+// section in the parser, else their Summary overwrites its neighbor's
+// (Media was inheriting Aspire Leadership's copy).
+const EXTRA_SECTIONS = [
+  'Consumer Science', 'Industrial Arts', 'Aspire Leadership (Thrive)',
+  'Volleyball', 'Baccalaureate',
+];
+
 // Folder slug → section name as it appears in the compiled doc.
 const SECTION_NAMES = {
   '01_bible': 'Bible', '02_english': 'English', '03_math': 'Math',
@@ -67,7 +75,7 @@ const SECTION_NAMES = {
 // ---------------------------------------------------------------------------
 function parseCompiled(txt) {
   const lines = txt.split('\n').map(l => l.replace(/ /g, ' ').trimEnd());
-  const names = Object.values(SECTION_NAMES);
+  const names = [...Object.values(SECTION_NAMES), ...EXTRA_SECTIONS];
   const sections = {};
   let i = 0;
   while (i < lines.length) {
@@ -84,9 +92,13 @@ function parseCompiled(txt) {
       }
       sec.title = header[0] || name;
       if (header[1]) sec.subheadline = header[1];
-      // Keyword blocks
+      // Keyword blocks. A repeated keyword means an unrecognized section
+      // header slipped past — stop this section rather than absorb it.
+      const seenKw = new Set();
       while (i < lines.length && !names.includes(lines[i].trim())) {
         const kw = lines[i].trim();
+        if (seenKw.has(kw)) break;
+        seenKw.add(kw);
         i++;
         const block = [];
         while (i < lines.length && !/^(Summary|Quotes|Stats & Facts|Photos)$/.test(lines[i].trim()) && !names.includes(lines[i].trim())) {
@@ -257,10 +269,16 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
 
   // Captions indexed against the deduped photo list.
   const capMap = manifestCaptions(spreadFolder);
+  const seenCapText = new Set();
   const photoCaptions = unique.map((p, i) => {
     if (!p.captioned) return null;
     const cap = capMap[p.base] || '';
-    return cap ? { photoIndex: i, caption: cap, people: '' } : null;
+    if (!cap) return null;
+    // Burst siblings share a manifest caption — print it once.
+    const norm = cap.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (seenCapText.has(norm)) return null;
+    seenCapText.add(norm);
+    return { photoIndex: i, caption: cap, people: '' };
   }).filter(Boolean);
 
   const pageContent = {
@@ -341,10 +359,15 @@ async function generatePair(pairSpec, sections, outDir) {
       if (unique.length === 5) break;
     }
     const capMap = manifestCaptions(folder);
+    const seenCapText = new Set();
     const photoCaptions = unique.map((p, i) => {
       if (!p.captioned) return null;
       const cap = capMap[p.base] || '';
-      return cap ? { photoIndex: i, caption: cap, people: '' } : null;
+      if (!cap) return null;
+      const norm = cap.toLowerCase().replace(/\s+/g, ' ').trim();
+      if (seenCapText.has(norm)) return null;
+      seenCapText.add(norm);
+      return { photoIndex: i, caption: cap, people: '' };
     }).filter(Boolean);
     for (const p of unique) {
       const buf = await sharp(p.file).rotate().resize(2000, 2000, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 86 }).toBuffer();

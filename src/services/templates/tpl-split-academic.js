@@ -155,7 +155,7 @@ function renderSplitAcademic(pageContent, photos, options = {}) {
   }`;
 
     const photoHtml = cells.map(c => srcs[c.idx] ? `
-  <img class="ph" src="${srcs[c.idx]}" style="left:${px(c.x)};top:${px(c.y)};width:${px(c.w)};height:${px(c.h)};object-position:${poss[c.idx]}" alt="">${capEntries ? `<span class="num-badge" style="left:${px(c.x + 0.08)};top:${px(c.y + c.h - 0.32)}">${c.idx + 1}</span>` : ''}` : '').join('');
+  <img class="ph" src="${srcs[c.idx]}" style="left:${px(c.x)};top:${px(c.y)};width:${px(c.w)};height:${px(c.h)};object-position:${poss[c.idx]}" alt="">${caps[c.idx] ? `<span class="num-badge" style="left:${px(c.x + 0.08)};top:${px(c.y + c.h - 0.32)}">${c.idx + 1}</span>` : ''}` : '').join('');
 
     const html = `
   ${chipText ? `<div class="chip-${id}">${escapeHtml(chipText)}</div>` : ''}
