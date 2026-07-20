@@ -107,10 +107,14 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
       sideMods.push(t ? { capOnly: t, src: modSrcs[i] } : { photoOnly: true, src: modSrcs[i] });
     }
   }
-  // Distribute however many mods exist over the rail height instead of
-  // clustering them at the top with a dead zone below.
-  const modGap = sideMods.length > 1
-    ? Math.min(2.2, Math.max(0.22, (9.7 - modTop - sideMods.length * modH) / (sideMods.length - 1)))
+  // Mods are photo-above-text now; size the boxes to the count so four
+  // still fit, then distribute over the rail height instead of clustering
+  // at the top with a dead zone below.
+  const modCount = sideMods.length;
+  const modBoxH = modCount > 0 ? Math.min(2.45, (9.9 - modTop - Math.max(0, modCount - 1) * 0.25) / modCount) : modH;
+  const modImgH = Math.min(1.3, Math.max(0.9, modBoxH - 0.75));
+  const modGap = modCount > 1
+    ? Math.min(2.2, Math.max(0.22, (9.7 - modTop - modCount * modBoxH) / (modCount - 1)))
     : 0.22;
 
   // Center column flows: title (measured) → subhead bar → body → photos.
@@ -196,7 +200,8 @@ ${BRAND.fontLink}
     left: ${px(0.5)};
     width: ${px(1.85)};
     display: flex;
-    gap: ${px(0.1)};
+    flex-direction: column;
+    gap: ${px(0.08)};
   }
   .side-mod .quote {
     flex: 1;
@@ -215,10 +220,13 @@ ${BRAND.fontLink}
     font-size: ${pt(7)};
     color: ${PURPLE};
   }
+  /* Talking-head photo spans the full rail width above the quote — tiny
+     0.8" thumbnails read as clutter at print size. */
   .side-mod img {
-    width: ${px(0.8)}; height: ${px(0.8)};
+    width: 100%; height: ${px(modImgH)};
     object-fit: cover;
     flex: none;
+    display: block;
   }
 
   /* CENTER COLUMN */
@@ -412,27 +420,27 @@ ${BRAND.fontLink}
   <!-- LEFT RAIL -->
   <div class="mod-question">${escapeHtml(modQuestion)}</div>
   ${sideMods.map((m, i) => {
-    const top = modTop + i * (modH + modGap);
+    const top = modTop + i * (modBoxH + modGap);
     if (m.photoOnly) {
-      return `<div class="side-mod" style="top:${px(top)};height:${px(modH)}"><img src="${m.src}" alt="" style="width:100%;height:100%;object-fit:cover;flex:none;object-position:${modPos[i]};"></div>`;
+      return `<div class="side-mod" style="top:${px(top)};height:${px(modBoxH)}"><img src="${m.src}" alt="" style="width:100%;height:100%;object-fit:cover;flex:none;object-position:${modPos[i]};"></div>`;
     }
     const img = m.src ? `<img src="${m.src}" style="object-position:${modPos[i]}" alt="">` : '';
     let body;
+    // Text budget shrinks when a photo shares the box.
+    const maxChars = Math.max(60, Math.floor(((modBoxH - (m.src ? modImgH : 0) - 0.35) / 0.141) * 33));
     if (m.quoteObj) {
-      // Truncate so the quote + attribution always fit inside the mod box
-      // (~170 chars at 7.5pt in a 0.95in column over ~11 lines).
       let text = m.quoteObj.text.replace(/^["']|["']$/g, '');
-      if (text.length > 170) text = text.slice(0, 167).replace(/\s+\S*$/, '') + '…';
+      if (text.length > maxChars) text = text.slice(0, maxChars - 1).replace(/\s+\S*$/, '') + '…';
       const attrName = cleanAttribution(m.quoteObj.attribution);
       const attr = attrName && !isPlaceholder(attrName)
         ? `<span class="attr">— ${escapeHtml(attrName)}</span>` : '';
       body = `"${escapeHtml(text)}"${attr}`;
     } else {
       let text = m.capOnly;
-      if (text.length > 180) text = text.slice(0, 177).replace(/\s+\S*$/, '') + '…';
+      if (text.length > maxChars) text = text.slice(0, maxChars - 1).replace(/\s+\S*$/, '') + '…';
       body = escapeHtml(text);
     }
-    return `<div class="side-mod" style="top:${px(top)};height:${px(modH)}"><div class="quote">${body}</div>${img}</div>`;
+    return `<div class="side-mod" style="top:${px(top)};height:${px(modBoxH)}">${img}<div class="quote">${body}</div></div>`;
   }).join('\n')}
 
   <!-- CENTER COLUMN -->

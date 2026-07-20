@@ -110,8 +110,8 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   const featuredHeight = headlineLineCount * 0.24 + 0.1 + taglineLines.length * 0.29;
   // Mini stack bottom-anchors at 10.4; the featured block sits directly
   // above it so the rail has no floating gaps.
-  const mini2H = 1.2;
-  const mini1H = 1.4;
+  const mini2H = 1.45;
+  const mini1H = 1.65;
   const mini2Top = 10.4 - mini2H;
   const mini1Top = mini2Top - 0.18 - mini1H;
   const showMini2 = !!miniSrcs[1];
@@ -407,7 +407,7 @@ ${BRAND.fontLink}
   .mini-1 { left: ${px(13.2)}; top: ${px(mini1Top)}; height: ${px(mini1H)}; }
   .mini-2 { left: ${px(13.2)}; top: ${px(mini2Top)}; height: ${px(mini2H)}; }
   .mini-1 img, .mini-2 img {
-    width: ${px(1.5)};
+    width: ${px(1.7)};
     height: 100%;
     object-fit: cover;
     display: block;

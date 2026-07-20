@@ -181,6 +181,12 @@ function auditSpread(spreadFolder, sec, photos) {
   if (missing.noLink) flags.push(`${missing.noLink} photo(s) listed in the doc with no Drive link`);
   if (missing.authErrors) flags.push(`${missing.authErrors} photo(s) blocked by Drive permissions (Request Access)`);
   if (!sec) { flags.push('NO COPY found in compiled doc'); return flags; }
+  // First-name-only quote attributions ("Niko", "VJ") don't print in a
+  // yearbook — hold the spread until the full name is confirmed.
+  const bareNames = sec.quotes
+    .map(q => (q.attribution || '').replace(/\(\d+\)/g, '').replace(/,.*$/, '').trim())
+    .filter(n => n && !n.includes(' '));
+  if (bareNames.length) flags.push(`NEEDS NAME VERIFICATION — quote attributed to first name only: ${[...new Set(bareNames)].map(n => `'${n}'`).join(', ')}`);
   if ((sec.bodyCopy || '').length < 250) flags.push(`body copy short (${(sec.bodyCopy || '').length} chars)`);
   if (sec.quotes.length === 0) flags.push('no quotes');
   else if (sec.quotes.length === 1) flags.push('only 1 quote (2-3 ideal: hero pull-quote + sidebar mods)');
@@ -203,8 +209,9 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
     return result;
   }
   // Under 3 photos: don't generate a half-empty spread — flag for the
-  // second content batch instead.
-  if (!sec || photos.length < 3) return result;
+  // second content batch instead. Unverified first-name attributions also
+  // hold the spread until the full name is confirmed.
+  if (!sec || photos.length < 3 || flags.some(f => f.startsWith('NEEDS NAME'))) return result;
 
   // Drive folder pulls contain burst shots and same-image-different-size
   // duplicates that byte-level dedup can't catch — drop perceptual
