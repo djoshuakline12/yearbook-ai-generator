@@ -113,7 +113,11 @@ function isPlaceholder(str) {
 
 function pickCaption(photoCaptions, idx) {
   if (!photoCaptions || photoCaptions.length === 0) return null;
-  const cap = photoCaptions.find(c => c.photoIndex === idx) || photoCaptions[idx];
+  // When entries carry photoIndex, exact match ONLY — the positional
+  // fallback hands a neighboring photo's caption to any uncaptioned photo
+  // (wrong names under faces, the worst yearbook error).
+  const hasIdx = photoCaptions.some(c => c && typeof c.photoIndex === 'number');
+  const cap = hasIdx ? photoCaptions.find(c => c && c.photoIndex === idx) : photoCaptions[idx];
   if (!cap) return null;
   // A filename is worse than no caption at all — blank the field so the
   // template's fallback (hide caption / grow photo / use a quote) kicks in.
