@@ -28,6 +28,14 @@ function ensureCompiledTxt() {
   execFileSync('textutil', ['-convert', 'txt', '-output', COMPILED_TXT, COMPILED_DOCX]);
 }
 
+// Confirmed full names for first-name-only quote attributions (verified
+// with Josh 2026-07-20). Bare names not listed here hold their spread
+// with NEEDS NAME VERIFICATION.
+const NAME_FIXES = {
+  'VJ': 'VJ Ryan',
+  'Niko': 'Niko Diakos',
+};
+
 // Folder slug → section name as it appears in the compiled doc.
 const SECTION_NAMES = {
   '01_bible': 'Bible', '02_english': 'English', '03_math': 'Math',
@@ -89,7 +97,10 @@ function parseCompiled(txt) {
         else if (kw === 'Quotes') {
           for (const b of block) {
             const m = b.replace(/^[•\t\s]+/, '').match(/^(.+?):\s*[""]?(.+?)[""]?$/);
-            if (m) sec.quotes.push({ attribution: m[1].trim(), text: m[2].replace(/^["""]|["""]$/g, '').trim() });
+            if (m) {
+              const rawAttr = m[1].trim();
+              sec.quotes.push({ attribution: NAME_FIXES[rawAttr] || rawAttr, text: m[2].replace(/^["""]|["""]$/g, '').trim() });
+            }
           }
         } else if (kw === 'Stats & Facts') {
           sec.highlights = block.map(b => b.replace(/^[•\t\s]+/, '').trim()).filter(Boolean);
