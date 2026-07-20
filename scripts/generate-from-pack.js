@@ -146,14 +146,20 @@ function parseCsv(text) {
 }
 
 function manifestCaptions(spreadFolder) {
-  const csv = parseCsv(fs.readFileSync(path.join(PACK_DIR, 'final_manifest.csv'), 'utf8'));
-  const head = csv[0];
-  const iPath = head.indexOf('final_path');
-  const iCap = head.indexOf('caption');
   const map = {};
-  for (const r of csv.slice(1)) {
-    const p = r[iPath] || '';
-    if (p.startsWith(spreadFolder + '/')) map[path.basename(p).replace(/\.\w+$/, '')] = r[iCap] || '';
+  // Pipeline manifest first, then user-confirmed captions (captions_confirmed.csv,
+  // built through the photo-by-photo review with Josh) override/extend it.
+  for (const file of ['final_manifest.csv', 'captions_confirmed.csv']) {
+    const fp = path.join(PACK_DIR, file);
+    if (!fs.existsSync(fp)) continue;
+    const csv = parseCsv(fs.readFileSync(fp, 'utf8'));
+    const head = csv[0];
+    const iPath = head.indexOf('final_path');
+    const iCap = head.indexOf('caption');
+    for (const r of csv.slice(1)) {
+      const p = r[iPath] || '';
+      if (p.startsWith(spreadFolder + '/')) map[path.basename(p).replace(/\.\w+$/, '')] = r[iCap] || '';
+    }
   }
   return map;
 }
