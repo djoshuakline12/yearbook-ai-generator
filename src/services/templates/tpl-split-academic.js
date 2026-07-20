@@ -80,10 +80,35 @@ function renderSplitAcademic(pageContent, photos, options = {}) {
       .map((t, i) => (t && srcs[i] ? `<span class="gcap"><b>${i + 1}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null))
       .filter(Boolean).join('\n');
 
-    const heroH = srcs.length === 1 ? (capEntries ? 8.1 : 9.4) : 5.55;
-    const smallY = 0.5 + heroH + 0.15;
-    const smallH = (capEntries ? 8.75 - 0.15 : 9.9) - smallY;
-    const capsY = 8.75;
+    // Count-adaptive photo grid: hero on top, then rows of smalls. Up to 5
+    // photos per half — a thin class gets a clean stack, a photo-rich class
+    // fills its page.
+    const n = srcs.length;
+    const halfW = 2.05;           // small cell width (two across with 0.1 gap)
+    const cells = [];             // {x, y, w, h, idx}
+    const gridBottom = capEntries ? 8.85 : 10.15;
+    if (n === 1) {
+      cells.push({ x: photoX, y: 0.5, w: photoW, h: gridBottom - 0.5, idx: 0 });
+    } else if (n === 2) {
+      cells.push({ x: photoX, y: 0.5, w: photoW, h: 5.55, idx: 0 });
+      cells.push({ x: photoX, y: 6.2, w: photoW, h: gridBottom - 6.2, idx: 1 });
+    } else if (n === 3) {
+      cells.push({ x: photoX, y: 0.5, w: photoW, h: 5.55, idx: 0 });
+      cells.push({ x: photoX, y: 6.2, w: halfW, h: gridBottom - 6.2, idx: 1 });
+      cells.push({ x: photoX + 2.15, y: 6.2, w: halfW, h: gridBottom - 6.2, idx: 2 });
+    } else if (n === 4) {
+      cells.push({ x: photoX, y: 0.5, w: photoW, h: 4.3, idx: 0 });
+      cells.push({ x: photoX, y: 4.95, w: halfW, h: 1.85, idx: 1 });
+      cells.push({ x: photoX + 2.15, y: 4.95, w: halfW, h: 1.85, idx: 2 });
+      cells.push({ x: photoX, y: 6.95, w: photoW, h: gridBottom - 6.95, idx: 3 });
+    } else {
+      cells.push({ x: photoX, y: 0.5, w: photoW, h: 4.3, idx: 0 });
+      cells.push({ x: photoX, y: 4.95, w: halfW, h: 1.85, idx: 1 });
+      cells.push({ x: photoX + 2.15, y: 4.95, w: halfW, h: 1.85, idx: 2 });
+      cells.push({ x: photoX, y: 6.95, w: halfW, h: gridBottom - 6.95, idx: 3 });
+      cells.push({ x: photoX + 2.15, y: 6.95, w: halfW, h: gridBottom - 6.95, idx: 4 });
+    }
+    const capsY = 8.97;
 
     const css = `
   .chip-${id} {
@@ -122,34 +147,22 @@ function renderSplitAcademic(pageContent, photos, options = {}) {
     display: block; margin-top: ${px(0.08)};
     font-size: ${pt(8.5)}; color: ${PURPLE};
   }
-  .hero-${id} {
-    position: absolute; left: ${px(photoX)}; top: ${px(0.5)};
-    width: ${px(photoW)}; height: ${px(heroH)};
-    object-fit: cover;
-  }
-  .small-${id}-1, .small-${id}-2 {
-    position: absolute; top: ${px(smallY)}; height: ${px(smallH)};
-    object-fit: cover;
-  }
-  .small-${id}-1 { left: ${px(photoX)}; width: ${px(srcs.length >= 3 ? 2.05 : photoW)}; }
-  .small-${id}-2 { left: ${px(photoX + 2.15)}; width: ${px(2.05)}; }
   .caps-${id} {
     position: absolute; left: ${px(photoX)}; top: ${px(capsY)};
-    width: ${px(photoW)}; height: ${px(1.15)};
+    width: ${px(photoW)}; height: ${px(1.35)};
     font-size: ${pt(7.5)}; line-height: 1.35; color: ${DARK};
     column-count: 2; column-gap: ${px(0.18)}; overflow: hidden;
   }`;
 
-    const badge = (n, x, y) => capEntries
-      ? `<span class="num-badge" style="left:${px(x)};top:${px(y)}">${n}</span>` : '';
+    const photoHtml = cells.map(c => srcs[c.idx] ? `
+  <img class="ph" src="${srcs[c.idx]}" style="left:${px(c.x)};top:${px(c.y)};width:${px(c.w)};height:${px(c.h)};object-position:${poss[c.idx]}" alt="">${capEntries ? `<span class="num-badge" style="left:${px(c.x + 0.08)};top:${px(c.y + c.h - 0.32)}">${c.idx + 1}</span>` : ''}` : '').join('');
+
     const html = `
   ${chipText ? `<div class="chip-${id}">${escapeHtml(chipText)}</div>` : ''}
   ${titleRaw ? `<div class="title-${id}">${escapeHtml(titleRaw)}</div>` : ''}
   <div class="body-${id}">${(content.bodyCopy || '').split(/\n\s*\n/).filter(p => p.trim()).map(p => `<p>${escapeHtml(p.trim())}</p>`).join('')}</div>
   ${quote ? `<div class="quote-${id}">'${escapeHtml(quote.text.replace(/^["']|["']$/g, ''))}'${quoteAttr && !isPlaceholder(quoteAttr) ? `<span class="attr">— ${escapeHtml(quoteAttr)}</span>` : ''}</div>` : ''}
-  ${srcs[0] ? `<img class="hero-${id}" src="${srcs[0]}" style="object-position:${poss[0]}" alt="">${badge(1, photoX + 0.08, 0.5 + heroH - 0.32)}` : ''}
-  ${srcs[1] ? `<img class="small-${id}-1" src="${srcs[1]}" style="object-position:${poss[1]}" alt="">${badge(2, photoX + 0.08, smallY + smallH - 0.32)}` : ''}
-  ${srcs[2] ? `<img class="small-${id}-2" src="${srcs[2]}" style="object-position:${poss[2]}" alt="">${badge(3, photoX + 2.23, smallY + smallH - 0.32)}` : ''}
+  ${photoHtml}
   ${capEntries ? `<div class="caps-${id}">${capEntries}</div>` : ''}`;
 
     return { css, html };
@@ -175,6 +188,7 @@ ${BRAND.fontLink}
   .spread { position: relative; width: ${spreadWpx}px; height: ${spreadHpx}px; }
   .gcap { display: block; margin-bottom: ${px(0.05)}; break-inside: avoid; }
   .gcap b { font-weight: 700; }
+  .ph { position: absolute; object-fit: cover; }
   .num-badge {
     position: absolute; color: white; font-weight: 700;
     font-size: ${pt(9)}; padding: 0 ${px(0.06)};

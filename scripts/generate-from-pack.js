@@ -338,7 +338,7 @@ async function generatePair(pairSpec, sections, outDir) {
       if (seen.some(s => ham(s, bits) <= 6)) continue;
       seen.push(bits);
       unique.push(p);
-      if (unique.length === 3) break;
+      if (unique.length === 5) break;
     }
     const capMap = manifestCaptions(folder);
     const photoCaptions = unique.map((p, i) => {
