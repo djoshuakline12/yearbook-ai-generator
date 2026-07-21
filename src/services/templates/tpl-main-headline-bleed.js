@@ -163,7 +163,10 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
   const heroW = 16 - heroX;
   const heroH = 10.5 - heroTop;
   const crowdTop = stripAny ? 3.1 : 0.4;
-  const crowdH = (underAny ? 7.1 : 8.95) - crowdTop;
+  // Cap the crowd stretch by the photo's shape — a landscape photo forced
+  // into a tall slot crops to a sliver of the subject.
+  const crowdAspect = (assign.crowd >= 0 && photos[assign.crowd] && photos[assign.crowd].aspectRatio) || 1.5;
+  const crowdH = Math.min((underAny ? 7.1 : 8.95) - crowdTop, (3.7 / crowdAspect) * 2.2);
   // With no crowd column the grouped captions would sit on the widened
   // hero — render them as a white chip over its bottom-left instead.
   const midCapsOverlay = !crowdSrc;

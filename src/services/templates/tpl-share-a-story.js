@@ -48,6 +48,21 @@ function renderShareAStory(pageContent, photos, options = {}) {
     slotIdx = { crowd: -1, stack1: -1, stack2: -1, rightBig: -1, rightPair1: -1, rightPair2: -1, rail: -1, heads: [] };
     ['crowd', 'rightBig', 'stack1', 'stack2', 'rightPair1'].forEach((s, i) => { if (i < N) slotIdx[s] = i; });
   }
+  // The rail slot is extremely tall and narrow — a landscape photo crops
+  // to a sliver there. Give it the most portrait photo from the tail pool
+  // (rail + talking heads, all small/uncaptioned slots, so swapping is
+  // safe); the heads take whatever remains.
+  if (N >= 8) {
+    const tail = [slotIdx.rail, ...slotIdx.heads].filter(i => i >= 0 && i < N);
+    if (tail.length > 1) {
+      const railPick = tail.slice().sort((a, b) =>
+        ((photos[a] && photos[a].aspectRatio) || 1.5) - ((photos[b] && photos[b].aspectRatio) || 1.5))[0];
+      if (railPick !== slotIdx.rail) {
+        slotIdx.heads = tail.filter(i => i !== railPick);
+        slotIdx.rail = railPick;
+      }
+    }
+  }
   const at = (i) => (i >= 0 ? photoDataUri(photos[i]) : '');
   const posAt = (i) => photoObjectPosition(i >= 0 ? photos[i] : null);
   const crowdSrc = at(slotIdx.crowd);
@@ -144,17 +159,23 @@ function renderShareAStory(pageContent, photos, options = {}) {
     : 0;
   const highlightsTop = 10.4 - hlEstH;
   const railContentBottom = highlightsTop - 0.25;
+  // Never stretch the rail photo beyond ~2.2x its natural height at rail
+  // width — past that the crop shows a sliver of the subject, not a photo.
+  const railAspect = (slotIdx.rail >= 0 && photos[slotIdx.rail] && photos[slotIdx.rail].aspectRatio) || 1.5;
+  const railMaxH = Math.min(10, (2.4 / railAspect) * 2.2);
   let railQuoteTop;
   let railPhotoTop;
   let railPhotoH;
   if (flipQuote && railSrc) {
     railPhotoTop = 0.4;
-    railPhotoH = Math.max(1.2, railContentBottom - railBarsH - 0.35 - 0.4);
+    railPhotoH = Math.max(1.2, Math.min(railMaxH, railContentBottom - railBarsH - 0.35 - 0.4));
     railQuoteTop = railPhotoTop + railPhotoH + 0.35;
   } else {
     railQuoteTop = 0.4;
-    railPhotoTop = 0.4 + railBarsH + 0.35;
-    railPhotoH = Math.max(1.2, railContentBottom - railPhotoTop);
+    railPhotoH = Math.max(1.2, Math.min(railMaxH, railContentBottom - (0.4 + railBarsH + 0.35)));
+    // Bottom-anchor after the cap so any spare space sits between the bars
+    // and the photo, not as a stub below it.
+    railPhotoTop = railContentBottom - railPhotoH;
   }
   // Right page photos fill the full column height down to the band. Hero (4)
   // top, pair (5,6) below, captions, ending just above the talking-heads
