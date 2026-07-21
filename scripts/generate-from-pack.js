@@ -164,12 +164,26 @@ function manifestCaptions(spreadFolder) {
   return map;
 }
 
+// Per-folder photo source restriction (Josh 2026-07-21: for Spirit Week
+// only the "Spirit Week Photos" folder matters — ignore everything else).
+const PHOTO_SOURCE_ONLY = {
+  '28_spirit_week': 'Spirit Week Photos',
+};
+
 // Photos on disk for a spread: top-level files first (caption-matched via
 // the manifest), then EVERY subdirectory (Drive folder pulls, user-added
 // folders like "Spirit Week Photos" or "Grad Day Pics"), capped at maxPhotos.
 function collectPhotos(spreadFolder, maxPhotos = 13) {
   const dir = path.join(PACK_DIR, spreadFolder);
   if (!fs.existsSync(dir)) return [];
+  if (PHOTO_SOURCE_ONLY[spreadFolder]) {
+    const only = path.join(dir, PHOTO_SOURCE_ONLY[spreadFolder]);
+    if (!fs.existsSync(only)) return [];
+    return fs.readdirSync(only).sort()
+      .filter(f => /\.(jpe?g|png)$/i.test(f) && !f.startsWith('.'))
+      .map(f => ({ file: path.join(only, f), base: f.replace(/\.\w+$/, ''), captioned: true }))
+      .slice(0, maxPhotos);
+  }
   const top = fs.readdirSync(dir)
     .filter(f => /\.(jpe?g|png)$/i.test(f) && fs.statSync(path.join(dir, f)).isFile())
     .sort()
@@ -277,7 +291,8 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
   const capMap = manifestCaptions(spreadFolder);
   const seenCapText = new Set();
   const photoCaptions = unique.map((p, i) => {
-    if (!p.captioned) return null;
+    // Confirmed captions (captions_confirmed.csv) key by basename, so
+    // subfolder photos are captionable too — no top-level-only gate.
     const cap = capMap[p.base] || '';
     if (!cap) return null;
     // Burst siblings share a manifest caption — print it once.
@@ -367,7 +382,6 @@ async function generatePair(pairSpec, sections, outDir) {
     const capMap = manifestCaptions(folder);
     const seenCapText = new Set();
     const photoCaptions = unique.map((p, i) => {
-      if (!p.captioned) return null;
       const cap = capMap[p.base] || '';
       if (!cap) return null;
       const norm = cap.toLowerCase().replace(/\s+/g, ' ').trim();
