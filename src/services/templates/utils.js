@@ -187,6 +187,37 @@ function photoObjectPosition(photo) {
   return (photo && photo.objectPosition) || 'center 35%';
 }
 
+// Aspect-aware slot repair: photos land in the slots whose shape fits them.
+// slotMap: {key: photoIndex}; slotAspects: {key: representativeAspect(w/h)}.
+// Pairwise-swaps photo assignments whenever a swap improves the combined
+// aspect fit — a wide group shot never gets slivered into a tall rail, a
+// portrait never letterboxes a wide strip. Captions stay correct because
+// templates resolve captions through the slot map.
+function repairAspects(photos, slotMap, slotAspects) {
+  const aspectOf = (i) => (photos[i] && photos[i].aspectRatio) || 1.5;
+  const fit = (i, slotAspect) => Math.abs(Math.log(aspectOf(i) / slotAspect));
+  const keys = Object.keys(slotAspects).filter(k => slotMap[k] >= 0);
+  let improved = true;
+  let guard = 0;
+  while (improved && guard++ < 40) {
+    improved = false;
+    for (let a = 0; a < keys.length; a++) {
+      for (let b = a + 1; b < keys.length; b++) {
+        const ka = keys[a], kb = keys[b];
+        const ia = slotMap[ka], ib = slotMap[kb];
+        const cur = fit(ia, slotAspects[ka]) + fit(ib, slotAspects[kb]);
+        const swp = fit(ib, slotAspects[ka]) + fit(ia, slotAspects[kb]);
+        if (swp + 1e-9 < cur) {
+          slotMap[ka] = ib;
+          slotMap[kb] = ia;
+          improved = true;
+        }
+      }
+    }
+  }
+  return slotMap;
+}
+
 // De-duplicate the three caption fields, which frequently repeat the
 // subject's name (title = "NIKO DIAKOS", people = "Niko Diakos (10)",
 // body = "Niko Diakos (10) worships on stage").
@@ -283,5 +314,5 @@ module.exports = {
   inToPx, ptToPx, escapeHtml, photoDataUri, photoObjectPosition,
   cleanCaption, isPlaceholder, isFilenameLike, pickCaption,
   splitQuoteIntoLines, wrapToLines, dedupCaption, cleanAttribution,
-  pickOverlayQuote, estimateTextHeightIn, wrapLineCount,
+  pickOverlayQuote, repairAspects, estimateTextHeightIn, wrapLineCount,
 };

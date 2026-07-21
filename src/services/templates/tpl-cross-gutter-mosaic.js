@@ -12,7 +12,7 @@ const {
   BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri, photoObjectPosition,
   isPlaceholder, pickCaption, splitQuoteIntoLines, wrapToLines, dedupCaption,
-  cleanAttribution, pickOverlayQuote, estimateTextHeightIn, wrapLineCount,
+  cleanAttribution, pickOverlayQuote, repairAspects, estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderCrossGutterMosaic(pageContent, photos, options = {}) {
@@ -54,22 +54,33 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   // Photo slots — fixed assignment matching the reference, no photo reuse:
   // hero=0, mosaic=1-4, small preview=5, minis=6-7. Slots without a photo
   // simply don't render.
-  const heroSrc = photoDataUri(photos[0]);
-  const heroPos = photoObjectPosition(photos[0]);
-  const mosaicSrcs = [1, 2, 3, 4].map(i => photoDataUri(photos[i]));
-  const mosaicPos = [1, 2, 3, 4].map(i => photoObjectPosition(photos[i]));
-  const smallPreviewIdx = 5;
-  const smallSrc = photoDataUri(photos[smallPreviewIdx]);
-  const smallPos = photoObjectPosition(photos[smallPreviewIdx]);
-  const miniSrcs = [6, 7].map(i => photoDataUri(photos[i]));
-  const miniPos = [6, 7].map(i => photoObjectPosition(photos[i]));
+  // Shape-matched slots: the tall cross-gutter hero takes the most
+  // portrait photo; the mosaic and minis lean landscape.
+  const NP = Array.isArray(photos) ? photos.length : 0;
+  const m5 = { hero: 0, m0: 1, m1: 2, m2: 3, m3: 4, small: 5, mini0: 6, mini1: 7 };
+  Object.keys(m5).forEach(k => { if (m5[k] >= NP) m5[k] = -1; });
+  repairAspects(photos, m5, {
+    hero: 0.66, m0: 1.1, m1: 1.1, m2: 1.1, m3: 1.1,
+    small: 1.25, mini0: 1.13, mini1: 1.13,
+  });
+  const at5 = (i) => (i >= 0 ? photoDataUri(photos[i]) : '');
+  const posAt5 = (i) => photoObjectPosition(i >= 0 ? photos[i] : null);
+  const heroSrc = at5(m5.hero);
+  const heroPos = posAt5(m5.hero);
+  const mosaicIdx = [m5.m0, m5.m1, m5.m2, m5.m3];
+  const mosaicSrcs = mosaicIdx.map(at5);
+  const mosaicPos = mosaicIdx.map(posAt5);
+  const smallSrc = at5(m5.small);
+  const smallPos = posAt5(m5.small);
+  const miniSrcs = [m5.mini0, m5.mini1].map(at5);
+  const miniPos = [m5.mini0, m5.mini1].map(posAt5);
 
-  const smallCap = dedupCaption(pickCaption(pageContent.photoCaptions, smallPreviewIdx));
-  const miniCaps = [6, 7].map(i => dedupCaption(pickCaption(pageContent.photoCaptions, i)));
+  const smallCap = m5.small >= 0 ? dedupCaption(pickCaption(pageContent.photoCaptions, m5.small)) : null;
+  const miniCaps = [m5.mini0, m5.mini1].map(i => (i >= 0 ? dedupCaption(pickCaption(pageContent.photoCaptions, i)) : null));
 
   // Grouped numbered captions for the 2x2 mosaic (photos 2-5).
-  const mosaicCapEntries = [1, 2, 3, 4].map((photoIdx, i) => {
-    if (!mosaicSrcs[i]) return null;
+  const mosaicCapEntries = mosaicIdx.map((photoIdx, i) => {
+    if (!mosaicSrcs[i] || photoIdx < 0) return null;
     const c = dedupCaption(pickCaption(pageContent.photoCaptions, photoIdx));
     if (!c || (!c.lead && !c.body)) return null;
     const text = [c.lead, c.body].filter(Boolean).join(' ');
@@ -143,7 +154,7 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   const quoteBlockH = quoteLines.length * quoteBarH + (overlayAttr ? 0.35 : 0);
   // Bars dodge the hero's subject: bottom placement when faces sit high
   // (the common case), top only when the subject is low in the frame.
-  const heroFocal = (photos[0] && photos[0].focalPoint) || { focalX: 0.5, focalY: 0.35 };
+  const heroFocal = (m5.hero >= 0 && photos[m5.hero] && photos[m5.hero].focalPoint) || { focalX: 0.5, focalY: 0.35 };
   const quoteTop = heroFocal.focalY > 0.5 ? 0.55 : Math.min(7.7, 9.95 - quoteBlockH);
   const heroRight = 3.15 + (mosaicCount === 0 ? 12.35 : 6.6);
   const quoteLeft = heroFocal.focalX >= 0.55 ? 3.4

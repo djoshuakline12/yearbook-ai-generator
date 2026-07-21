@@ -14,7 +14,7 @@ const {
   BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri, photoObjectPosition,
   isPlaceholder, pickCaption, splitQuoteIntoLines, dedupCaption,
-  cleanAttribution, estimateTextHeightIn, wrapLineCount,
+  cleanAttribution, repairAspects, estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderHeadlineHeroRail(pageContent, photos, options = {}) {
@@ -42,6 +42,12 @@ function renderHeadlineHeroRail(pageContent, photos, options = {}) {
     ? ['hero', 'under', 'rail0', 'rail1', 'rail2', 'inset1', 'inset2', 'quoteCol']
     : ['hero', 'inset2', 'under', 'inset1', 'rail0', 'rail1', 'rail2', 'quoteCol'];
   slotNames.forEach((k, i) => { idx[k] = i < N ? i : -1; });
+  // Shape-match photos to slots (hero is portrait-ish, rail cards and the
+  // under-hero band are wide) so group shots never get slivered.
+  repairAspects(photos, idx, {
+    hero: 0.86, under: 1.14, rail0: 1.8, rail1: 1.8, rail2: 1.8,
+    inset1: 1.18, inset2: 0.93, quoteCol: 0.9,
+  });
   const at = (i) => (i >= 0 ? photoDataUri(photos[i]) : '');
   const posAt = (i) => photoObjectPosition(i >= 0 ? photos[i] : null);
   const heroSrc = at(idx.hero);

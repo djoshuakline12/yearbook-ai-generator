@@ -16,7 +16,7 @@ const {
   BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri, photoObjectPosition,
   isPlaceholder, pickCaption, splitQuoteIntoLines, dedupCaption,
-  cleanAttribution, pickOverlayQuote, estimateTextHeightIn, wrapLineCount,
+  cleanAttribution, pickOverlayQuote, repairAspects, estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderModSidebarGroup(pageContent, photos, options = {}) {
@@ -33,15 +33,26 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
   const pt = (n) => `${ptToPx(n, dpi)}px`;
 
   // ---- Photo slots ----
-  // group hero=0, center row=1,2, right top=3,4, sidebar mods=5,6,7,8
-  const heroSrc = photoDataUri(photos[0]);
-  const heroPos = photoObjectPosition(photos[0]);
-  const centerSrcs = [1, 2].map(i => photoDataUri(photos[i]));
-  const centerPos = [1, 2].map(i => photoObjectPosition(photos[i]));
-  const rightSrcs = [3, 4].map(i => photoDataUri(photos[i]));
-  const rightPos = [3, 4].map(i => photoObjectPosition(photos[i]));
-  const modSrcs = [5, 6, 7, 8].map(i => photoDataUri(photos[i]));
-  const modPos = [5, 6, 7, 8].map(i => photoObjectPosition(photos[i]));
+  // group hero=0, center row=1,2, right top=3,4, sidebar mods=5,6,7,8 —
+  // then shape-matched: the tall center pair takes portrait photos, the
+  // wide right-2 takes a landscape, so nobody gets slivered.
+  const N = Array.isArray(photos) ? photos.length : 0;
+  const m = { hero: 0, center1: 1, center2: 2, right1: 3, right2: 4, mod0: 5, mod1: 6, mod2: 7, mod3: 8 };
+  Object.keys(m).forEach(k => { if (m[k] >= N) m[k] = -1; });
+  repairAspects(photos, m, {
+    hero: 0.9, center1: 0.66, center2: 0.66, right1: 1.09, right2: 1.78,
+    mod0: 1.5, mod1: 1.5, mod2: 1.5, mod3: 1.5,
+  });
+  const at = (i) => (i >= 0 ? photoDataUri(photos[i]) : '');
+  const posAt = (i) => photoObjectPosition(i >= 0 ? photos[i] : null);
+  const heroSrc = at(m.hero);
+  const heroPos = posAt(m.hero);
+  const centerSrcs = [at(m.center1), at(m.center2)];
+  const centerPos = [posAt(m.center1), posAt(m.center2)];
+  const rightSrcs = [at(m.right1), at(m.right2)];
+  const rightPos = [posAt(m.right1), posAt(m.right2)];
+  const modSrcs = [m.mod0, m.mod1, m.mod2, m.mod3].map(at);
+  const modPos = [m.mod0, m.mod1, m.mod2, m.mod3].map(posAt);
 
   // ---- Text ----
   const titleRaw = (pageContent.pageTitle || pageContent.section || '');
@@ -83,11 +94,13 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
     const c = dedupCaption(pickCaption(pageContent.photoCaptions, i));
     return c && (c.lead || c.body) ? [c.lead, c.body].filter(Boolean).join(' ') : null;
   };
-  const centerCaps = [1, 2].map((photoIdx, i) => {
+  const centerCaps = [m.center1, m.center2].map((photoIdx, i) => {
+    if (photoIdx < 0) return null;
     const t = capText(photoIdx);
     return t ? `<span class="gcap"><b>${i + 1}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null;
   }).filter(Boolean).join('\n');
-  const rightCaps = [3, 4, 0].map((photoIdx, i) => {
+  const rightCaps = [m.right1, m.right2, m.hero].map((photoIdx, i) => {
+    if (photoIdx < 0) return null;
     const t = capText(photoIdx);
     return t ? `<span class="gcap"><b>${i + 3}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null;
   }).filter(Boolean).join('\n');
@@ -103,7 +116,7 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
     } else if (modSrcs[i]) {
       // Caption text may be junk (suppressed); a photo-only mod still
       // fills the rail better than a blank column.
-      const t = capText(5 + i);
+      const t = m['mod' + i] >= 0 ? capText(m['mod' + i]) : null;
       sideMods.push(t ? { capOnly: t, src: modSrcs[i] } : { photoOnly: true, src: modSrcs[i] });
     }
   }
@@ -167,7 +180,7 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
 
   // Overlay bars dodge the group photo's subjects (faces sit high in most
   // shots, so bars default to the bottom; horizontal side away from focalX).
-  const heroFocal = (photos[0] && photos[0].focalPoint) || { focalX: 0.5, focalY: 0.35 };
+  const heroFocal = (m.hero >= 0 && photos[m.hero] && photos[m.hero].focalPoint) || { focalX: 0.5, focalY: 0.35 };
   const heroOverlayTop = heroQuote
     ? (heroFocal.focalY <= 0.5
         ? 10.05 - heroQuoteLines.length * 0.375 - (heroQuote.attribution ? 0.4 : 0.1)

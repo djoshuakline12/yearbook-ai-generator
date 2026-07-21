@@ -18,7 +18,7 @@ const {
   BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri, photoObjectPosition,
   isPlaceholder, pickCaption, splitQuoteIntoLines, dedupCaption,
-  cleanAttribution, estimateTextHeightIn, wrapLineCount,
+  cleanAttribution, repairAspects, estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderShareAStory(pageContent, photos, options = {}) {
@@ -48,20 +48,22 @@ function renderShareAStory(pageContent, photos, options = {}) {
     slotIdx = { crowd: -1, stack1: -1, stack2: -1, rightBig: -1, rightPair1: -1, rightPair2: -1, rail: -1, heads: [] };
     ['crowd', 'rightBig', 'stack1', 'stack2', 'rightPair1'].forEach((s, i) => { if (i < N) slotIdx[s] = i; });
   }
-  // The rail slot is extremely tall and narrow — a landscape photo crops
-  // to a sliver there. Give it the most portrait photo from the tail pool
-  // (rail + talking heads, all small/uncaptioned slots, so swapping is
-  // safe); the heads take whatever remains.
-  if (N >= 8) {
-    const tail = [slotIdx.rail, ...slotIdx.heads].filter(i => i >= 0 && i < N);
-    if (tail.length > 1) {
-      const railPick = tail.slice().sort((a, b) =>
-        ((photos[a] && photos[a].aspectRatio) || 1.5) - ((photos[b] && photos[b].aspectRatio) || 1.5))[0];
-      if (railPick !== slotIdx.rail) {
-        slotIdx.heads = tail.filter(i => i !== railPick);
-        slotIdx.rail = railPick;
-      }
-    }
+  // Shape-match photos to slots: the rail is very tall, the right pair
+  // leans portrait, everything else leans landscape. Group shots stay in
+  // wide slots instead of cropping to slivers.
+  {
+    const flat = { crowd: slotIdx.crowd, stack1: slotIdx.stack1, stack2: slotIdx.stack2,
+      rightBig: slotIdx.rightBig, rightPair1: slotIdx.rightPair1, rightPair2: slotIdx.rightPair2,
+      rail: slotIdx.rail,
+      head0: slotIdx.heads[0] != null ? slotIdx.heads[0] : -1,
+      head1: slotIdx.heads[1] != null ? slotIdx.heads[1] : -1,
+      head2: slotIdx.heads[2] != null ? slotIdx.heads[2] : -1 };
+    repairAspects(photos, flat, {
+      crowd: 1.2, stack1: 1.2, stack2: 1.2, rightBig: 1.14,
+      rightPair1: 0.82, rightPair2: 0.82, rail: 0.48,
+      head0: 0.74, head1: 0.74, head2: 0.74,
+    });
+    slotIdx = { ...flat, heads: [flat.head0, flat.head1, flat.head2].filter(i => i >= 0) };
   }
   const at = (i) => (i >= 0 ? photoDataUri(photos[i]) : '');
   const posAt = (i) => photoObjectPosition(i >= 0 ? photos[i] : null);

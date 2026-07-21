@@ -16,7 +16,7 @@ const {
   BRAND,
   inToPx, ptToPx, escapeHtml, photoDataUri, photoObjectPosition,
   isPlaceholder, pickCaption, splitQuoteIntoLines, wrapToLines, dedupCaption,
-  cleanAttribution, pickOverlayQuote, estimateTextHeightIn, wrapLineCount,
+  cleanAttribution, pickOverlayQuote, repairAspects, estimateTextHeightIn, wrapLineCount,
 } = require('./utils');
 
 function renderMainHeadlineBleed(pageContent, photos, options = {}) {
@@ -43,6 +43,11 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
     ? ['hero', 'strip0', 'strip1', 'strip2', 'crowd', 'under0', 'under1', 'leftA', 'leftB']
     : ['hero', 'crowd', 'strip0', 'strip1', 'strip2', 'under0', 'under1', 'leftA', 'leftB'];
   slotNames.forEach((k, i) => { assign[k] = i < N ? i : -1; });
+  // Shape-match photos to slots (strip is wide, crowd leans tall).
+  repairAspects(photos, assign, {
+    hero: 1.08, strip0: 1.64, strip1: 1.32, strip2: 1.55,
+    crowd: 0.93, under0: 1.06, under1: 1.06, leftA: 1.0, leftB: 1.29,
+  });
   const at = (i) => (i >= 0 ? photoDataUri(photos[i]) : '');
   const posAt = (i) => photoObjectPosition(i >= 0 ? photos[i] : null);
   const heroSrc = at(assign.hero);
