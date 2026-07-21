@@ -230,6 +230,14 @@ function auditSpread(spreadFolder, sec, photos) {
   else if (photos.length < 3) flags.push(`NEEDS MORE PHOTOS — only ${photos.length}, not generating (5-9 ideal)`);
   else if (photos.length <= 4) flags.push(`${photos.length} photos — usable but thin (5-9 ideal)`);
   if (photos.length && captioned < photos.length) flags.push(`${photos.length - captioned} photo(s) have no caption (Drive folder pulls)`);
+  // Shape coverage: every template has tall slots (heroes, rails). If the
+  // pool is all-landscape, even best-fit placement crops somebody — ask
+  // for a couple of vertical shots before it reaches print.
+  const aspects = photos.map(p => p.aspectRatio).filter(Boolean);
+  if (aspects.length >= 3) {
+    if (Math.min(...aspects) > 1.25) flags.push('ALL PHOTOS LANDSCAPE — tall slots will crop tightly; add 1-2 portrait/vertical shots');
+    else if (Math.max(...aspects) < 0.9) flags.push('ALL PHOTOS PORTRAIT — wide slots will crop tightly; add 1-2 landscape shots');
+  }
   if (missing.noLink) flags.push(`${missing.noLink} photo(s) listed in the doc with no Drive link`);
   if (missing.authErrors) flags.push(`${missing.authErrors} photo(s) blocked by Drive permissions (Request Access)`);
   if (!sec) { flags.push('NO COPY found in compiled doc'); return flags; }
@@ -246,10 +254,26 @@ function auditSpread(spreadFolder, sec, photos) {
   return flags;
 }
 
+// Attach width/height-derived aspect ratios so shape checks and the
+// templates' aspect repair can see photo shapes.
+async function attachAspects(photos) {
+  const sharp = require('sharp');
+  for (const p of photos) {
+    try {
+      const meta = await sharp(p.file).metadata();
+      const rotated = (meta.orientation || 1) >= 5;
+      const w = rotated ? meta.height : meta.width;
+      const h = rotated ? meta.width : meta.height;
+      if (w && h) p.aspectRatio = w / h;
+    } catch (e) { /* unreadable file — leave undefined */ }
+  }
+}
+
 async function generateSpread(spreadFolder, sections, outDir, apiBase) {
   const sectionName = SECTION_NAMES[spreadFolder];
   const sec = sections[sectionName];
   const photos = collectPhotos(spreadFolder);
+  await attachAspects(photos);
   const flags = auditSpread(spreadFolder, sec, photos);
   const result = { spread: spreadFolder, title: sec ? sec.title : '(no copy)', photos: photos.length, quotes: sec ? sec.quotes.length : 0, flags, status: 'skipped' };
 
@@ -359,6 +383,7 @@ async function generatePair(pairSpec, sections, outDir) {
   for (const folder of [fa, fb]) {
     const sec = sections[SECTION_NAMES[folder]];
     const photosRaw = collectPhotos(folder, 6);
+    await attachAspects(photosRaw);
     const halfFlags = auditSpread(folder, sec, photosRaw).map(f => `${folder}: ${f}`);
     flags.push(...halfFlags);
     if (!sec) throw new Error(`${folder}: no copy in compiled doc`);
