@@ -96,15 +96,23 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
 
   const capAt = (i) => (i >= 0 ? capText(dedupCaption(pickCaption(pageContent.photoCaptions, i))) : null);
 
-  // Top strip grouped captions, numbered by visual order over present photos
-  const stripCapEntries = ['strip0', 'strip1', 'strip2'].map((k, i) => {
-    if (!stripSrcs[i]) return null;
-    const t = capAt(assign[k]);
-    return t ? `<span class="gcap"><b>${i + 1}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null;
+  // Numbers exist only for photos that HAVE a caption — an uncaptioned
+  // photo carries no badge, and numbering is sequential over captioned
+  // photos within each group.
+  const stripNums = {};
+  {
+    let sn = 0;
+    ['strip0', 'strip1', 'strip2'].forEach((k, i) => {
+      if (stripSrcs[i] && capAt(assign[k])) stripNums[k] = ++sn;
+    });
+  }
+  const stripCapEntries = ['strip0', 'strip1', 'strip2'].map((k) => {
+    if (!stripNums[k]) return null;
+    return `<span class="gcap"><b>${stripNums[k]}</b>&nbsp;&nbsp;${escapeHtml(capAt(assign[k]))}</span>`;
   }).filter(Boolean).join('\n');
 
-  // Middle group: crowd, under-crowd pair, hero — numbered over the photos
-  // that actually rendered so a lone hero is "1", not a floating "4".
+  // Middle group: crowd, under-crowd pair, hero — numbered over captioned
+  // photos only.
   const midSlots = [
     { key: 'crowd', src: crowdSrc },
     { key: 'under0', src: underSrcs[0] },
@@ -113,11 +121,10 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
   ];
   const midNums = {};
   let midN = 0;
-  midSlots.forEach(s => { if (s.src) midNums[s.key] = ++midN; });
-  const midCapEntries = midSlots.map(({ key, src }) => {
-    if (!src) return null;
-    const t = capAt(assign[key]);
-    return t ? `<span class="gcap"><b>${midNums[key]}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null;
+  midSlots.forEach(s => { if (s.src && capAt(assign[s.key])) midNums[s.key] = ++midN; });
+  const midCapEntries = midSlots.map(({ key }) => {
+    if (!midNums[key]) return null;
+    return `<span class="gcap"><b>${midNums[key]}</b>&nbsp;&nbsp;${escapeHtml(capAt(assign[key]))}</span>`;
   }).filter(Boolean).join('\n');
 
   // Left column captions
@@ -430,19 +437,19 @@ ${BRAND.fontLink}
   </div>` : ''}
 
   <!-- TOP STRIP -->
-  ${stripSrcs[0] ? `<img class="strip-1" src="${stripSrcs[0]}" style="object-position:${stripPos[0]}" alt="">${stripCapEntries ? `<span class="strip-num" style="left:${px(3.58)}">1</span>` : ''}` : ''}
-  ${stripSrcs[1] ? `<img class="strip-2" src="${stripSrcs[1]}" style="object-position:${stripPos[1]}" alt="">${stripCapEntries ? `<span class="strip-num" style="left:${px(7.3)}">2</span>` : ''}` : ''}
-  ${stripSrcs[2] ? `<img class="strip-3" src="${stripSrcs[2]}" style="object-position:${stripPos[2]}" alt="">${stripCapEntries ? `<span class="strip-num" style="left:${px(10.32)}">3</span>` : ''}` : ''}
+  ${stripSrcs[0] ? `<img class="strip-1" src="${stripSrcs[0]}" style="object-position:${stripPos[0]}" alt="">${stripNums.strip0 ? `<span class="strip-num" style="left:${px(3.58)}">${stripNums.strip0}</span>` : ''}` : ''}
+  ${stripSrcs[1] ? `<img class="strip-2" src="${stripSrcs[1]}" style="object-position:${stripPos[1]}" alt="">${stripNums.strip1 ? `<span class="strip-num" style="left:${px(7.3)}">${stripNums.strip1}</span>` : ''}` : ''}
+  ${stripSrcs[2] ? `<img class="strip-3" src="${stripSrcs[2]}" style="object-position:${stripPos[2]}" alt="">${stripNums.strip2 ? `<span class="strip-num" style="left:${px(10.32)}">${stripNums.strip2}</span>` : ''}` : ''}
   ${stripCapEntries ? `<div class="strip-caps">${stripCapEntries}</div>` : ''}
 
   <!-- MIDDLE-LEFT BLOCK -->
-  ${crowdSrc ? `<img class="crowd" src="${crowdSrc}" style="object-position:${crowdPos}" alt="">${midCapEntries ? `<span class="num-badge" style="left:${px(3.58)};top:${px(crowdTop + crowdH - 0.32)}">${midNums.crowd}</span>` : ''}` : ''}
-  ${underSrcs[0] ? `<img class="under-1" src="${underSrcs[0]}" style="object-position:${underPos[0]}" alt="">${midCapEntries ? `<span class="num-badge" style="left:${px(3.58)};top:${px(8.63)}">${midNums.under0}</span>` : ''}` : ''}
-  ${underSrcs[1] ? `<img class="under-2" src="${underSrcs[1]}" style="object-position:${underPos[1]}" alt="">${midCapEntries ? `<span class="num-badge" style="left:${px(5.48)};top:${px(8.63)}">${midNums.under1}</span>` : ''}` : ''}
+  ${crowdSrc ? `<img class="crowd" src="${crowdSrc}" style="object-position:${crowdPos}" alt="">${midNums.crowd ? `<span class="num-badge" style="left:${px(3.58)};top:${px(crowdTop + crowdH - 0.32)}">${midNums.crowd}</span>` : ''}` : ''}
+  ${underSrcs[0] ? `<img class="under-1" src="${underSrcs[0]}" style="object-position:${underPos[0]}" alt="">${midNums.under0 ? `<span class="num-badge" style="left:${px(3.58)};top:${px(8.63)}">${midNums.under0}</span>` : ''}` : ''}
+  ${underSrcs[1] ? `<img class="under-2" src="${underSrcs[1]}" style="object-position:${underPos[1]}" alt="">${midNums.under1 ? `<span class="num-badge" style="left:${px(5.48)};top:${px(8.63)}">${midNums.under1}</span>` : ''}` : ''}
   ${midCapEntries ? `<div class="mid-caps">${midCapEntries}</div>` : ''}
 
   <!-- HERO -->
-  ${heroSrc ? `<img class="hero" src="${heroSrc}" style="object-position:${heroPos}" alt="">${midCapEntries ? `<span class="num-badge" style="left:${px(heroX + 0.15)};top:${px(10.05)}">${midNums.hero}</span>` : ''}` : ''}
+  ${heroSrc ? `<img class="hero" src="${heroSrc}" style="object-position:${heroPos}" alt="">${midNums.hero ? `<span class="num-badge" style="left:${px(heroX + 0.15)};top:${px(10.05)}">${midNums.hero}</span>` : ''}` : ''}
   ${quoteLines.length > 0 ? `
   <div class="quote-overlay">
     ${quoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}

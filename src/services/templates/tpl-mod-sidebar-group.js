@@ -94,16 +94,19 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
     const c = dedupCaption(pickCaption(pageContent.photoCaptions, i));
     return c && (c.lead || c.body) ? [c.lead, c.body].filter(Boolean).join(' ') : null;
   };
-  const centerCaps = [m.center1, m.center2].map((photoIdx, i) => {
-    if (photoIdx < 0) return null;
-    const t = capText(photoIdx);
-    return t ? `<span class="gcap"><b>${i + 1}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null;
+  // Numbers exist only for captioned photos, sequential across the spread's
+  // two caption groups (center 1..n, then right continues the count).
+  const capNums = {};
+  let capN = 0;
+  for (const [key, idx] of [['center1', m.center1], ['center2', m.center2], ['right1', m.right1], ['right2', m.right2], ['hero', m.hero]]) {
+    if (idx >= 0 && capText(idx)) capNums[key] = ++capN;
+  }
+  const groupCaps2 = (entries) => entries.map(([key, idx]) => {
+    if (!capNums[key]) return null;
+    return `<span class="gcap"><b>${capNums[key]}</b>&nbsp;&nbsp;${escapeHtml(capText(idx))}</span>`;
   }).filter(Boolean).join('\n');
-  const rightCaps = [m.right1, m.right2, m.hero].map((photoIdx, i) => {
-    if (photoIdx < 0) return null;
-    const t = capText(photoIdx);
-    return t ? `<span class="gcap"><b>${i + 3}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null;
-  }).filter(Boolean).join('\n');
+  const centerCaps = groupCaps2([['center1', m.center1], ['center2', m.center2]]);
+  const rightCaps = groupCaps2([['right1', m.right1], ['right2', m.right2], ['hero', m.hero]]);
 
   // Sidebar mod stack: quotes first, then caption-based mods (photo +
   // caption) to fill remaining slots so the rail never runs dry.
@@ -472,18 +475,18 @@ ${BRAND.fontLink}
   ${titleRaw ? `<div class="center-title">${escapeHtml(titleRaw)}</div>` : ''}
   ${subheadText ? `<div class="subhead-bar">${escapeHtml(subheadText)}</div>` : ''}
   <div class="center-body">${bodyParagraphs}</div>
-  ${centerSrcs[0] ? `<img class="center-1" src="${centerSrcs[0]}" style="object-position:${centerPos[0]}" alt="">${centerCaps ? `<span class="num-badge" style="left:${px(2.88)};top:${px(centerPhotosY + centerPhotoH - 0.32)}">1</span>` : ''}` : ''}
-  ${centerSrcs[1] ? `<img class="center-2" src="${centerSrcs[1]}" style="object-position:${centerPos[1]}" alt="">${centerCaps ? `<span class="num-badge" style="left:${px(5.3)};top:${px(centerPhotosY + centerPhotoH - 0.32)}">2</span>` : ''}` : ''}
+  ${centerSrcs[0] ? `<img class="center-1" src="${centerSrcs[0]}" style="object-position:${centerPos[0]}" alt="">${capNums.center1 ? `<span class="num-badge" style="left:${px(2.88)};top:${px(centerPhotosY + centerPhotoH - 0.32)}">${capNums.center1}</span>` : ''}` : ''}
+  ${centerSrcs[1] ? `<img class="center-2" src="${centerSrcs[1]}" style="object-position:${centerPos[1]}" alt="">${capNums.center2 ? `<span class="num-badge" style="left:${px(5.3)};top:${px(centerPhotosY + centerPhotoH - 0.32)}">${capNums.center2}</span>` : ''}` : ''}
   ${centerCaps ? `<div class="center-caps">${centerCaps}</div>` : ''}
   ${centerFiller}
 
   <!-- RIGHT TOP -->
   ${showRightCaps ? `<div class="right-caps">${rightCaps}</div>` : ''}
-  ${rightSrcs[0] ? `<img class="right-1" src="${rightSrcs[0]}" style="object-position:${rightPos[0]}" alt="">${showRightCaps ? `<span class="num-badge" style="left:${px(9.63)};top:${px(2.28)}">3</span>` : ''}` : ''}
-  ${rightSrcs[1] ? `<img class="right-2" src="${rightSrcs[1]}" style="object-position:${rightPos[1]}" alt="">${showRightCaps ? `<span class="num-badge" style="left:${px(12.16)};top:${px(2.28)}">4</span>` : ''}` : ''}
+  ${rightSrcs[0] ? `<img class="right-1" src="${rightSrcs[0]}" style="object-position:${rightPos[0]}" alt="">${showRightCaps && capNums.right1 ? `<span class="num-badge" style="left:${px(9.63)};top:${px(2.28)}">${capNums.right1}</span>` : ''}` : ''}
+  ${rightSrcs[1] ? `<img class="right-2" src="${rightSrcs[1]}" style="object-position:${rightPos[1]}" alt="">${showRightCaps && capNums.right2 ? `<span class="num-badge" style="left:${px(12.16)};top:${px(2.28)}">${capNums.right2}</span>` : ''}` : ''}
 
   <!-- GROUP HERO -->
-  ${heroSrc ? `<img class="hero" src="${heroSrc}" style="object-position:${heroPos}" alt="">${showRightCaps ? `<span class="num-badge" style="left:${px(8.03)};top:${px(10.1)}">5</span>` : ''}` : ''}
+  ${heroSrc ? `<img class="hero" src="${heroSrc}" style="object-position:${heroPos}" alt="">${showRightCaps && capNums.hero ? `<span class="num-badge" style="left:${px(8.03)};top:${px(10.1)}">${capNums.hero}</span>` : ''}` : ''}
   ${heroQuoteLines.length > 0 ? `
   <div class="quote-overlay" style="left:${px(heroOverlayLeft)};top:${px(heroOverlayTop)}">
     ${heroQuoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}

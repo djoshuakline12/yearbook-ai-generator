@@ -78,14 +78,31 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   const smallCap = m5.small >= 0 ? dedupCaption(pickCaption(pageContent.photoCaptions, m5.small)) : null;
   const miniCaps = [m5.mini0, m5.mini1].map(i => (i >= 0 ? dedupCaption(pickCaption(pageContent.photoCaptions, i)) : null));
 
-  // Grouped numbered captions for the 2x2 mosaic (photos 2-5).
-  const mosaicCapEntries = mosaicIdx.map((photoIdx, i) => {
-    if (!mosaicSrcs[i] || photoIdx < 0) return null;
+  // Grouped numbered captions: numbers exist only for captioned photos —
+  // hero first (when captioned), then mosaic cells, sequential with no gaps.
+  const capTextOf = (photoIdx) => {
+    if (photoIdx < 0) return null;
     const c = dedupCaption(pickCaption(pageContent.photoCaptions, photoIdx));
     if (!c || (!c.lead && !c.body)) return null;
-    const text = [c.lead, c.body].filter(Boolean).join(' ');
-    return `<span class="mcap"><b>${i + 2}</b>&nbsp;&nbsp;${escapeHtml(text)}</span>`;
-  }).filter(Boolean).join('\n');
+    return [c.lead, c.body].filter(Boolean).join(' ');
+  };
+  const heroCapText = capTextOf(m5.hero);
+  const mosaicNums = {};
+  let heroNum = 0;
+  {
+    let mn = 0;
+    if (heroCapText) heroNum = ++mn;
+    mosaicIdx.forEach((photoIdx, i) => {
+      if (mosaicSrcs[i] && capTextOf(photoIdx)) mosaicNums[i] = ++mn;
+    });
+  }
+  const mosaicCapEntries = [
+    heroCapText ? `<span class="mcap"><b>${heroNum}</b>&nbsp;&nbsp;${escapeHtml(heroCapText)}</span>` : null,
+    ...mosaicIdx.map((photoIdx, i) => {
+      if (!mosaicNums[i]) return null;
+      return `<span class="mcap"><b>${mosaicNums[i]}</b>&nbsp;&nbsp;${escapeHtml(capTextOf(photoIdx))}</span>`;
+    }),
+  ].filter(Boolean).join('\n');
   const mosaicCount = mosaicSrcs.filter(Boolean).length;
 
   // Featured moments block: black serif headline (2nd word italic, matching
@@ -471,7 +488,7 @@ ${BRAND.fontLink}
   <!-- ============ CENTER HERO ============ -->
 
   ${heroSrc ? `<img class="hero-photo" src="${heroSrc}" style="object-position:${heroPos}" alt="">` : ''}
-  ${heroSrc && mosaicCapEntries ? `<div class="hero-num">1</div>` : ''}
+  ${heroSrc && heroNum ? `<div class="hero-num">${heroNum}</div>` : ''}
 
   <!-- ============ QUOTE OVERLAY ON HERO ============ -->
 
@@ -485,10 +502,10 @@ ${BRAND.fontLink}
 
   ${mosaicCount > 0 ? `<div class="mosaic">
     ${[0, 1, 2, 3].filter(i => mosaicSrcs[i]).map((i, pos) => {
-      const badge = i + 2;
       // With 3 photos the last cell spans both columns so no dead cell shows.
       const span = (mosaicCount === 3 && pos === 2) ? ' style="grid-column: 1 / -1;"' : '';
-      return `<div class="mosaic-cell"${span}><img src="${mosaicSrcs[i]}" style="object-position:${mosaicPos[i]}" alt=""><span class="num-badge">${badge}</span></div>`;
+      const badge = mosaicNums[i] ? `<span class="num-badge">${mosaicNums[i]}</span>` : '';
+      return `<div class="mosaic-cell"${span}><img src="${mosaicSrcs[i]}" style="object-position:${mosaicPos[i]}" alt="">${badge}</div>`;
     }).join('\n')}
   </div>` : ''}
 

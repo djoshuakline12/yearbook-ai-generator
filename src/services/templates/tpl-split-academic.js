@@ -76,8 +76,14 @@ function renderSplitAcademic(pageContent, photos, options = {}) {
       const c = dedupCaption(pickCaption(content.photoCaptions, i));
       return c && (c.lead || c.body) ? [c.lead, c.body].filter(Boolean).join(' ') : null;
     });
+    // Numbers only for captioned photos, sequential with no gaps.
+    const capNums = {};
+    {
+      let cn = 0;
+      caps.forEach((t, i) => { if (t && srcs[i]) capNums[i] = ++cn; });
+    }
     const capEntries = caps
-      .map((t, i) => (t && srcs[i] ? `<span class="gcap"><b>${i + 1}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null))
+      .map((t, i) => (capNums[i] ? `<span class="gcap"><b>${capNums[i]}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null))
       .filter(Boolean).join('\n');
 
     // Count-adaptive photo grid: hero on top, then rows of smalls. Up to 5
@@ -155,7 +161,7 @@ function renderSplitAcademic(pageContent, photos, options = {}) {
   }`;
 
     const photoHtml = cells.map(c => srcs[c.idx] ? `
-  <img class="ph" src="${srcs[c.idx]}" style="left:${px(c.x)};top:${px(c.y)};width:${px(c.w)};height:${px(c.h)};object-position:${poss[c.idx]}" alt="">${caps[c.idx] ? `<span class="num-badge" style="left:${px(c.x + 0.08)};top:${px(c.y + c.h - 0.32)}">${c.idx + 1}</span>` : ''}` : '').join('');
+  <img class="ph" src="${srcs[c.idx]}" style="left:${px(c.x)};top:${px(c.y)};width:${px(c.w)};height:${px(c.h)};object-position:${poss[c.idx]}" alt="">${capNums[c.idx] ? `<span class="num-badge" style="left:${px(c.x + 0.08)};top:${px(c.y + c.h - 0.32)}">${capNums[c.idx]}</span>` : ''}` : '').join('');
 
     const html = `
   ${chipText ? `<div class="chip-${id}">${escapeHtml(chipText)}</div>` : ''}

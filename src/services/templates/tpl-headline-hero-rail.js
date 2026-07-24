@@ -97,10 +97,17 @@ function renderHeadlineHeroRail(pageContent, photos, options = {}) {
     const c = dedupCaption(pickCaption(pageContent.photoCaptions, i));
     return c && (c.lead || c.body) ? [c.lead, c.body].filter(Boolean).join(' ') : null;
   };
-  const heroCaps = [idx.hero, idx.under].map((photoIdx, i) => {
-    if (photoIdx < 0) return null;
-    const t = capText(photoIdx);
-    return t ? `<span class="gcap"><b>${i + 1}</b>&nbsp;&nbsp;${escapeHtml(t)}</span>` : null;
+  // Numbers only for captioned photos (a bare badge is confusing).
+  const capNums3 = {};
+  {
+    let n3 = 0;
+    for (const [k, i] of [['hero', idx.hero], ['under', idx.under]]) {
+      if (i >= 0 && capText(i)) capNums3[k] = ++n3;
+    }
+  }
+  const heroCaps = [['hero', idx.hero], ['under', idx.under]].map(([k, photoIdx]) => {
+    if (!capNums3[k]) return null;
+    return `<span class="gcap"><b>${capNums3[k]}</b>&nbsp;&nbsp;${escapeHtml(capText(photoIdx))}</span>`;
   }).filter(Boolean).join('\n');
   const railCapTexts = [idx.rail0, idx.rail1, idx.rail2].map(i => (i >= 0 ? capText(i) : null));
 
@@ -365,9 +372,9 @@ ${BRAND.fontLink}
   ${showQuoteColPhoto ? `<img class="quote-col-photo" src="${quoteColSrc}" style="object-position:${quoteColPos}" alt="">` : ''}
 
   <!-- CENTER HERO -->
-  ${heroSrc ? `<img class="hero" src="${heroSrc}" style="object-position:${heroPos}" alt="">${heroCaps ? `<span class="num-badge" style="left:${px(6.68)};top:${px(0.4 + heroH - 0.32)}">1</span>` : ''}` : ''}
+  ${heroSrc ? `<img class="hero" src="${heroSrc}" style="object-position:${heroPos}" alt="">${capNums3.hero ? `<span class="num-badge" style="left:${px(6.68)};top:${px(0.4 + heroH - 0.32)}">${capNums3.hero}</span>` : ''}` : ''}
   ${heroCaps ? `<div class="hero-caps">${heroCaps}</div>` : ''}
-  ${underSrc ? `<img class="under-hero" src="${underSrc}" style="object-position:${underPos}" alt="">${heroCaps ? `<span class="num-badge" style="left:${px(underX + 0.08)};top:${px(9.83)}">2</span>` : ''}` : ''}
+  ${underSrc ? `<img class="under-hero" src="${underSrc}" style="object-position:${underPos}" alt="">${capNums3.under ? `<span class="num-badge" style="left:${px(underX + 0.08)};top:${px(9.83)}">${capNums3.under}</span>` : ''}` : ''}
 
   <!-- RIGHT RAIL -->
   ${railMods.length > 0 ? `<div class="rail-header">${escapeHtml(railHeader)}</div>` : ''}
