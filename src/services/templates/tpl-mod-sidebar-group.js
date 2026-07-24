@@ -381,8 +381,8 @@ ${BRAND.fontLink}
   /* RIGHT TOP */
   .right-caps {
     position: absolute;
-    left: ${px(7.95)}; top: ${px(0.4)};
-    width: ${px(1.45)}; height: ${px(2.2)};
+    left: ${px(8.15)}; top: ${px(0.4)};
+    width: ${px(1.3)}; height: ${px(2.2)};
     font-size: ${pt(7.5)};
     line-height: 1.35;
     color: ${DARK};

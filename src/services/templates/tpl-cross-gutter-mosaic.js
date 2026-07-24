@@ -157,9 +157,13 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   const heroFocal = (m5.hero >= 0 && photos[m5.hero] && photos[m5.hero].focalPoint) || { focalX: 0.5, focalY: 0.35 };
   const quoteTop = heroFocal.focalY > 0.5 ? 0.55 : Math.min(7.7, 9.95 - quoteBlockH);
   const heroRight = 3.15 + (mosaicCount === 0 ? 12.35 : 6.6);
+  // The right-side position is only usable when the bars land entirely on
+  // the right page (expanded hero) — text never straddles the center fold.
+  const rightPlacement = heroRight - 0.25 - 3.8;
+  const rightSafe = rightPlacement >= 8.1;
   const quoteLeft = heroFocal.focalX >= 0.55 ? 3.4
-    : heroFocal.focalX <= 0.45 ? heroRight - 0.25 - 3.8
-    : (flipQuote ? heroRight - 0.25 - 3.8 : 3.4);
+    : heroFocal.focalX <= 0.45 ? (rightSafe ? rightPlacement : 3.4)
+    : (flipQuote && rightSafe ? rightPlacement : 3.4);
 
   // Left column flows: title box (measured) → body (measured) → attribution
   // quote → small photo that stretches down to its caption anchor at 9.85.

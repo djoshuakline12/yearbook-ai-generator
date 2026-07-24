@@ -201,12 +201,23 @@ function renderShareAStory(pageContent, photos, options = {}) {
       if (t) headMods.push({ capOnly: t, src: headSrcs[i] });
     }
   }
-  const bandLeft = 0.75;
-  const bandRight = 12.6; // rail starts at 13.1
+  // Band mods carry TEXT, so no mod may straddle the center fold (x=8).
+  // Split the band into a left-page segment and a right-page segment and
+  // distribute mods between them.
   const modCount = Math.max(1, headMods.length);
-  const headModStride = (bandRight - bandLeft) / modCount;
-  // With only 1-2 mods, bigger photos carry the band; 3+ mods pack tighter.
-  const headModW = modCount <= 2 ? Math.min(headModStride - 0.25, 5.4) : Math.min(headModStride - 0.25, 4.6);
+  const nRight = Math.floor(headMods.length / 2);
+  const nLeft = Math.max(1, headMods.length - nRight);
+  const segL = { x: 0.75, w: 7.15 };  // ends 7.9, clear of the fold
+  const segR = { x: 8.1, w: 4.5 };    // 8.1-12.6, rail starts at 13.1
+  const headModBoxes = headMods.map((_, i) => {
+    if (i < nLeft) {
+      const stride = segL.w / nLeft;
+      return { x: segL.x + i * stride, w: Math.min(stride - 0.25, 5.4) };
+    }
+    const j = i - nLeft;
+    const stride = segR.w / Math.max(1, nRight);
+    return { x: segR.x + j * stride, w: Math.min(stride - 0.25, 4.6) };
+  });
   const headImgW = modCount <= 2 ? 2.0 : 1.45;
   // Angle bar: a distinct teaser — never repeats the title OR the subtitle.
   const angleBarRaw = [pageContent.headline, pageContent.record, pageContent.section]
@@ -342,12 +353,12 @@ ${BRAND.fontLink}
     text-transform: uppercase;
     letter-spacing: 0.03em;
     padding: ${px(0.05)} ${px(0.12)};
-    max-width: ${px(9.5)};
+    max-width: ${px(4.85)};
   }
   .head-mod {
     position: absolute;
     top: ${px(8.5)};
-    width: ${px(headModW)}; height: ${px(1.95)};
+    height: ${px(1.95)};
     display: flex;
     gap: ${px(0.12)};
   }
@@ -490,7 +501,7 @@ ${BRAND.fontLink}
   <div class="angle-header">THIS IS <span class="accent">MY</span> ANGLE</div>
   ${angleBarRaw ? `<div class="angle-bar">${escapeHtml(angleBarRaw.toUpperCase())}</div>` : ''}
   ${headMods.map((m, i) => {
-    const x = bandLeft + i * headModStride;
+    const box = headModBoxes[i];
     const img = m.src ? `<img src="${m.src}" style="object-position:${headPos[headSrcs.indexOf(m.src)] || 'center 35%'}" alt="">` : '';
     let body;
     if (m.quoteObj) {
@@ -503,7 +514,7 @@ ${BRAND.fontLink}
     } else {
       body = escapeHtml(m.capOnly);
     }
-    return `<div class="head-mod" style="left:${px(x)}">${img}<div class="quote">${body}</div></div>`;
+    return `<div class="head-mod" style="left:${px(box.x)};width:${px(box.w)}">${img}<div class="quote">${body}</div></div>`;
   }).join('\n')}
 
   <!-- RIGHT PAGE PHOTOS -->

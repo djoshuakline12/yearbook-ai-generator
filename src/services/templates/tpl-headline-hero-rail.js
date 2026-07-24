@@ -123,7 +123,10 @@ function renderHeadlineHeroRail(pageContent, photos, options = {}) {
   // caption column becomes a wide band directly beneath it.
   const heroH = underSrc ? 6.3 : (heroCaps ? 8.5 : 9.65);
   const heroCapsTop = underSrc ? 6.85 : 0.4 + heroH + 0.2;
-  const heroCapsW = underSrc ? 1.5 : 5.4;
+  // Caption text must not straddle the fold: the narrow column ends at
+  // 7.9; the wide band (stretched-hero case) sits on the right page only.
+  const heroCapsX = underSrc ? 6.6 : 8.2;
+  const heroCapsW = underSrc ? 1.3 : 3.7;
   const heroCapsH = Math.max(0.4, 10.05 - heroCapsTop);
 
   // bit1 swaps the pull-quote column and the inset-photo column.
@@ -273,7 +276,7 @@ ${BRAND.fontLink}
   }
   .hero-caps {
     position: absolute;
-    left: ${px(6.6)}; top: ${px(heroCapsTop)};
+    left: ${px(heroCapsX)}; top: ${px(heroCapsTop)};
     width: ${px(heroCapsW)}; height: ${px(heroCapsH)};
     font-size: ${pt(7.5)};
     line-height: 1.35;
