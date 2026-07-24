@@ -156,12 +156,35 @@ function manifestCaptions(spreadFolder) {
     const head = csv[0];
     const iPath = head.indexOf('final_path');
     const iCap = head.indexOf('caption');
+    const iAct = head.indexOf('action');
     for (const r of csv.slice(1)) {
       const p = r[iPath] || '';
+      if (iAct >= 0 && (r[iAct] || '').trim() === 'remove') continue;
       if (p.startsWith(spreadFolder + '/')) map[path.basename(p).replace(/\.\w+$/, '')] = r[iCap] || '';
     }
   }
   return map;
+}
+
+// Photos Josh removed in the review UI (action=remove rows) never reach
+// a spread.
+let _excludedCache = null;
+function excludedPhotos() {
+  if (_excludedCache) return _excludedCache;
+  _excludedCache = new Set();
+  const fp = path.join(PACK_DIR, 'captions_confirmed.csv');
+  if (fs.existsSync(fp)) {
+    const csv = parseCsv(fs.readFileSync(fp, 'utf8'));
+    const head = csv[0];
+    const iPath = head.indexOf('final_path');
+    const iAct = head.indexOf('action');
+    if (iAct >= 0) {
+      for (const r of csv.slice(1)) {
+        if ((r[iAct] || '').trim() === 'remove' && r[iPath]) _excludedCache.add(r[iPath]);
+      }
+    }
+  }
+  return _excludedCache;
 }
 
 // Per-folder photo source restriction (Josh 2026-07-21: for Spirit Week
@@ -176,31 +199,35 @@ const PHOTO_SOURCE_ONLY = {
 function collectPhotos(spreadFolder, maxPhotos = 13) {
   const dir = path.join(PACK_DIR, spreadFolder);
   if (!fs.existsSync(dir)) return [];
+  const excluded = excludedPhotos();
+  const keep = (rel) => !excluded.has(spreadFolder + '/' + rel);
   if (PHOTO_SOURCE_ONLY[spreadFolder]) {
-    const only = path.join(dir, PHOTO_SOURCE_ONLY[spreadFolder]);
+    const sub = PHOTO_SOURCE_ONLY[spreadFolder];
+    const only = path.join(dir, sub);
     if (!fs.existsSync(only)) return [];
     return fs.readdirSync(only).sort()
-      .filter(f => /\.(jpe?g|png)$/i.test(f) && !f.startsWith('.'))
+      .filter(f => /\.(jpe?g|png)$/i.test(f) && !f.startsWith('.') && keep(sub + '/' + f))
       .map(f => ({ file: path.join(only, f), base: f.replace(/\.\w+$/, ''), captioned: true }))
       .slice(0, maxPhotos);
   }
   const top = fs.readdirSync(dir)
-    .filter(f => /\.(jpe?g|png)$/i.test(f) && fs.statSync(path.join(dir, f)).isFile())
+    .filter(f => /\.(jpe?g|png)$/i.test(f) && fs.statSync(path.join(dir, f)).isFile() && keep(f))
     .sort()
     .map(f => ({ file: path.join(dir, f), base: f.replace(/\.\w+$/, ''), captioned: true }));
   const pulls = [];
-  const walk = (d) => {
+  const walk = (d, rel) => {
     for (const e of fs.readdirSync(d).sort()) {
-      if (e.startsWith('.') || e === '_raw_originals') continue;
+      if (e.startsWith('.') || e === '_raw_originals' || e === '_review') continue;
       const p = path.join(d, e);
       const st = fs.statSync(p);
-      if (st.isDirectory()) walk(p);
-      else if (/\.(jpe?g|png)$/i.test(e)) pulls.push({ file: p, base: e.replace(/\.\w+$/, ''), captioned: false });
+      const r = rel ? rel + '/' + e : e;
+      if (st.isDirectory()) walk(p, r);
+      else if (/\.(jpe?g|png)$/i.test(e) && keep(r)) pulls.push({ file: p, base: e.replace(/\.\w+$/, ''), captioned: false });
     }
   };
   for (const sub of fs.readdirSync(dir).sort()) {
     const p = path.join(dir, sub);
-    if (!sub.startsWith('.') && sub !== '_raw_originals' && fs.statSync(p).isDirectory()) walk(p);
+    if (!sub.startsWith('.') && sub !== '_raw_originals' && fs.statSync(p).isDirectory()) walk(p, sub);
   }
   return [...top, ...pulls].slice(0, maxPhotos);
 }

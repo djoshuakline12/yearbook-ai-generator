@@ -67,14 +67,22 @@ function walkPhotos(folder) {
     console.log(folder, photos.length, 'photos');
   }
 
-  // Mark rows whose caption came from captions_confirmed.csv as pre-approved.
+  // Mark rows from captions_confirmed.csv: caption rows pre-approve,
+  // action=remove rows pre-mark as removed.
   const confirmedPath = path.join(PACK, 'captions_confirmed.csv');
   if (fs.existsSync(confirmedPath)) {
-    const confirmed = new Set(
-      fs.readFileSync(confirmedPath, 'utf8').split('\n').slice(1)
-        .map(l => (l.match(/^"?([^,"]+)"?,/) || [])[1]).filter(Boolean)
-    );
-    for (const r of rows) if (confirmed.has(r.finalPath)) r.preApproved = true;
+    const confirmed = new Set();
+    const removed = new Set();
+    for (const l of fs.readFileSync(confirmedPath, 'utf8').split('\n').slice(1)) {
+      const fp = (l.match(/^"?([^,"]+)"?,/) || [])[1];
+      if (!fp) continue;
+      if (/,\s*"?remove"?\s*$/.test(l.trim())) removed.add(fp);
+      else confirmed.add(fp);
+    }
+    for (const r of rows) {
+      if (removed.has(r.finalPath)) r.preRemoved = true;
+      else if (confirmed.has(r.finalPath)) r.preApproved = true;
+    }
   }
 
   const DATA = JSON.stringify(rows);
@@ -109,6 +117,11 @@ function walkPhotos(folder) {
   .card label { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; cursor: pointer; }
   .card input[type=checkbox] { width: 18px; height: 18px; accent-color: #2e9e44; }
   .card .skip { font-size: 12px; color: #888; margin-left: auto; cursor: pointer; text-decoration: underline; }
+  .card.removed { outline: 3px solid #c0392b; opacity: 0.55; }
+  .card .btn { border: none; border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .card .btn.nocap { background: #eee; color: #333; margin-left: auto; }
+  .card .btn.remove { background: #fdecea; color: #c0392b; }
+  .card .btn.restore { background: #eafafit; background: #e8f8ee; color: #2e9e44; margin-left: auto; }
   #zoom { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none;
           align-items: center; justify-content: center; z-index: 50; cursor: zoom-out; }
   #zoom img { max-width: 92vw; max-height: 92vh; }
@@ -119,7 +132,7 @@ function walkPhotos(folder) {
   <h1>Caption Review</h1>
   <span class="count" id="count"></span>
   <button onclick="exportCsv()">⬇︎ Export captions_confirmed.csv</button>
-  <span class="hint">Edit the caption, then check ✓ Approved. Orange box = no caption yet (photo runs uncaptioned unless you add one). "skip" marks a photo as intentionally uncaptioned. Progress saves in this browser automatically. When done, Export and send the file to Claude (it lands in your Downloads).</span>
+  <span class="hint">Edit the caption, then check ✓ Approved. Orange box = no caption yet. "No caption" confirms a photo runs without one; "✕ Remove" pulls the photo from the book entirely (restorable). Progress saves in this browser automatically. When done, Export and send the file to Claude (it lands in your Downloads).</span>
 </header>
 <div id="app"></div>
 <div id="zoom" onclick="this.style.display='none'"><img id="zoomimg"></div>
@@ -133,6 +146,7 @@ for (const r of DATA) {
     caption: s.caption !== undefined ? s.caption : r.caption,
     approved: s.approved !== undefined ? s.approved : r.preApproved,
     skipped: s.skipped || false,
+    removed: s.removed !== undefined ? s.removed : (r.preRemoved || false),
   };
 }
 function save() {
@@ -141,7 +155,7 @@ function save() {
 }
 function updateCount() {
   const total = DATA.length;
-  const done = DATA.filter(r => state[r.finalPath].approved || state[r.finalPath].skipped).length;
+  const done = DATA.filter(r => { const s = state[r.finalPath]; return s.approved || s.skipped || s.removed; }).length;
   document.getElementById('count').textContent = done + ' / ' + total + ' reviewed';
 }
 function render() {
@@ -151,16 +165,22 @@ function render() {
   app.innerHTML = Object.entries(bySection).map(([section, rows]) =>
     '<h2>' + section + '</h2><div class="grid">' + rows.map(r => {
       const s = state[r.finalPath];
-      return '<div class="card' + (s.approved ? ' approved' : '') + '" id="card-' + cssId(r.finalPath) + '">' +
+      const cls = s.removed ? ' removed' : (s.approved ? ' approved' : '');
+      return '<div class="card' + cls + '" id="card-' + cssId(r.finalPath) + '">' +
         '<img src="' + r.thumb + '" loading="lazy" onclick="zoom(\\'' + r.thumb + '\\')">' +
         '<div class="body">' +
-        '<div class="file">' + r.finalPath + (s.skipped ? ' — <b>skipped (no caption)</b>' : '') + '</div>' +
-        '<textarea class="' + (s.caption ? '' : 'empty') + '" placeholder="No caption — type one or skip" ' +
+        '<div class="file">' + r.finalPath +
+          (s.removed ? ' — <b style="color:#c0392b">REMOVED — will not appear in the book</b>' : (s.skipped ? ' — <b>no caption (confirmed)</b>' : '')) + '</div>' +
+        '<textarea class="' + (s.caption ? '' : 'empty') + '" placeholder="No caption — type one, or use the buttons" ' +
+          (s.removed ? 'disabled ' : '') +
           'oninput="onEdit(\\'' + jsEsc(r.finalPath) + '\\', this)">' + escHtml(s.caption) + '</textarea>' +
         '<div class="row">' +
-        '<label><input type="checkbox" ' + (s.approved ? 'checked' : '') +
+        '<label><input type="checkbox" ' + (s.approved ? 'checked' : '') + (s.removed ? ' disabled' : '') +
           ' onchange="onApprove(\\'' + jsEsc(r.finalPath) + '\\', this.checked)"> Approved</label>' +
-        '<span class="skip" onclick="onSkip(\\'' + jsEsc(r.finalPath) + '\\')">skip</span>' +
+        (s.removed
+          ? '<button class="btn restore" onclick="onRestore(\\'' + jsEsc(r.finalPath) + '\\')">↩︎ Restore</button>'
+          : '<button class="btn nocap" onclick="onSkip(\\'' + jsEsc(r.finalPath) + '\\')">No caption</button>' +
+            '<button class="btn remove" onclick="onRemove(\\'' + jsEsc(r.finalPath) + '\\')">✕ Remove</button>') +
         '</div></div></div>';
     }).join('') + '</div>'
   ).join('');
@@ -172,14 +192,18 @@ function escHtml(t) { return (t || '').replace(/&/g, '&amp;').replace(/</g, '&lt
 function onEdit(p, el) { state[p].caption = el.value; state[p].skipped = false; el.classList.toggle('empty', !el.value); save(); }
 function onApprove(p, v) { state[p].approved = v; if (v) state[p].skipped = false; save();
   document.getElementById('card-' + cssId(p)).classList.toggle('approved', v); }
-function onSkip(p) { state[p].skipped = true; state[p].approved = false; state[p].caption = ''; save(); render(); }
+function onSkip(p) { state[p].skipped = true; state[p].approved = false; state[p].removed = false; state[p].caption = ''; save(); render(); }
+function onRemove(p) { state[p].removed = true; state[p].approved = false; state[p].skipped = false; save(); render(); }
+function onRestore(p) { state[p].removed = false; save(); render(); }
 function zoom(src) { document.getElementById('zoomimg').src = src.replace('thumbs/', 'thumbs/'); document.getElementById('zoom').style.display = 'flex'; }
 function exportCsv() {
-  let csv = 'final_path,caption\\n';
+  let csv = 'final_path,caption,action\\n';
   for (const r of DATA) {
     const s = state[r.finalPath];
-    if (s.approved && s.caption.trim()) {
-      csv += '"' + r.finalPath.replace(/"/g, '""') + '","' + s.caption.trim().replace(/"/g, '""') + '"\\n';
+    if (s.removed) {
+      csv += '"' + r.finalPath.replace(/"/g, '""') + '","",remove\\n';
+    } else if (s.approved && s.caption.trim()) {
+      csv += '"' + r.finalPath.replace(/"/g, '""') + '","' + s.caption.trim().replace(/"/g, '""') + '",keep\\n';
     }
   }
   const blob = new Blob([csv], { type: 'text/csv' });
