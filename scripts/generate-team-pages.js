@@ -59,40 +59,64 @@ async function loadPhoto(file) {
   return { base64: buf.toString('base64'), aspectRatio: meta.width / meta.height };
 }
 
+// Every page gets exactly TWO squad rows (uniform layout, Josh 2026-07-25).
+// Missing photos/rosters render as placeholders so proofs show what's
+// still needed; add files/rosters and regenerate to fill them.
 async function buildSport(name, entry, photos) {
   if (!name) return FILLER;
-  const rosterKeys = Object.keys(entry.rosters).filter(k => entry.rosters[k].length);
   const photoFiles = (entry.photos || []).map(p => p.file);
-  const isBG = rosterKeys.includes('Boys') || rosterKeys.includes('Girls');
+  const keys = Object.keys(entry.rosters || {});
   const squads = [];
 
-  const addSquad = async (label, roster, photoFile) => {
+  const addSquad = async (label, roster, photoFile, note) => {
     let photoIndex = null;
     const ph = await loadPhoto(photoFile);
     if (ph) { photos.push(ph); photoIndex = photos.length - 1; }
-    squads.push({ label, roster, coachLine: coachLine(entry.coaches, label), photoIndex });
+    squads.push({
+      label,
+      roster: roster || [],
+      coachLine: (roster && roster.length) || !note ? coachLine(entry.coaches, label) : '',
+      photoIndex,
+      note,
+      placeholderText: 'TEAM PHOTO',
+    });
   };
 
-  if (isBG) {
-    // Combined team photo (if any) shows above Boys/Girls roster cards.
-    await addSquad('BOYS', entry.rosters.Boys || [], photoFiles[0]);
-    await addSquad('GIRLS', entry.rosters.Girls || [], null);
-    return { sport: name, season: SEASON, mode: 'bg', squads };
+  if (keys.includes('Boys') || keys.includes('Girls')) {
+    // Combined-program sports: shared team photo goes on the boys row.
+    await addSquad('BOYS', entry.rosters.Boys, photoFiles[0]);
+    await addSquad('GIRLS', entry.rosters.Girls, photoFiles[1]);
+  } else {
+    await addSquad('VARSITY', entry.rosters.V, photoFiles[0]);
+    const jv = entry.rosters.JV || [];
+    const sportHasJvPage = keys.some(k => k.toUpperCase() === 'JV');
+    await addSquad('JUNIOR VARSITY', jv, photoFiles[1],
+      jv.length ? '' : (sportHasJvPage
+        ? 'Roster not posted on royalssports.com for 2025-26'
+        : 'No JV roster listed for 2025-26'));
   }
-  const hasJV = (entry.rosters.JV || []).length > 0;
-  if (hasJV) {
-    await addSquad('VARSITY', entry.rosters.V || [], photoFiles[0]);
-    await addSquad('JUNIOR VARSITY', entry.rosters.JV, photoFiles[1]);
-    return { sport: name, season: SEASON, mode: 'dual', squads };
-  }
-  await addSquad('VARSITY', entry.rosters.V || entry.rosters[rosterKeys[0]] || [], photoFiles[0]);
-  return { sport: name, season: SEASON, mode: 'single', squads };
+  return { sport: name, season: SEASON, squads };
 }
 
 async function main() {
   const outDir = (process.argv[2] || path.join(os.homedir(), 'Downloads', 'finished spreads')).replace(/^~/, os.homedir());
   fs.mkdirSync(outDir, { recursive: true });
   const data = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'data.json'), 'utf8'));
+
+  // Manual fill-ins for what the site lacks (JV rosters, missing photos).
+  // overrides.json: { "<Sport>": { "rosters": { "JV": [{first,last,grade}] },
+  //   "photos": [{ "file": "photos/baseball_jv.jpg" }, ...appended] } }
+  const ovPath = path.join(DATA_DIR, 'overrides.json');
+  if (fs.existsSync(ovPath)) {
+    const ov = JSON.parse(fs.readFileSync(ovPath, 'utf8'));
+    for (const [sport, o] of Object.entries(ov)) {
+      if (!data[sport]) continue;
+      Object.assign(data[sport].rosters, o.rosters || {});
+      for (const p of o.photos || []) {
+        data[sport].photos.push({ ...p, file: path.resolve(DATA_DIR, p.file) });
+      }
+    }
+  }
   const { renderHandTemplate } = require('../src/services/templates');
   const { exportToFile } = require('../src/services/exporter');
 
