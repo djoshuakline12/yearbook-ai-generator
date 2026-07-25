@@ -10,6 +10,7 @@ const { renderShareAStory } = require('./tpl-share-a-story');
 const { renderModSidebarGroup } = require('./tpl-mod-sidebar-group');
 const { renderHeadlineHeroRail } = require('./tpl-headline-hero-rail');
 const { renderSplitAcademic } = require('./tpl-split-academic');
+const { renderTeamDirectory } = require('./tpl-team-directory');
 
 const TEMPLATES = {
   'hero-top-bleed': renderShareAStory,          // Tpl 1 — editorial "share a story"
@@ -20,6 +21,8 @@ const TEMPLATES = {
   // Tpl 6 — two subjects per spread; invoked explicitly (pageContent.split),
   // never hash-assigned, so it stays out of the auto rotation.
   'split-academic': renderSplitAcademic,
+  // Tpl 7 — athletics directory (team photos + rosters); explicit only.
+  'team-directory': renderTeamDirectory,
 };
 
 // Old algorithmic style names → nearest hand-crafted template. Keeps
