@@ -41,7 +41,7 @@ const NAME_FIXES = {
 // (Media was inheriting Aspire Leadership's copy).
 const EXTRA_SECTIONS = [
   'Consumer Science', 'Industrial Arts', 'Aspire Leadership (Thrive)',
-  'Volleyball', 'Baccalaureate',
+  'Baccalaureate',
 ];
 
 // Folder slug → section name as it appears in the compiled doc.
@@ -52,7 +52,8 @@ const SECTION_NAMES = {
   '12_praise_and_worship': 'Praise and Worship', '13_gym_health': 'Gym / Health',
   '14_boys_soccer': 'Boys Soccer', '15_girls_soccer': 'Girls Soccer',
   '16_boys_basketball': 'Boys Basketball', '17_girls_basketball': 'Girls Basketball',
-  '18_baseball': 'Baseball', '19_softball': 'Softball', '21_cheer': 'Cheer',
+  '18_baseball': 'Baseball', '19_softball': 'Softball',
+  '20_volleyball': 'Volleyball', '21_cheer': 'Cheer',
   '22_cross_country': 'Cross Country', '23_field_hockey': 'Field Hockey',
   '24_chapel_and_community_groups': 'Chapel and Community Groups',
   '25_see_you_at_the_pole': 'See You At The Pole',
