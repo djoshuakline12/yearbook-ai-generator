@@ -77,6 +77,16 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
 
   const smallCap = m5.small >= 0 ? dedupCaption(pickCaption(pageContent.photoCaptions, m5.small)) : null;
   const miniCaps = [m5.mini0, m5.mini1].map(i => (i >= 0 ? dedupCaption(pickCaption(pageContent.photoCaptions, i)) : null));
+  // The mini caption column is ~0.75in wide; clip long captions at a word
+  // boundary instead of letting overflow:hidden cut a name in half.
+  const miniCapMax = [150, 130];
+  miniCaps.forEach((c, i) => {
+    if (!c) return;
+    const budget = miniCapMax[i] - (c.lead ? c.lead.length : 0);
+    if (c.body && c.body.length > budget) {
+      c.body = c.body.slice(0, Math.max(0, budget - 1)).replace(/[,\s]+\S*$/, '') + '…';
+    }
+  });
 
   // Grouped numbered captions: numbers exist only for captioned photos —
   // hero first (when captioned), then mosaic cells, sequential with no gaps.
