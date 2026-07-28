@@ -31,7 +31,6 @@ function renderTeamDirectory(pageContent, photos, options = {}) {
   const dpi = options.dpi || 450;
   const PURPLE = BRAND.purple;
   const DARK = BRAND.dark;
-  const LAVENDER = '#EFEAF6';
   const spreadWpx = inToPx(16, dpi);
   const spreadHpx = inToPx(10.5, dpi);
   const px = (n) => `${inToPx(n, dpi)}px`;
@@ -158,7 +157,7 @@ function renderTeamDirectory(pageContent, photos, options = {}) {
           rowsCss += `
   .bg${i}-${id} {
     position: absolute; left: ${px(cx)}; top: ${px(rosterY)};
-    width: ${px(cardW)}; background: ${LAVENDER}; padding: ${px(0.25)};
+    width: ${px(cardW)};
   }`;
           rowsHtml += `
   <div class="bg${i}-${id}">
