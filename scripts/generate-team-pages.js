@@ -83,19 +83,21 @@ async function buildSport(name, entry, photos) {
   };
 
   if (keys.includes('Boys') || keys.includes('Girls')) {
-    // Combined-program sports: shared team photo goes on the boys row.
+    // Combined-program sports: one shared team photo, two rosters.
     await addSquad('BOYS', entry.rosters.Boys, photoFiles[0]);
     await addSquad('GIRLS', entry.rosters.Girls, photoFiles[1]);
-  } else {
-    await addSquad('VARSITY', entry.rosters.V, photoFiles[0]);
-    const jv = entry.rosters.JV || [];
-    const sportHasJvPage = keys.some(k => k.toUpperCase() === 'JV');
-    await addSquad('JUNIOR VARSITY', jv, photoFiles[1],
-      jv.length ? '' : (sportHasJvPage
-        ? 'Roster not posted on royalssports.com for 2025-26'
-        : 'No JV roster listed for 2025-26'));
+    return { sport: name, season: SEASON, mode: 'bg', squads };
   }
-  return { sport: name, season: SEASON, squads };
+  const jv = entry.rosters.JV || [];
+  if (jv.length) {
+    await addSquad('VARSITY', entry.rosters.V, photoFiles[0]);
+    await addSquad('JUNIOR VARSITY', jv, photoFiles[1]);
+    return { sport: name, season: SEASON, mode: 'dual', squads };
+  }
+  // Not every team fields a JV (Josh 2026-07-28) — varsity-only sports get
+  // one large photo + roster, no empty second row.
+  await addSquad('VARSITY', entry.rosters.V, photoFiles[0]);
+  return { sport: name, season: SEASON, mode: 'single', squads };
 }
 
 async function main() {

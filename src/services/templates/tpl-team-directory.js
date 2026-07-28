@@ -31,6 +31,7 @@ function renderTeamDirectory(pageContent, photos, options = {}) {
   const dpi = options.dpi || 450;
   const PURPLE = BRAND.purple;
   const DARK = BRAND.dark;
+  const LAVENDER = '#EFEAF6';
   const spreadWpx = inToPx(16, dpi);
   const spreadHpx = inToPx(10.5, dpi);
   const px = (n) => `${inToPx(n, dpi)}px`;
@@ -86,49 +87,103 @@ function renderTeamDirectory(pageContent, photos, options = {}) {
     const titleY = chipY + 0.4;
     const titleFontPt = title.length > 16 ? 24 : 28;
     const contentY = titleY + 0.75;
-    const rowH = (10.0 - contentY) / 2;   // identical rows on every page
-    const photoH = 3.3;
 
     let rowsCss = '';
     let rowsHtml = '';
-    squads.forEach((sq, i) => {
-      const y = contentY + i * rowH;
-      const ph = photos[sq.photoIndex];
-      const ar = (ph && ph.aspectRatio) || 1.25;
-      const photoW = Math.min(4.3, photoH * ar);
-      const rosterW = pageW - photoW - 0.3;
-      const photoX = side === 0 ? x0 + pageW - photoW : x0;
-      const rosterX = side === 0 ? x0 : x0 + photoW + 0.3;
-      const cols = sq.roster.length > 9 ? 2 : 1;
-      rowsCss += `
+
+    const placeholderCss = `border: ${px(0.025)} dashed ${PURPLE}; background: white;
+    display: flex; align-items: center; justify-content: center;
+    color: ${PURPLE}; font-weight: 700; font-size: ${pt(9.5)};
+    letter-spacing: ${px(0.02)}; text-align: center; padding: ${px(0.2)};`;
+
+    if (content.mode === 'dual') {
+      // Two real squads (V + JV): identical stacked rows, photo toward the
+      // gutter, roster toward the outer edge.
+      const rowH = (10.0 - contentY) / 2;
+      const photoH = 3.3;
+      squads.forEach((sq, i) => {
+        const y = contentY + i * rowH;
+        const ph = photos[sq.photoIndex];
+        const ar = (ph && ph.aspectRatio) || 1.25;
+        const photoW = Math.min(4.3, photoH * ar);
+        const rosterW = pageW - photoW - 0.3;
+        const photoX = side === 0 ? x0 + pageW - photoW : x0;
+        const rosterX = side === 0 ? x0 : x0 + photoW + 0.3;
+        const cols = sq.roster.length > 9 ? 2 : 1;
+        rowsCss += `
   .r${i}-${id} .sphoto {
     position: absolute; left: ${px(photoX)}; top: ${px(y)};
     width: ${px(photoW)}; height: ${px(photoH)};
-    ${ph ? 'object-fit: cover;' : `border: ${px(0.025)} dashed ${PURPLE}; background: white;
-    display: flex; align-items: center; justify-content: center;
-    color: ${PURPLE}; font-weight: 700; font-size: ${pt(9.5)};
-    letter-spacing: ${px(0.02)}; text-align: center; padding: ${px(0.2)};`}
+    ${ph ? 'object-fit: cover;' : placeholderCss}
   }
   .r${i}-${id} .rblock {
     position: absolute; left: ${px(rosterX)}; top: ${px(y)};
     width: ${px(rosterW)}; height: ${px(rowH - 0.15)};
   }
   .r${i}-${id} .rlist { column-count: ${cols}; column-gap: ${px(0.22)}; }`;
-      const photoEl = ph
-        ? `<img class="sphoto" src="${photoDataUri(ph)}" alt="">`
-        : `<div class="sphoto">${escapeHtml(sq.placeholderText || 'TEAM PHOTO')}</div>`;
-      rowsHtml += `
+        rowsHtml += `
   <div class="r${i}-${id}">
-    ${photoEl}
+    ${ph ? `<img class="sphoto" src="${photoDataUri(ph)}" alt="">` : `<div class="sphoto">TEAM PHOTO</div>`}
     <div class="rblock">
-      ${sq.label ? `<div class="slabel">${escapeHtml(sq.label)}</div>` : ''}
+      <div class="slabel">${escapeHtml(sq.label)}</div>
       ${sq.coachLine ? `<div class="coach">${escapeHtml(sq.coachLine)}</div>` : ''}
-      ${sq.roster.length
-        ? `<div class="rlist">${sq.roster.map(rosterEntry).join('')}</div>`
-        : (sq.note ? `<div class="rnote">${escapeHtml(sq.note)}</div>` : '')}
+      <div class="rlist">${sq.roster.map(rosterEntry).join('')}</div>
     </div>
   </div>`;
-    });
+      });
+    } else {
+      // 'single' (varsity-only sports — no JV exists) and 'bg' (one combined
+      // team photo, Boys/Girls rosters): big centered photo, rosters below.
+      const first = squads.find(sq => photos[sq.photoIndex]);
+      const ph = first ? photos[first.photoIndex] : null;
+      const ar = (ph && ph.aspectRatio) || 1.4;
+      const photoH = Math.min(4.1, 5.6 / ar);
+      const photoW = Math.min(5.6, photoH * ar);
+      const photoX = x0 + (pageW - photoW) / 2;
+      rowsCss += `
+  .tp-${id} {
+    position: absolute; left: ${px(photoX)}; top: ${px(contentY)};
+    width: ${px(photoW)}; height: ${px(photoH)};
+    ${ph ? 'object-fit: cover;' : placeholderCss}
+  }`;
+      rowsHtml += ph
+        ? `\n  <img class="tp-${id}" src="${photoDataUri(ph)}" alt="">`
+        : `\n  <div class="tp-${id}">TEAM PHOTO</div>`;
+      const rosterY = contentY + photoH + 0.3;
+
+      if (content.mode === 'bg') {
+        const cardW = (pageW - 0.3) / 2;
+        squads.forEach((sq, i) => {
+          const cx = x0 + i * (cardW + 0.3);
+          rowsCss += `
+  .bg${i}-${id} {
+    position: absolute; left: ${px(cx)}; top: ${px(rosterY)};
+    width: ${px(cardW)}; background: ${LAVENDER}; padding: ${px(0.25)};
+  }`;
+          rowsHtml += `
+  <div class="bg${i}-${id}">
+    <div class="slabel">${escapeHtml(sq.label)}</div>
+    ${i === 0 && sq.coachLine ? `<div class="coach">${escapeHtml(sq.coachLine)}</div>` : ''}
+    <div class="rlist-1">${sq.roster.map(rosterEntry).join('')}</div>
+  </div>`;
+        });
+      } else {
+        const sq = squads[0] || { roster: [] };
+        const cols = sq.roster.length > 18 ? 3 : (sq.roster.length > 8 ? 2 : 1);
+        rowsCss += `
+  .sr-${id} {
+    position: absolute; left: ${px(x0)}; top: ${px(rosterY)};
+    width: ${px(pageW)};
+  }
+  .sr-${id} .rlist { column-count: ${cols}; column-gap: ${px(0.3)}; }`;
+        rowsHtml += `
+  <div class="sr-${id}">
+    <div class="slabel">${escapeHtml(sq.label)}</div>
+    ${sq.coachLine ? `<div class="coach">${escapeHtml(sq.coachLine)}</div>` : ''}
+    <div class="rlist">${sq.roster.map(rosterEntry).join('')}</div>
+  </div>`;
+      }
+    }
 
     const css = `
   .chip-${id} {
