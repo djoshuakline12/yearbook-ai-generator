@@ -161,7 +161,12 @@ function manifestCaptions(spreadFolder) {
     for (const r of csv.slice(1)) {
       const p = r[iPath] || '';
       if (iAct >= 0 && (r[iAct] || '').trim() === 'remove') continue;
-      if (p.startsWith(spreadFolder + '/')) map[path.basename(p).replace(/\.\w+$/, '')] = r[iCap] || '';
+      if (p.startsWith(spreadFolder + '/')) {
+        // Doc sections with bare-link photo bullets leave the raw Drive URL
+        // in the caption column — that's no caption, not a caption.
+        const cap = (r[iCap] || '').trim();
+        map[path.basename(p).replace(/\.\w+$/, '')] = /^https?:\/\//i.test(cap) ? '' : cap;
+      }
     }
   }
   return map;
@@ -252,7 +257,11 @@ function missingPhotoRecords(spreadNum) {
 // Content scrutiny: is there enough material for a strong spread?
 function auditSpread(spreadFolder, sec, photos) {
   const flags = [];
-  const captioned = photos.filter(p => p.captioned).length;
+  // A photo counts as captioned if ANY caption source covers it — the
+  // confirmed-captions review keys by basename, so folder pulls qualify
+  // too (the old p.captioned check false-flagged reviewed spreads).
+  const capMap = manifestCaptions(spreadFolder);
+  const captioned = photos.filter(p => capMap[p.base]).length;
   const missing = missingPhotoRecords(spreadFolder.slice(0, 2));
   if (photos.length === 0) flags.push('NO PHOTOS on disk — cannot generate');
   else if (photos.length < 3) flags.push(`NEEDS MORE PHOTOS — only ${photos.length}, not generating (5-9 ideal)`);
