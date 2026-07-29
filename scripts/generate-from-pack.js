@@ -53,7 +53,12 @@ const SECTION_NAMES = {
   '14_boys_soccer': 'Boys Soccer', '15_girls_soccer': 'Girls Soccer',
   '16_boys_basketball': 'Boys Basketball', '17_girls_basketball': 'Girls Basketball',
   '18_baseball': 'Baseball', '19_softball': 'Softball',
-  '20_volleyball': 'Volleyball', '21_cheer': 'Cheer',
+  // Two volleyball spreads (Josh 2026-07-28, like last year's book): the
+  // doc's 'Volleyball' section is the BOYS team; the girls spread awaits
+  // its own copy ('Girls Volleyball' section not in the doc yet).
+  '20_boys_volleyball': 'Volleyball',
+  '20_girls_volleyball': 'Girls Volleyball',
+  '21_cheer': 'Cheer',
   '22_cross_country': 'Cross Country', '23_field_hockey': 'Field Hockey',
   '24_chapel_and_community_groups': 'Chapel and Community Groups',
   '25_see_you_at_the_pole': 'See You At The Pole',

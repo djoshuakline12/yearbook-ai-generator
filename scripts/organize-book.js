@@ -26,6 +26,13 @@ const titleOf = (folder) => (SECTION_NAMES[folder] || folder).replace(/[\/:]/g, 
 const numOf = (folder) => folder.slice(0, 2);
 
 const files = fs.readdirSync(SRC).filter(f => /\.(jpe?g|png)$/i.test(f));
+// Josh picked split pairs for academics (2026-07-28): where a pair spread
+// exists, the two full-spread versions stay out of the book.
+const paired = new Set();
+for (const f of files) {
+  const m = f.replace(/\.\w+$/, '').match(/^(\d\d_[a-z0-9_]+)\+(\d\d_[a-z0-9_]+)$/);
+  if (m && SECTION_NAMES[m[1]] && SECTION_NAMES[m[2]]) { paired.add(m[1]); paired.add(m[2]); }
+}
 const entries = [];
 for (const f of files) {
   const base = f.replace(/\.\w+$/, '');
@@ -37,7 +44,7 @@ for (const f of files) {
       name: `${numOf(pair[1])}-${numOf(pair[2])} ${titleOf(pair[1])} + ${titleOf(pair[2])} (split spread)${ext}`,
       src: f,
     });
-  } else if (SECTION_NAMES[base]) {
+  } else if (SECTION_NAMES[base] && !paired.has(base)) {
     entries.push({
       sort: `${numOf(base)}b`,
       name: `${numOf(base)} ${titleOf(base)}${ext}`,
