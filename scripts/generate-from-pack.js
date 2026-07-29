@@ -373,6 +373,16 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
     return { photoIndex: i, caption: cap, people: '' };
   }).filter(Boolean);
 
+  // Per-photo focal overrides: <folder>/_focus.json maps basename -> CSS
+  // object-position ("38% 45%"). Wins over server smart crop for photos
+  // whose subject sits at the frame edge.
+  const photoFocus = {};
+  const focusPath = path.join(PACK_DIR, spreadFolder, '_focus.json');
+  if (fs.existsSync(focusPath)) {
+    const hints = JSON.parse(fs.readFileSync(focusPath, 'utf8'));
+    unique.forEach((p, i) => { if (hints[p.base]) photoFocus[i] = hints[p.base]; });
+  }
+
   const pageContent = {
     pageTitle: sec.title.toUpperCase(),
     section: sectionName,
@@ -381,6 +391,7 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
     quotes: sec.quotes,
     highlights: sec.highlights,
     photoCaptions,
+    ...(Object.keys(photoFocus).length ? { photoFocus } : {}),
   };
 
   const form = new FormData();

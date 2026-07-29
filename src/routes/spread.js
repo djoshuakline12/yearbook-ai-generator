@@ -174,6 +174,15 @@ router.post('/generate-spread', uploadAny.any(), async (req, res) => {
       console.log('Smart Crop - Analysis complete');
     }
 
+    // Manual focal overrides (pageContent.photoFocus = { "<index>": "x% y%" })
+    // beat smart crop — the auto focal centers on the dominant face, which
+    // crops out edge subjects (our own blocker at the frame's left, say).
+    if (pageContent && pageContent.photoFocus) {
+      for (const [idx, pos] of Object.entries(pageContent.photoFocus)) {
+        if (photoResults[idx]) photoResults[idx].objectPosition = pos;
+      }
+    }
+
     // 2. CONTENT POLISHING - AI enhances all text before layout
     // Skip for index pages that just have topic/page lists
     if (USE_CONTENT_POLISHING && category !== 'index') {
