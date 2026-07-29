@@ -50,6 +50,16 @@ function inToPx(inches, dpi) {
   return Math.round(inches * dpi);
 }
 
+// Mirror helper: templates route every absolute `left` through this with the
+// block's width. mirror=false is the identity, so existing layouts are
+// untouched; mirror=true flips the layout left↔right around the 16in spread.
+// Photos are never flipped (reversed jerseys/text) — only their positions.
+// Fold safety survives mirroring: a text block that avoids x=8 in the
+// original avoids it in the mirror ([a,b] maps to [16-b,16-a]).
+function mirrorLeft(mirror, spreadW = 16) {
+  return (x, w) => (mirror ? spreadW - x - w : x);
+}
+
 function ptToPx(pt, dpi) {
   return Math.round((pt / 72) * dpi);
 }
@@ -315,4 +325,5 @@ module.exports = {
   cleanCaption, isPlaceholder, isFilenameLike, pickCaption,
   splitQuoteIntoLines, wrapToLines, dedupCaption, cleanAttribution,
   pickOverlayQuote, repairAspects, estimateTextHeightIn, wrapLineCount,
+  mirrorLeft,
 };

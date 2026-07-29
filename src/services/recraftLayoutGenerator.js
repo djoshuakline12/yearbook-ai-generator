@@ -279,13 +279,16 @@ function buildSpreadLayout(pageContent, photos, theme, pageType) {
       // Hand-crafted templates bypass algorithmic layout entirely.
       // variant (0-3) selects within-template variations (anchor photo
       // B&W vs color, quote-block position) → 5 templates x 4 = 20 spreads.
+      // Bit 4 mirrors the whole layout left↔right (templates that support
+      // it); explicit only via pageContent.mirror — never hash-assigned, so
+      // regenerating an approved spread can't silently flip it.
       const { resolveTemplateId } = require('./templates');
       const handTemplateId = resolveTemplateId(layoutParams.layoutStyle);
       if (handTemplateId) {
         return {
           isHandTemplate: true,
           templateId: handTemplateId,
-          variant: layoutParams.templateVariant || 0,
+          variant: (layoutParams.templateVariant || 0) | (pageContent.mirror ? 4 : 0),
           pageContent,
           pageType,
           background: theme && theme.background ? theme.background : null,

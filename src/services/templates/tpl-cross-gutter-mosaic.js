@@ -13,6 +13,7 @@ const {
   inToPx, ptToPx, escapeHtml, photoDataUri, photoObjectPosition,
   isPlaceholder, pickCaption, splitQuoteIntoLines, wrapToLines, dedupCaption,
   cleanAttribution, pickOverlayQuote, repairAspects, estimateTextHeightIn, wrapLineCount,
+  mirrorLeft,
 } = require('./utils');
 
 function renderCrossGutterMosaic(pageContent, photos, options = {}) {
@@ -20,6 +21,8 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   const variant = options.variant || 0;
   const anchorColor = !!(variant & 1);   // bit0: anchor photo color vs B&W
   const flipQuote = !!(variant & 2);     // bit1: quote-block position flip
+  const mirror = !!(variant & 4);        // bit2: whole layout flipped left↔right
+  const ML = mirrorLeft(mirror);
   const bwFilter = anchorColor ? '' : 'filter: grayscale(1) contrast(1.05);';
   const PURPLE = BRAND.purple;
   const DARK = '#1A1A1A';
@@ -183,14 +186,18 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   // (the common case), top only when the subject is low in the frame.
   const heroFocal = (m5.hero >= 0 && photos[m5.hero] && photos[m5.hero].focalPoint) || { focalX: 0.5, focalY: 0.35 };
   const quoteTop = heroFocal.focalY > 0.5 ? 0.55 : Math.min(7.7, 9.95 - quoteBlockH);
-  const heroRight = 3.15 + (mosaicCount === 0 ? 12.35 : 6.6);
-  // The right-side position is only usable when the bars land entirely on
-  // the right page (expanded hero) — text never straddles the center fold.
-  const rightPlacement = heroRight - 0.25 - 3.8;
-  const rightSafe = rightPlacement >= 8.1;
-  const quoteLeft = heroFocal.focalX >= 0.55 ? 3.4
-    : heroFocal.focalX <= 0.45 ? (rightSafe ? rightPlacement : 3.4)
-    : (flipQuote && rightSafe ? rightPlacement : 3.4);
+  // Quote bars dodge the hero subject using the hero's ACTUAL (possibly
+  // mirrored) geometry — a naive coordinate mirror would land the bars on
+  // top of the subject it used to dodge. Text never straddles the fold.
+  const heroW = mosaicCount === 0 ? 12.35 : 6.6;
+  const heroL = ML(3.15, heroW);
+  const inHeroLeft = heroL + 0.25;
+  const inHeroRight = heroL + heroW - 0.25 - 3.8;
+  const quoteSafe = (x) => x >= 0.4 && x + 3.8 <= 15.6 && (x + 3.8 <= 7.9 || x >= 8.1);
+  const preferRight = heroFocal.focalX <= 0.45 || (flipQuote && !(heroFocal.focalX >= 0.55));
+  const quoteCandidates = preferRight ? [inHeroRight, inHeroLeft] : [inHeroLeft, inHeroRight];
+  const quoteLeft = quoteCandidates.find(quoteSafe)
+    ?? (mirror ? 8.8 : 3.4);  // last resort: mid-hero on the fold-safe side
 
   // Left column flows: title box (measured) → body (measured) → attribution
   // quote → small photo that stretches down to its caption anchor at 9.85.
@@ -227,7 +234,7 @@ ${BRAND.fontLink}
   /* T1 — Outlined title box */
   .title-box {
     position: absolute;
-    left: ${px(0.5)}; top: ${px(0.4)};
+    left: ${px(ML(0.5, 2.5))}; top: ${px(0.4)};
     width: ${px(2.5)}; height: ${px(titleBoxH)};
     border: ${px(0.03)} solid ${PURPLE};
     padding: ${px(0.15)} ${px(0.2)};
@@ -248,7 +255,7 @@ ${BRAND.fontLink}
   /* T2 — Body copy, single column */
   .body-copy {
     position: absolute;
-    left: ${px(0.5)}; top: ${px(bodyTop)};
+    left: ${px(ML(0.5, 2.5))}; top: ${px(bodyTop)};
     width: ${px(2.5)}; height: ${px(bodyH)};
     font-family: ${BRAND.body};
     font-size: ${pt(10)};
@@ -262,7 +269,7 @@ ${BRAND.fontLink}
   /* T3 — Italic attribution quote */
   .attr-quote {
     position: absolute;
-    left: ${px(0.5)}; top: ${px(attrY)};
+    left: ${px(ML(0.5, 2.5))}; top: ${px(attrY)};
     width: ${px(2.5)}; height: ${px(1.0)};
     font-family: 'Bodoni Moda', serif;
     font-optical-sizing: none;
@@ -285,7 +292,7 @@ ${BRAND.fontLink}
   /* P_small — small preview photo bottom-left */
   .small-photo {
     position: absolute;
-    left: ${px(0.5)}; top: ${px(smallY)};
+    left: ${px(ML(0.5, 2.5))}; top: ${px(smallY)};
     width: ${px(2.5)}; height: ${px(smallH)};
     object-fit: cover;
     object-position: center center;
@@ -294,7 +301,7 @@ ${BRAND.fontLink}
   /* T4 — Caption for P_small */
   .small-caption {
     position: absolute;
-    left: ${px(0.5)}; top: ${px(9.85)};
+    left: ${px(ML(0.5, 2.5))}; top: ${px(9.85)};
     width: ${px(2.5)}; height: ${px(0.55)};
     font-family: ${BRAND.body};
     font-size: ${pt(7.5)};
@@ -313,15 +320,15 @@ ${BRAND.fontLink}
      page would be blank, so the hero bleeds across it instead. */
   .hero-photo {
     position: absolute;
-    left: ${px(3.15)}; top: ${px(0.25)};
-    width: ${px(mosaicCount === 0 ? 12.35 : 6.6)}; height: ${px(10.0)};
+    left: ${px(heroL)}; top: ${px(0.25)};
+    width: ${px(heroW)}; height: ${px(10.0)};
     object-fit: cover;
     object-position: center 60%;
     ${bwFilter}
   }
   .hero-num {
     position: absolute;
-    left: ${px(3.25)}; top: ${px(9.9)};
+    left: ${px(heroL + 0.1)}; top: ${px(9.9)};
     color: white;
     font-family: ${BRAND.body};
     font-size: ${pt(10)};
@@ -369,7 +376,7 @@ ${BRAND.fontLink}
   /* 2x2 photo mosaic top-right */
   .mosaic {
     position: absolute;
-    left: ${px(10.0)}; top: ${px(0.4)};
+    left: ${px(ML(10.0, 5.5))}; top: ${px(0.4)};
     width: ${px(5.5)}; height: ${px(mosaicH)};
     display: grid;
     grid-template-columns: ${mosaicCols === 1 ? '1fr' : '1fr 1fr'};
@@ -392,7 +399,7 @@ ${BRAND.fontLink}
   /* Grouped numbered captions for the mosaic */
   .mosaic-captions {
     position: absolute;
-    left: ${px(10.0)}; top: ${px(mosaicCapsTop)};
+    left: ${px(ML(10.0, 5.5))}; top: ${px(mosaicCapsTop)};
     width: ${px(5.5)}; height: ${px(0.75)};
     font-family: ${BRAND.body};
     font-size: ${pt(7.5)};
@@ -412,7 +419,7 @@ ${BRAND.fontLink}
   /* Featured moments title block: black serif headline + purple tagline bars */
   .featured {
     position: absolute;
-    left: ${px(13.2)}; top: ${px(featuredTop)};
+    left: ${px(ML(13.2, 2.55))}; top: ${px(featuredTop)};
     width: ${px(2.55)};
   }
   .featured .headline-black {
@@ -453,8 +460,8 @@ ${BRAND.fontLink}
     display: flex;
     gap: ${px(0.12)};
   }
-  .mini-1 { left: ${px(13.2)}; top: ${px(mini1Top)}; height: ${px(mini1H)}; }
-  .mini-2 { left: ${px(13.2)}; top: ${px(mini2Top)}; height: ${px(mini2H)}; }
+  .mini-1 { left: ${px(ML(13.2, 2.55))}; top: ${px(mini1Top)}; height: ${px(mini1H)}; }
+  .mini-2 { left: ${px(ML(13.2, 2.55))}; top: ${px(mini2Top)}; height: ${px(mini2H)}; }
   .mini-1 img, .mini-2 img {
     width: ${px(1.7)};
     height: 100%;
