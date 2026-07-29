@@ -42,6 +42,8 @@ const NAME_FIXES = {
 const EXTRA_SECTIONS = [
   'Consumer Science', 'Industrial Arts', 'Aspire Leadership (Thrive)',
   'Baccalaureate',
+  // Cut from the book (Josh 2026-07-28) — kept as a parser boundary.
+  'Ambassadors',
 ];
 
 // Folder slug → section name as it appears in the compiled doc.
@@ -70,8 +72,11 @@ const SECTION_NAMES = {
   '34_scholarship_banquet': 'Scholarship Banquet', '35_grandparents_day': "Grandparents' Day",
   '36_community_service': 'Community Service',
   '37_student_leadership_council_slc': 'Student Leadership Council (SLC)',
-  '38_ambassadors': 'Ambassadors', '39_senior_thesis_project_stp': 'Senior Thesis Project (STP)',
+  '39_senior_thesis_project_stp': 'Senior Thesis Project (STP)',
   '40_graduation': 'Graduation', '42_collage_spread': 'Collage Spread',
+  // JTerm confirmed for this year's book (Josh 2026-07-28) — photos and
+  // copy incoming; held until both land.
+  '43_jterm': 'JTerm',
 };
 
 // ---------------------------------------------------------------------------
