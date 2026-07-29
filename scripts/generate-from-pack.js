@@ -403,6 +403,16 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
       .toBuffer();
     form.append('photos', new Blob([buf], { type: 'image/jpeg' }), p.base + '.jpg');
   }
+  // TEMPLATE=1..5 (or a style id) forces a template instead of the hash pick.
+  const TEMPLATE_IDS = {
+    1: 'hero-top-bleed', 2: 'hero-left-magazine', 3: 'hero-dominant-sidebar',
+    4: 'sidebar-mods-bleed', 5: 'cross-gutter-mosaic',
+  };
+  if (process.env.TEMPLATE) {
+    const style = TEMPLATE_IDS[process.env.TEMPLATE] || process.env.TEMPLATE;
+    pageContent.layoutStyle = style;
+    form.append('layoutStyle', style);
+  }
   form.append('pageContent', JSON.stringify(pageContent));
   form.append('pageType', 'spread');
   form.append('format', 'png');
