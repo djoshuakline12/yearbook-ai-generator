@@ -413,6 +413,8 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
     pageContent.layoutStyle = style;
     form.append('layoutStyle', style);
   }
+  // MIRROR=1 flips the layout left↔right (templates with mirror support).
+  if (process.env.MIRROR === '1') pageContent.mirror = true;
   form.append('pageContent', JSON.stringify(pageContent));
   form.append('pageType', 'spread');
   form.append('format', 'png');
