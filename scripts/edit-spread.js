@@ -51,13 +51,7 @@ const TEMPLATE_IDS = {
   4: 'sidebar-mods-bleed', 5: 'cross-gutter-mosaic',
 };
 
-async function main() {
-  const folder = process.argv[2];
-  if (!folder || !SECTION_NAMES[folder]) {
-    console.error('Usage: node scripts/edit-spread.js <spreadFolder>');
-    console.error('Known folders:', Object.keys(SECTION_NAMES).join(', '));
-    process.exit(1);
-  }
+async function buildOne(folder, navList) {
   let overrides = {};
   const ovPath = path.join(PACK_DIR, '_layout_overrides.json');
   if (fs.existsSync(ovPath)) overrides = JSON.parse(fs.readFileSync(ovPath, 'utf8'))[folder] || {};
@@ -69,7 +63,7 @@ async function main() {
   ensureCompiledTxt();
   const sections = parseCompiled(fs.readFileSync(COMPILED_TXT, 'utf8'));
   const sec = sections[SECTION_NAMES[folder]];
-  if (!sec) { console.error(`No copy for ${folder} in the compiled doc.`); process.exit(1); }
+  if (!sec) throw new Error('no copy in the compiled doc');
 
   // Photos: same collection + perceptual dedup as generate-from-pack.
   const collected = collectPhotos(folder);
@@ -177,6 +171,10 @@ async function main() {
     display: flex; align-items: center; gap: 10px; padding: 10px 14px;
     box-shadow: 0 2px 8px rgba(0,0,0,.5);
   }
+  #edbar select {
+    font-size: 13px; padding: 5px 8px; border-radius: 6px; border: 1px solid #555;
+    background: #35304a; color: #eee;
+  }
   #edbar button {
     font-size: 13px; padding: 6px 14px; border-radius: 6px; border: 1px solid #555;
     background: #35304a; color: #eee; cursor: pointer;
@@ -192,7 +190,9 @@ async function main() {
   body.swapmode img.ed-target { cursor: pointer; }
 </style>
 <div id="edbar">
-  <b>${folder}</b>
+  <button id="prevBtn" title="Previous spread">&#8249;</button>
+  <select id="navSel">${navList.map(f => `<option value="edit_${f}.html"${f === folder ? ' selected' : ''}>${f}</option>`).join('')}</select>
+  <button id="nextBtn" title="Next spread">&#8250;</button>
   <button id="cropBtn" class="active">Crop (drag inside a photo)</button>
   <button id="swapBtn">Swap (click two photos)</button>
   <button id="resetBtn">Reset</button>
@@ -301,6 +301,18 @@ function handleSwapClick(im) {
 
 document.getElementById('resetBtn').onclick = () => location.reload();
 
+// Spread navigation. Warn if there are unsaved edits.
+let dirty = false;
+document.addEventListener('pointerup', () => { setTimeout(() => { dirty = document.querySelectorAll('img.ed-changed').length > 0; }, 0); });
+function go(href) {
+  if (dirty && !confirm('Unsaved edits on this spread — leave anyway?')) return;
+  location.href = href;
+}
+const navSel = document.getElementById('navSel');
+navSel.onchange = () => go(navSel.value);
+document.getElementById('prevBtn').onclick = () => { if (navSel.selectedIndex > 0) { navSel.selectedIndex--; go(navSel.value); } };
+document.getElementById('nextBtn').onclick = () => { if (navSel.selectedIndex < navSel.options.length - 1) { navSel.selectedIndex++; go(navSel.value); } };
+
 document.getElementById('save').onclick = () => {
   const out = { order: ORDER, focus: FOCUS };
   const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
@@ -319,7 +331,29 @@ rescale();
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, html);
   console.log(`Editor: ${outPath}`);
-  require('child_process').execFileSync('open', [outPath]);
+  return outPath;
+}
+
+async function main() {
+  const arg = process.argv[2];
+  if (!arg || (arg !== 'all' && !SECTION_NAMES[arg])) {
+    console.error('Usage: node scripts/edit-spread.js <spreadFolder>|all');
+    console.error('Known folders:', Object.keys(SECTION_NAMES).join(', '));
+    process.exit(1);
+  }
+  const folders = arg === 'all' ? Object.keys(SECTION_NAMES) : [arg];
+  // Nav list: every folder that could have an editor page (built or not);
+  // pages link to their siblings, so build `all` for full click-through.
+  const navList = Object.keys(SECTION_NAMES);
+  const built = [];
+  for (const f of folders) {
+    try {
+      built.push(await buildOne(f, navList));
+    } catch (e) {
+      console.log(`${f}: skipped (${e.message.split('\n')[0]})`);
+    }
+  }
+  if (built.length) require('child_process').execFileSync('open', [built[0]]);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
