@@ -17,13 +17,16 @@ const {
   inToPx, ptToPx, escapeHtml, photoDataUri, photoObjectPosition,
   isPlaceholder, pickCaption, splitQuoteIntoLines, wrapToLines, dedupCaption,
   cleanAttribution, pickOverlayQuote, repairAspects, estimateTextHeightIn, wrapLineCount,
+  mirrorLeft,
 } = require('./utils');
 
 function renderMainHeadlineBleed(pageContent, photos, options = {}) {
   const dpi = options.dpi || 450;
   const variant = options.variant || 0;
   const anchorColor = !!(variant & 1);   // bit0: anchor photo color vs B&W
-  const flipQuote = !!(variant & 2);     // bit1: quote-block position flip
+  const flipQuote = !!(variant & 2);
+  const mirror = !!(variant & 4);        // bit2: whole layout flipped left↔right
+  const ML = mirrorLeft(mirror);     // bit1: quote-block position flip
   const bwFilter = anchorColor ? '' : 'filter: grayscale(1) contrast(1.05);';
   const PURPLE = BRAND.purple;
   const DARK = '#1A1A1A';
@@ -132,8 +135,8 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
   const leftBCap = capAt(assign.leftB);
 
   // ---- Left column vertical layout (computed so nothing collides) ----
-  const leftColX = 0.5;
   const leftColW = 2.7;
+  const leftColX = ML(0.5, leftColW);
   // photo A + side caption
   const leftAY = 0.4;
   const leftAH = 1.5;
@@ -191,13 +194,27 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
   const overlayTop = heroFocal.focalY <= 0.5
     ? Math.max(heroTop + 0.4, 10.0 - qBlockH)
     : heroTop + 0.4;
-  const overlayLeft = heroFocal.focalX >= 0.55 ? heroX + 0.4
-    : heroFocal.focalX <= 0.45 ? 15.6 - 3.7
-    : (flipQuote ? 15.6 - 3.7 : heroX + 0.4);
+  // Hero bleeds the outer edge (right normally, left mirrored); the bars
+  // dodge within the hero's ACTUAL frame, photo-relative as ever.
+  const heroL = ML(heroX, heroW);
+  const ovNear = heroL + 0.4;
+  const ovFar = heroL + heroW - 0.4 - 3.7;
+  const overlayLeft = heroFocal.focalX >= 0.55 ? ovNear
+    : heroFocal.focalX <= 0.45 ? ovFar
+    : (flipQuote ? ovFar : ovNear);
   // Sparse-case caption chip takes the opposite corner from the quote block.
-  const midCapsChipLeft = (quoteLines.length && overlayTop > heroTop + 1 && overlayLeft < 10)
-    ? 15.6 - 3.7
-    : heroX + 0.35;
+  const chipNear = heroL + 0.35;
+  const chipFar = heroL + heroW - 0.35 - 3.7;
+  const midCapsChipLeft = (quoteLines.length && overlayTop > heroTop + 1
+      && Math.abs(overlayLeft - chipFar) > 1) ? chipFar : chipNear;
+  // Mirrored column anchors — text stays left-aligned, columns swap sides.
+  const s1X = ML(3.5, 3.6);
+  const s2X = ML(7.22, 2.9);
+  const s3X = ML(10.24, 3.4);
+  const scX = ML(13.85, 1.75);
+  const crowdX = ML(3.5, 3.7);
+  const u1X = ML(3.5, 1.8);
+  const u2X = ML(5.4, 1.8);
 
   return `<!DOCTYPE html>
 <html>
@@ -308,9 +325,9 @@ ${BRAND.fontLink}
     top: ${px(0.4)}; height: ${px(2.2)};
     object-fit: cover;
   }
-  .strip-1 { left: ${px(3.5)};  width: ${px(3.6)}; }
-  .strip-2 { left: ${px(7.22)}; width: ${px(2.9)}; }
-  .strip-3 { left: ${px(10.24)}; width: ${px(3.4)}; }
+  .strip-1 { left: ${px(s1X)};  width: ${px(3.6)}; }
+  .strip-2 { left: ${px(s2X)}; width: ${px(2.9)}; }
+  .strip-3 { left: ${px(s3X)}; width: ${px(3.4)}; }
   .strip-num {
     position: absolute;
     top: ${px(2.28)};
@@ -323,7 +340,7 @@ ${BRAND.fontLink}
   }
   .strip-caps {
     position: absolute;
-    left: ${px(13.85)}; top: ${px(0.4)};
+    left: ${px(scX)}; top: ${px(0.4)};
     width: ${px(1.75)}; height: ${px(2.6)};
     font-size: ${pt(7.5)};
     line-height: 1.35;
@@ -336,7 +353,7 @@ ${BRAND.fontLink}
   /* ---------- MIDDLE-LEFT BLOCK ---------- */
   .crowd {
     position: absolute;
-    left: ${px(3.5)}; top: ${px(crowdTop)};
+    left: ${px(crowdX)}; top: ${px(crowdTop)};
     width: ${px(3.7)}; height: ${px(crowdH)};
     object-fit: cover;
     filter: grayscale(1) contrast(1.05);
@@ -347,8 +364,8 @@ ${BRAND.fontLink}
     width: ${px(1.8)};
     object-fit: cover;
   }
-  .under-1 { left: ${px(3.5)}; }
-  .under-2 { left: ${px(5.4)}; }
+  .under-1 { left: ${px(u1X)}; }
+  .under-2 { left: ${px(u2X)}; }
   .mid-caps {
     position: absolute;
     ${midCapsOverlay
@@ -357,7 +374,7 @@ ${BRAND.fontLink}
     background: rgba(255,255,255,0.92);
     padding: ${px(0.08)} ${px(0.12)};
     z-index: 3;`
-      : `left: ${px(3.5)}; top: ${px(9.1)};
+      : `left: ${px(crowdX)}; top: ${px(9.1)};
     width: ${px(3.7)}; height: ${px(1.1)};
     column-count: 2;
     column-gap: ${px(0.15)};
@@ -379,7 +396,7 @@ ${BRAND.fontLink}
   /* ---------- HERO ---------- */
   .hero {
     position: absolute;
-    left: ${px(heroX)}; top: ${px(heroTop)};
+    left: ${px(heroL)}; top: ${px(heroTop)};
     width: ${px(heroW)}; height: ${px(heroH)};
     object-fit: cover;
     ${bwFilter}
@@ -437,19 +454,19 @@ ${BRAND.fontLink}
   </div>` : ''}
 
   <!-- TOP STRIP -->
-  ${stripSrcs[0] ? `<img class="strip-1" src="${stripSrcs[0]}" style="object-position:${stripPos[0]}" alt="">${stripNums.strip0 ? `<span class="strip-num" style="left:${px(3.58)}">${stripNums.strip0}</span>` : ''}` : ''}
-  ${stripSrcs[1] ? `<img class="strip-2" src="${stripSrcs[1]}" style="object-position:${stripPos[1]}" alt="">${stripNums.strip1 ? `<span class="strip-num" style="left:${px(7.3)}">${stripNums.strip1}</span>` : ''}` : ''}
-  ${stripSrcs[2] ? `<img class="strip-3" src="${stripSrcs[2]}" style="object-position:${stripPos[2]}" alt="">${stripNums.strip2 ? `<span class="strip-num" style="left:${px(10.32)}">${stripNums.strip2}</span>` : ''}` : ''}
+  ${stripSrcs[0] ? `<img class="strip-1" src="${stripSrcs[0]}" style="object-position:${stripPos[0]}" alt="">${stripNums.strip0 ? `<span class="strip-num" style="left:${px(s1X + 0.08)}">${stripNums.strip0}</span>` : ''}` : ''}
+  ${stripSrcs[1] ? `<img class="strip-2" src="${stripSrcs[1]}" style="object-position:${stripPos[1]}" alt="">${stripNums.strip1 ? `<span class="strip-num" style="left:${px(s2X + 0.08)}">${stripNums.strip1}</span>` : ''}` : ''}
+  ${stripSrcs[2] ? `<img class="strip-3" src="${stripSrcs[2]}" style="object-position:${stripPos[2]}" alt="">${stripNums.strip2 ? `<span class="strip-num" style="left:${px(s3X + 0.08)}">${stripNums.strip2}</span>` : ''}` : ''}
   ${stripCapEntries ? `<div class="strip-caps">${stripCapEntries}</div>` : ''}
 
   <!-- MIDDLE-LEFT BLOCK -->
-  ${crowdSrc ? `<img class="crowd" src="${crowdSrc}" style="object-position:${crowdPos}" alt="">${midNums.crowd ? `<span class="num-badge" style="left:${px(3.58)};top:${px(crowdTop + crowdH - 0.32)}">${midNums.crowd}</span>` : ''}` : ''}
-  ${underSrcs[0] ? `<img class="under-1" src="${underSrcs[0]}" style="object-position:${underPos[0]}" alt="">${midNums.under0 ? `<span class="num-badge" style="left:${px(3.58)};top:${px(8.63)}">${midNums.under0}</span>` : ''}` : ''}
-  ${underSrcs[1] ? `<img class="under-2" src="${underSrcs[1]}" style="object-position:${underPos[1]}" alt="">${midNums.under1 ? `<span class="num-badge" style="left:${px(5.48)};top:${px(8.63)}">${midNums.under1}</span>` : ''}` : ''}
+  ${crowdSrc ? `<img class="crowd" src="${crowdSrc}" style="object-position:${crowdPos}" alt="">${midNums.crowd ? `<span class="num-badge" style="left:${px(crowdX + 0.08)};top:${px(crowdTop + crowdH - 0.32)}">${midNums.crowd}</span>` : ''}` : ''}
+  ${underSrcs[0] ? `<img class="under-1" src="${underSrcs[0]}" style="object-position:${underPos[0]}" alt="">${midNums.under0 ? `<span class="num-badge" style="left:${px(u1X + 0.08)};top:${px(8.63)}">${midNums.under0}</span>` : ''}` : ''}
+  ${underSrcs[1] ? `<img class="under-2" src="${underSrcs[1]}" style="object-position:${underPos[1]}" alt="">${midNums.under1 ? `<span class="num-badge" style="left:${px(u2X + 0.08)};top:${px(8.63)}">${midNums.under1}</span>` : ''}` : ''}
   ${midCapEntries ? `<div class="mid-caps">${midCapEntries}</div>` : ''}
 
   <!-- HERO -->
-  ${heroSrc ? `<img class="hero" src="${heroSrc}" style="object-position:${heroPos}" alt="">${midNums.hero ? `<span class="num-badge" style="left:${px(heroX + 0.15)};top:${px(10.05)}">${midNums.hero}</span>` : ''}` : ''}
+  ${heroSrc ? `<img class="hero" src="${heroSrc}" style="object-position:${heroPos}" alt="">${midNums.hero ? `<span class="num-badge" style="left:${px(heroL + 0.15)};top:${px(10.05)}">${midNums.hero}</span>` : ''}` : ''}
   ${quoteLines.length > 0 ? `
   <div class="quote-overlay">
     ${quoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}

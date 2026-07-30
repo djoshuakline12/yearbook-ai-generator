@@ -17,6 +17,7 @@ const {
   inToPx, ptToPx, escapeHtml, photoDataUri, photoObjectPosition,
   isPlaceholder, pickCaption, splitQuoteIntoLines, dedupCaption,
   cleanAttribution, pickOverlayQuote, repairAspects, estimateTextHeightIn, wrapLineCount,
+  mirrorLeft,
 } = require('./utils');
 
 function renderModSidebarGroup(pageContent, photos, options = {}) {
@@ -24,6 +25,8 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
   const variant = options.variant || 0;
   const anchorColor = !!(variant & 1);   // bit0: anchor photo color vs B&W
   const flipQuote = !!(variant & 2);     // bit1: quote-block position flip
+  const mirror = !!(variant & 4);        // bit2: whole layout flipped left↔right
+  const ML = mirrorLeft(mirror);
   const bwFilter = anchorColor ? '' : 'filter: grayscale(1) contrast(1.05);';
   const PURPLE = BRAND.purple;
   const DARK = '#1A1A1A';
@@ -189,9 +192,20 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
         ? 10.05 - heroQuoteLines.length * 0.375 - (heroQuote.attribution ? 0.4 : 0.1)
         : heroTop + 0.45)
     : 0;
-  const heroOverlayLeft = heroFocal.focalX >= 0.55 ? 8.35
-    : heroFocal.focalX <= 0.45 ? 12.0
-    : (flipQuote ? 12.0 : 8.35);
+  // Bars dodge within the hero's ACTUAL (possibly mirrored) frame; the
+  // photo content itself never moves, so the dodge stays photo-relative.
+  const heroX = ML(7.95, 8.05);
+  const heroOverlayLeft = heroFocal.focalX >= 0.55 ? heroX + 0.4
+    : heroFocal.focalX <= 0.45 ? heroX + 4.05
+    : (flipQuote ? heroX + 4.05 : heroX + 0.4);
+  // Mirrored column anchors — text stays left-aligned, columns swap sides.
+  const railX = ML(0.5, 1.85);
+  const centerX = ML(2.8, 4.7);
+  const c1X = ML(2.8, 2.3);
+  const c2X = ML(5.22, 2.28);
+  const rcX = ML(8.15, 1.3);
+  const r1X = ML(9.55, 2.4);
+  const r2X = ML(12.08, 3.92);
 
   return `<!DOCTYPE html>
 <html>
@@ -212,7 +226,7 @@ ${BRAND.fontLink}
   /* LEFT RAIL */
   .mod-question {
     position: absolute;
-    left: ${px(0.5)}; top: ${px(0.5)};
+    left: ${px(railX)}; top: ${px(0.5)};
     width: ${px(1.85)};
     background: ${PURPLE};
     color: white;
@@ -225,7 +239,7 @@ ${BRAND.fontLink}
   }
   .side-mod {
     position: absolute;
-    left: ${px(0.5)};
+    left: ${px(railX)};
     width: ${px(1.85)};
     display: flex;
     flex-direction: column;
@@ -260,7 +274,7 @@ ${BRAND.fontLink}
   /* CENTER COLUMN */
   .script-accent {
     position: absolute;
-    left: ${px(2.95)}; top: ${px(0.3)};
+    left: ${px(centerX + 0.15)}; top: ${px(0.3)};
     font-family: 'Caveat', cursive;
     font-size: ${pt(20)};
     color: ${PURPLE};
@@ -269,7 +283,7 @@ ${BRAND.fontLink}
   }
   .center-title {
     position: absolute;
-    left: ${px(2.8)}; top: ${px(0.75)};
+    left: ${px(centerX)}; top: ${px(0.75)};
     width: ${px(4.7)};
     font-family: 'Bodoni Moda', serif;
     font-optical-sizing: none;
@@ -281,7 +295,7 @@ ${BRAND.fontLink}
   }
   .subhead-bar {
     position: absolute;
-    left: ${px(2.8)}; top: ${px(subheadY)};
+    left: ${px(centerX)}; top: ${px(subheadY)};
     display: inline-block;
     background: ${PURPLE};
     color: white;
@@ -294,7 +308,7 @@ ${BRAND.fontLink}
   }
   .center-body {
     position: absolute;
-    left: ${px(2.8)}; top: ${px(centerBodyY)};
+    left: ${px(centerX)}; top: ${px(centerBodyY)};
     width: ${px(4.7)}; height: ${px(centerPhotosY - centerBodyY - 0.15)};
     font-size: ${pt(9)};
     line-height: 1.45;
@@ -309,11 +323,11 @@ ${BRAND.fontLink}
     top: ${px(centerPhotosY)}; height: ${px(centerPhotoH)};
     object-fit: cover;
   }
-  .center-1 { left: ${px(2.8)};  width: ${px(2.3)}; }
-  .center-2 { left: ${px(5.22)}; width: ${px(2.28)}; }
+  .center-1 { left: ${px(c1X)};  width: ${px(2.3)}; }
+  .center-2 { left: ${px(c2X)}; width: ${px(2.28)}; }
   .center-caps {
     position: absolute;
-    left: ${px(2.8)}; top: ${px(centerCapsY)};
+    left: ${px(centerX)}; top: ${px(centerCapsY)};
     width: ${px(4.7)}; height: ${px(1.3)};
     font-size: ${pt(7.5)};
     line-height: 1.35;
@@ -326,7 +340,7 @@ ${BRAND.fontLink}
   .gcap b { font-weight: 700; }
   .center-filler {
     position: absolute;
-    left: ${px(2.8)}; top: ${px(centerPhotosY + 0.2)};
+    left: ${px(centerX)}; top: ${px(centerPhotosY + 0.2)};
     width: ${px(4.2)};
   }
   .center-filler .cf-quote {
@@ -384,26 +398,26 @@ ${BRAND.fontLink}
   /* RIGHT TOP */
   .right-caps {
     position: absolute;
-    left: ${px(8.15)}; top: ${px(0.4)};
+    left: ${px(rcX)}; top: ${px(0.4)};
     width: ${px(1.3)}; height: ${px(2.2)};
     font-size: ${pt(7.5)};
     line-height: 1.35;
     color: ${DARK};
     overflow: hidden;
-    text-align: right;
+    text-align: ${mirror ? 'left' : 'right'};
   }
   .right-1, .right-2 {
     position: absolute;
     top: ${px(0.4)}; height: ${px(2.2)};
     object-fit: cover;
   }
-  .right-1 { left: ${px(9.55)};  width: ${px(2.4)}; }
-  .right-2 { left: ${px(12.08)}; width: ${px(3.92)}; }
+  .right-1 { left: ${px(r1X)};  width: ${px(2.4)}; }
+  .right-2 { left: ${px(r2X)}; width: ${px(3.92)}; }
 
   /* GROUP HERO */
   .hero {
     position: absolute;
-    left: ${px(7.95)}; top: ${px(heroTop)};
+    left: ${px(heroX)}; top: ${px(heroTop)};
     width: ${px(8.05)}; height: ${px(heroH)};
     object-fit: cover;
     ${bwFilter}
@@ -475,18 +489,18 @@ ${BRAND.fontLink}
   ${titleRaw ? `<div class="center-title">${escapeHtml(titleRaw)}</div>` : ''}
   ${subheadText ? `<div class="subhead-bar">${escapeHtml(subheadText)}</div>` : ''}
   <div class="center-body">${bodyParagraphs}</div>
-  ${centerSrcs[0] ? `<img class="center-1" src="${centerSrcs[0]}" style="object-position:${centerPos[0]}" alt="">${capNums.center1 ? `<span class="num-badge" style="left:${px(2.88)};top:${px(centerPhotosY + centerPhotoH - 0.32)}">${capNums.center1}</span>` : ''}` : ''}
-  ${centerSrcs[1] ? `<img class="center-2" src="${centerSrcs[1]}" style="object-position:${centerPos[1]}" alt="">${capNums.center2 ? `<span class="num-badge" style="left:${px(5.3)};top:${px(centerPhotosY + centerPhotoH - 0.32)}">${capNums.center2}</span>` : ''}` : ''}
+  ${centerSrcs[0] ? `<img class="center-1" src="${centerSrcs[0]}" style="object-position:${centerPos[0]}" alt="">${capNums.center1 ? `<span class="num-badge" style="left:${px(c1X + 0.08)};top:${px(centerPhotosY + centerPhotoH - 0.32)}">${capNums.center1}</span>` : ''}` : ''}
+  ${centerSrcs[1] ? `<img class="center-2" src="${centerSrcs[1]}" style="object-position:${centerPos[1]}" alt="">${capNums.center2 ? `<span class="num-badge" style="left:${px(c2X + 0.08)};top:${px(centerPhotosY + centerPhotoH - 0.32)}">${capNums.center2}</span>` : ''}` : ''}
   ${centerCaps ? `<div class="center-caps">${centerCaps}</div>` : ''}
   ${centerFiller}
 
   <!-- RIGHT TOP -->
   ${showRightCaps ? `<div class="right-caps">${rightCaps}</div>` : ''}
-  ${rightSrcs[0] ? `<img class="right-1" src="${rightSrcs[0]}" style="object-position:${rightPos[0]}" alt="">${showRightCaps && capNums.right1 ? `<span class="num-badge" style="left:${px(9.63)};top:${px(2.28)}">${capNums.right1}</span>` : ''}` : ''}
-  ${rightSrcs[1] ? `<img class="right-2" src="${rightSrcs[1]}" style="object-position:${rightPos[1]}" alt="">${showRightCaps && capNums.right2 ? `<span class="num-badge" style="left:${px(12.16)};top:${px(2.28)}">${capNums.right2}</span>` : ''}` : ''}
+  ${rightSrcs[0] ? `<img class="right-1" src="${rightSrcs[0]}" style="object-position:${rightPos[0]}" alt="">${showRightCaps && capNums.right1 ? `<span class="num-badge" style="left:${px(r1X + 0.08)};top:${px(2.28)}">${capNums.right1}</span>` : ''}` : ''}
+  ${rightSrcs[1] ? `<img class="right-2" src="${rightSrcs[1]}" style="object-position:${rightPos[1]}" alt="">${showRightCaps && capNums.right2 ? `<span class="num-badge" style="left:${px(r2X + 0.08)};top:${px(2.28)}">${capNums.right2}</span>` : ''}` : ''}
 
   <!-- GROUP HERO -->
-  ${heroSrc ? `<img class="hero" src="${heroSrc}" style="object-position:${heroPos}" alt="">${showRightCaps && capNums.hero ? `<span class="num-badge" style="left:${px(8.03)};top:${px(10.1)}">${capNums.hero}</span>` : ''}` : ''}
+  ${heroSrc ? `<img class="hero" src="${heroSrc}" style="object-position:${heroPos}" alt="">${showRightCaps && capNums.hero ? `<span class="num-badge" style="left:${px(heroX + 0.08)};top:${px(10.1)}">${capNums.hero}</span>` : ''}` : ''}
   ${heroQuoteLines.length > 0 ? `
   <div class="quote-overlay" style="left:${px(heroOverlayLeft)};top:${px(heroOverlayTop)}">
     ${heroQuoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}

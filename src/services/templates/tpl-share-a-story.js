@@ -19,6 +19,7 @@ const {
   inToPx, ptToPx, escapeHtml, photoDataUri, photoObjectPosition,
   isPlaceholder, pickCaption, splitQuoteIntoLines, dedupCaption,
   cleanAttribution, repairAspects, estimateTextHeightIn, wrapLineCount,
+  mirrorLeft,
 } = require('./utils');
 
 function renderShareAStory(pageContent, photos, options = {}) {
@@ -26,6 +27,8 @@ function renderShareAStory(pageContent, photos, options = {}) {
   const variant = options.variant || 0;
   const anchorColor = !!(variant & 1);   // bit0: anchor photo color vs B&W
   const flipQuote = !!(variant & 2);     // bit1: quote-block position flip
+  const mirror = !!(variant & 4);        // bit2: whole layout flipped left↔right
+  const ML = mirrorLeft(mirror);
   const bwFilter = anchorColor ? '' : 'filter: grayscale(1) contrast(1.05);';
   const PURPLE = BRAND.purple;
   const DARK = '#1A1A1A';
@@ -209,8 +212,8 @@ function renderShareAStory(pageContent, photos, options = {}) {
   const modCount = Math.max(1, headMods.length);
   const nRight = Math.floor(headMods.length / 2);
   const nLeft = Math.max(1, headMods.length - nRight);
-  const segL = { x: 0.75, w: 7.15 };  // ends 7.9, clear of the fold
-  const segR = { x: 8.1, w: 4.5 };    // 8.1-12.6, rail starts at 13.1
+  const segL = { x: mirror ? 8.1 : 0.75, w: 7.15 };  // ends clear of the fold
+  const segR = { x: mirror ? 3.4 : 8.1, w: 4.5 };     // both segments fold-safe mirrored
   const headModBoxes = headMods.map((_, i) => {
     if (i < nLeft) {
       const stride = segL.w / nLeft;
@@ -221,6 +224,16 @@ function renderShareAStory(pageContent, photos, options = {}) {
     return { x: segR.x + j * stride, w: Math.min(stride - 0.25, 4.6) };
   });
   const headImgW = modCount <= 2 ? 2.0 : 1.45;
+  // Mirrored column anchors — text stays left-aligned, columns swap sides.
+  const titleColX = ML(0.75, 6.6);
+  const bodyColX = ML(0.75, 6.4);
+  const crowdX = ML(0.75, crowdW);
+  const stackX = ML(5.2, 1.95);
+  const bandX = ML(0.75, 7.15);
+  const rbX = ML(8.2, 4.55);
+  const rp1X = ML(8.2, 2.21);
+  const rp2X = ML(10.54, 2.21);
+  const railX = ML(13.1, 2.4);
   // Angle bar: a distinct teaser — never repeats the title OR the subtitle.
   const angleBarRaw = [pageContent.headline, pageContent.record, pageContent.section]
     .find(t => t && t.toUpperCase().trim() !== titleRaw.trim()
@@ -245,7 +258,7 @@ ${BRAND.fontLink}
   /* Title block */
   .script-accent {
     position: absolute;
-    left: ${px(0.85)}; top: ${px(0.28)};
+    left: ${px(titleColX + 0.1)}; top: ${px(0.28)};
     font-family: 'Caveat', cursive;
     font-size: ${pt(22)};
     color: ${PURPLE};
@@ -254,7 +267,7 @@ ${BRAND.fontLink}
   }
   .big-title {
     position: absolute;
-    left: ${px(0.75)}; top: ${px(titleY)};
+    left: ${px(titleColX)}; top: ${px(titleY)};
     width: ${px(6.6)};
     font-family: 'Bodoni Moda', serif;
     font-optical-sizing: none;
@@ -266,7 +279,7 @@ ${BRAND.fontLink}
   }
   .subtitle-bar {
     position: absolute;
-    left: ${px(0.75)}; top: ${px(subtitleY)};
+    left: ${px(titleColX)}; top: ${px(subtitleY)};
     display: inline-block;
     background: ${PURPLE};
     color: white;
@@ -281,7 +294,7 @@ ${BRAND.fontLink}
   /* Body copy 2-col */
   .body-copy {
     position: absolute;
-    left: ${px(0.75)}; top: ${px(bodyY)};
+    left: ${px(bodyColX)}; top: ${px(bodyY)};
     width: ${px(6.4)}; height: ${px(crowdY - bodyY - 0.15)};
     font-size: ${pt(9)};
     line-height: 1.42;
@@ -295,14 +308,14 @@ ${BRAND.fontLink}
   /* Left photo block */
   .crowd {
     position: absolute;
-    left: ${px(0.75)}; top: ${px(crowdY)};
+    left: ${px(crowdX)}; top: ${px(crowdY)};
     width: ${px(crowdW)}; height: ${px(crowdH)};
     object-fit: cover;
     ${bwFilter}
   }
   .stack-1, .stack-2 {
     position: absolute;
-    left: ${px(5.2)};
+    left: ${px(stackX)};
     width: ${px(1.95)}; height: ${px(stackH)};
     object-fit: cover;
   }
@@ -310,7 +323,7 @@ ${BRAND.fontLink}
   .stack-2 { top: ${px(stack2Y)}; }
   .left-caps {
     position: absolute;
-    left: ${px(0.75)}; top: ${px(7.12)};
+    left: ${px(bodyColX)}; top: ${px(7.12)};
     width: ${px(6.4)}; height: ${px(0.75)};
     font-size: ${pt(7.5)};
     line-height: 1.35;
@@ -334,7 +347,7 @@ ${BRAND.fontLink}
   /* Bottom talking-heads band */
   .angle-header {
     position: absolute;
-    left: ${px(0.75)}; top: ${px(8.05)};
+    left: ${px(bandX)}; top: ${px(8.05)};
     font-family: 'Bodoni Moda', serif;
     font-optical-sizing: none;
     font-variation-settings: 'opsz' 9;
@@ -346,7 +359,7 @@ ${BRAND.fontLink}
   .angle-header .accent { font-style: italic; font-weight: 700; }
   .angle-bar {
     position: absolute;
-    left: ${px(2.9)}; top: ${px(8.02)};
+    left: ${px(bandX + 2.15)}; top: ${px(8.02)};
     display: inline-block;
     background: ${PURPLE};
     color: white;
@@ -390,7 +403,7 @@ ${BRAND.fontLink}
   /* Right page photos */
   .right-big {
     position: absolute;
-    left: ${px(8.2)}; top: ${px(0.4)};
+    left: ${px(rbX)}; top: ${px(0.4)};
     width: ${px(4.55)}; height: ${px(rightBigH)};
     object-fit: cover;
   }
@@ -400,11 +413,11 @@ ${BRAND.fontLink}
     width: ${px(2.21)}; height: ${px(rightPairH)};
     object-fit: cover;
   }
-  .right-pair-1 { left: ${px(8.2)}; }
-  .right-pair-2 { left: ${px(10.54)}; }
+  .right-pair-1 { left: ${px(rp1X)}; }
+  .right-pair-2 { left: ${px(rp2X)}; }
   .right-caps {
     position: absolute;
-    left: ${px(8.2)}; top: ${px(rightCapsY)};
+    left: ${px(rbX)}; top: ${px(rightCapsY)};
     width: ${px(4.55)}; height: ${px(0.7)};
     font-size: ${pt(7.5)};
     line-height: 1.35;
@@ -417,7 +430,7 @@ ${BRAND.fontLink}
   /* Right rail */
   .rail-quote {
     position: absolute;
-    left: ${px(13.1)}; top: ${px(railQuoteTop)};
+    left: ${px(railX)}; top: ${px(railQuoteTop)};
     width: ${px(2.4)};
     z-index: 3;
   }
@@ -445,13 +458,13 @@ ${BRAND.fontLink}
   }
   .rail-photo {
     position: absolute;
-    left: ${px(13.1)};
+    left: ${px(railX)};
     width: ${px(2.4)}; height: ${px(railPhotoH)};
     object-fit: cover;
   }
   .rail-highlights {
     position: absolute;
-    left: ${px(13.1)};
+    left: ${px(railX)};
     width: ${px(2.4)};
   }
   .rail-highlights .hl-header {
@@ -494,9 +507,9 @@ ${BRAND.fontLink}
   <div class="body-copy">${bodyParagraphs}</div>
 
   <!-- LEFT PHOTO BLOCK -->
-  ${crowdSrc ? `<img class="crowd" src="${crowdSrc}" style="object-position:${crowdPos}" alt="">${badgeNums.crowd ? `<span class="num-badge" style="left:${px(0.83)};top:${px(crowdY + crowdH - 0.32)}">${badgeNums.crowd}</span>` : ''}` : ''}
-  ${stackSrcs[0] ? `<img class="stack-1" src="${stackSrcs[0]}" style="object-position:${stackPos[0]}" alt="">${badgeNums.stack1 ? `<span class="num-badge" style="left:${px(5.28)};top:${px(crowdY + stackH - 0.32)}">${badgeNums.stack1}</span>` : ''}` : ''}
-  ${stackSrcs[1] ? `<img class="stack-2" src="${stackSrcs[1]}" style="object-position:${stackPos[1]}" alt="">${badgeNums.stack2 ? `<span class="num-badge" style="left:${px(5.28)};top:${px(stack2Y + stackH - 0.32)}">${badgeNums.stack2}</span>` : ''}` : ''}
+  ${crowdSrc ? `<img class="crowd" src="${crowdSrc}" style="object-position:${crowdPos}" alt="">${badgeNums.crowd ? `<span class="num-badge" style="left:${px(crowdX + 0.08)};top:${px(crowdY + crowdH - 0.32)}">${badgeNums.crowd}</span>` : ''}` : ''}
+  ${stackSrcs[0] ? `<img class="stack-1" src="${stackSrcs[0]}" style="object-position:${stackPos[0]}" alt="">${badgeNums.stack1 ? `<span class="num-badge" style="left:${px(stackX + 0.08)};top:${px(crowdY + stackH - 0.32)}">${badgeNums.stack1}</span>` : ''}` : ''}
+  ${stackSrcs[1] ? `<img class="stack-2" src="${stackSrcs[1]}" style="object-position:${stackPos[1]}" alt="">${badgeNums.stack2 ? `<span class="num-badge" style="left:${px(stackX + 0.08)};top:${px(stack2Y + stackH - 0.32)}">${badgeNums.stack2}</span>` : ''}` : ''}
   ${leftCaps ? `<div class="left-caps">${leftCaps}</div>` : ''}
 
   <!-- BOTTOM TALKING-HEADS BAND -->
@@ -520,9 +533,9 @@ ${BRAND.fontLink}
   }).join('\n')}
 
   <!-- RIGHT PAGE PHOTOS -->
-  ${rightBigSrc ? `<img class="right-big" src="${rightBigSrc}" style="object-position:${rightBigPos}" alt="">${badgeNums.rightBig ? `<span class="num-badge" style="left:${px(8.28)};top:${px(0.4 + rightBigH - 0.32)}">${badgeNums.rightBig}</span>` : ''}` : ''}
-  ${rightPairSrcs[0] ? `<img class="right-pair-1" src="${rightPairSrcs[0]}" style="object-position:${rightPairPos[0]}" alt="">${badgeNums.rightPair1 ? `<span class="num-badge" style="left:${px(8.28)};top:${px(rightPairY + rightPairH - 0.32)}">${badgeNums.rightPair1}</span>` : ''}` : ''}
-  ${rightPairSrcs[1] ? `<img class="right-pair-2" src="${rightPairSrcs[1]}" style="object-position:${rightPairPos[1]}" alt="">${badgeNums.rightPair2 ? `<span class="num-badge" style="left:${px(10.62)};top:${px(rightPairY + rightPairH - 0.32)}">${badgeNums.rightPair2}</span>` : ''}` : ''}
+  ${rightBigSrc ? `<img class="right-big" src="${rightBigSrc}" style="object-position:${rightBigPos}" alt="">${badgeNums.rightBig ? `<span class="num-badge" style="left:${px(rbX + 0.08)};top:${px(0.4 + rightBigH - 0.32)}">${badgeNums.rightBig}</span>` : ''}` : ''}
+  ${rightPairSrcs[0] ? `<img class="right-pair-1" src="${rightPairSrcs[0]}" style="object-position:${rightPairPos[0]}" alt="">${badgeNums.rightPair1 ? `<span class="num-badge" style="left:${px(rp1X + 0.08)};top:${px(rightPairY + rightPairH - 0.32)}">${badgeNums.rightPair1}</span>` : ''}` : ''}
+  ${rightPairSrcs[1] ? `<img class="right-pair-2" src="${rightPairSrcs[1]}" style="object-position:${rightPairPos[1]}" alt="">${badgeNums.rightPair2 ? `<span class="num-badge" style="left:${px(rp2X + 0.08)};top:${px(rightPairY + rightPairH - 0.32)}">${badgeNums.rightPair2}</span>` : ''}` : ''}
   ${rightCaps ? `<div class="right-caps">${rightCaps}</div>` : ''}
 
   <!-- RIGHT RAIL -->
