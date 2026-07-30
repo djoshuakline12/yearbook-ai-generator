@@ -77,6 +77,9 @@ function renderHandTemplate(templateId, pageContent, photos, options) {
   const resolved = resolveTemplateId(templateId);
   const fn = resolved && TEMPLATES[resolved];
   if (!fn) throw new Error(`Unknown hand template: ${templateId}`);
+  // Editor-arranged spreads: the incoming photo order IS the layout.
+  const { setLayoutLock } = require('./utils');
+  setLayoutLock(!!(pageContent && pageContent._lockOrder));
   // Split spreads carry per-half photo slices keyed by pageContent.photoSplit;
   // a global dedupe would shift that boundary. Pair mode dedupes per half.
   if (pageContent && pageContent.split) return fn(pageContent, photos, options);

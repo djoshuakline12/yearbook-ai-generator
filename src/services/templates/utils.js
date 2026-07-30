@@ -197,6 +197,12 @@ function photoObjectPosition(photo) {
   return (photo && photo.objectPosition) || 'center 35%';
 }
 
+// When a spread has been hand-arranged in the editor (_layout_edit.json →
+// pageContent._lockOrder), the given photo order IS the slot assignment —
+// aspect repair must not reshuffle it. Set per render by renderHandTemplate.
+let LAYOUT_LOCKED = false;
+function setLayoutLock(v) { LAYOUT_LOCKED = !!v; }
+
 // Aspect-aware slot repair: photos land in the slots whose shape fits them.
 // slotMap: {key: photoIndex}; slotAspects: {key: representativeAspect(w/h)}.
 // Pairwise-swaps photo assignments whenever a swap improves the combined
@@ -204,6 +210,7 @@ function photoObjectPosition(photo) {
 // portrait never letterboxes a wide strip. Captions stay correct because
 // templates resolve captions through the slot map.
 function repairAspects(photos, slotMap, slotAspects) {
+  if (LAYOUT_LOCKED) return slotMap;
   const aspectOf = (i) => (photos[i] && photos[i].aspectRatio) || 1.5;
   const fit = (i, slotAspect) => Math.abs(Math.log(aspectOf(i) / slotAspect));
   const keys = Object.keys(slotAspects).filter(k => slotMap[k] >= 0);
@@ -325,5 +332,5 @@ module.exports = {
   cleanCaption, isPlaceholder, isFilenameLike, pickCaption,
   splitQuoteIntoLines, wrapToLines, dedupCaption, cleanAttribution,
   pickOverlayQuote, repairAspects, estimateTextHeightIn, wrapLineCount,
-  mirrorLeft,
+  mirrorLeft, setLayoutLock,
 };
