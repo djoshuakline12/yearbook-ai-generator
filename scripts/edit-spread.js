@@ -51,6 +51,13 @@ const TEMPLATE_IDS = {
   4: 'sidebar-mods-bleed', 5: 'cross-gutter-mosaic',
 };
 
+// Academics run as split pairs (Josh 2026-07-28) — the editor rotation
+// shows the pair spreads, never the full-spread academic versions.
+const PAIRS = [
+  '01_bible+02_english', '03_math+04_science',
+  '05_history+06_spanish', '07_art+08_media',
+];
+
 async function buildOne(folder, navList) {
   let overrides = {};
   const ovPath = path.join(PACK_DIR, '_layout_overrides.json');
@@ -161,7 +168,18 @@ async function buildOne(folder, navList) {
     base: p.base,
     pos: p.objectPosition || '',
   }));
-  const editorJs = `
+  const editorJs = editorChrome(folder, navList, photoMeta, null);
+
+  html = html.replace('</body>', editorJs + '\n</body>');
+  const outPath = path.join(PACK_DIR, '_review', `edit_${folder}.html`);
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
+  fs.writeFileSync(outPath, html);
+  console.log(`Editor: ${outPath}`);
+  return outPath;
+}
+
+function editorChrome(label, navList, photoMeta, pair) {
+  return `
 <style>
   html { background: #2b2733; }
   body { width: auto !important; height: auto !important; overflow: auto !important; margin: 0; }
@@ -191,7 +209,7 @@ async function buildOne(folder, navList) {
 </style>
 <div id="edbar">
   <button id="prevBtn" title="Previous spread">&#8249;</button>
-  <select id="navSel">${navList.map(f => `<option value="edit_${f}.html"${f === folder ? ' selected' : ''}>${f}</option>`).join('')}</select>
+  <select id="navSel">${navList.map(f => `<option value="edit_${f}.html"${f === label ? ' selected' : ''}>${f}</option>`).join('')}</select>
   <button id="nextBtn" title="Next spread">&#8250;</button>
   <button id="cropBtn" class="active">Crop (drag inside a photo)</button>
   <button id="swapBtn">Swap (click two photos)</button>
@@ -200,7 +218,8 @@ async function buildOne(folder, navList) {
   <button id="save">Save layout file</button>
 </div>
 <script>
-const FOLDER = ${JSON.stringify(folder)};
+const FOLDER = ${JSON.stringify(label)};
+const PAIR = ${JSON.stringify(pair)};          // {split, folderA} for academic pairs
 const PHOTOS = ${JSON.stringify(photoMeta)};   // slot order
 let ORDER = PHOTOS.map(p => p.base);           // slot index -> basename
 const FOCUS = {};                              // basename -> "x% y%"
@@ -288,6 +307,10 @@ function handleSwapClick(im) {
   if (selected === im) { im.classList.remove('ed-selected'); selected = null; return; }
   const a = selected, b = im;
   const sa = +a.dataset.slot, sb = +b.dataset.slot;
+  if (PAIR && (sa < PAIR.split) !== (sb < PAIR.split)) {
+    alert('Photos stay within their class — swap within the same half of the spread.');
+    a.classList.remove('ed-selected'); selected = null; return;
+  }
   [ORDER[sa], ORDER[sb]] = [ORDER[sb], ORDER[sa]];
   const tmpSrc = a.getAttribute('src');
   a.setAttribute('src', b.getAttribute('src'));
@@ -314,20 +337,96 @@ document.getElementById('prevBtn').onclick = () => { if (navSel.selectedIndex > 
 document.getElementById('nextBtn').onclick = () => { if (navSel.selectedIndex < navSel.options.length - 1) { navSel.selectedIndex++; go(navSel.value); } };
 
 document.getElementById('save').onclick = () => {
-  const out = { order: ORDER, focus: FOCUS };
+  const out = PAIR
+    ? { orderA: ORDER.slice(0, PAIR.split), orderB: ORDER.slice(PAIR.split), focus: FOCUS }
+    : { order: ORDER, focus: FOCUS };
+  const destFolder = PAIR ? PAIR.folderA : FOLDER;
   const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
   const aEl = document.createElement('a');
   aEl.href = URL.createObjectURL(blob);
   aEl.download = '_layout_edit.json';
   aEl.click();
-  alert('Saved _layout_edit.json to Downloads.\\n\\nMove it into yearbook_import_pack/' + FOLDER + '/ (replacing any old one) and regenerate the spread.');
+  alert('Saved _layout_edit.json to Downloads.\\n\\nMove it into yearbook_import_pack/' + destFolder + '/ (replacing any old one) and regenerate the spread.');
 };
 
 rescale();
 </script>`;
 
+}
+
+// Academic pair spreads (Tpl6): identity slot order (no aspect repair),
+// two halves, photos never cross the class boundary.
+async function buildPair(pairSpec, navList) {
+  const [fa, fb] = pairSpec.split('+');
+  ensureCompiledTxt();
+  const sections = parseCompiled(fs.readFileSync(COMPILED_TXT, 'utf8'));
+  const halves = [];
+  const photosOrdered = [];
+  for (const folder of [fa, fb]) {
+    const sec = sections[SECTION_NAMES[folder]];
+    if (!sec) throw new Error(folder + ': no copy in the compiled doc');
+    const collected = collectPhotos(folder, 6);
+    const seen = [];
+    const unique = [];
+    for (const p of collected) {
+      const px = await sharp(p.file).rotate().grayscale().resize(8, 8, { fit: 'fill' }).raw().toBuffer();
+      const avg = px.reduce((a, b) => a + b, 0) / px.length;
+      let bits = 0n;
+      for (let i = 0; i < 64; i++) bits = (bits << 1n) | (px[i] > avg ? 1n : 0n);
+      const ham = (x, y) => { let v = x ^ y, n = 0; while (v) { n += Number(v & 1n); v >>= 1n; } return n; };
+      if (seen.some(sb => ham(sb, bits) <= 6)) continue;
+      seen.push(bits);
+      unique.push(p);
+      if (unique.length === 5) break;
+    }
+    // Existing pair edits (stored in folder A) shape the starting state.
+    let pe = null;
+    const pePath = path.join(PACK_DIR, fa, '_layout_edit.json');
+    if (fs.existsSync(pePath)) pe = JSON.parse(fs.readFileSync(pePath, 'utf8'));
+    const halfOrder = pe && (folder === fa ? pe.orderA : pe.orderB);
+    if (Array.isArray(halfOrder)) {
+      const byBase = new Map(unique.map(p => [p.base, p]));
+      const ordered = halfOrder.map(b => byBase.get(b)).filter(Boolean);
+      const rest = unique.filter(p => !halfOrder.includes(p.base));
+      unique.length = 0;
+      unique.push(...ordered, ...rest);
+    }
+    const capMap = manifestCaptions(folder);
+    const seenCap = new Set();
+    const photoCaptions = [];
+    const halfPhotos = [];
+    for (const [i, p] of unique.entries()) {
+      const buf = await sharp(p.file).rotate().resize(900, 900, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 78 }).toBuffer();
+      const meta = await sharp(buf).metadata();
+      const ph = { base: p.base, captioned: p.captioned, base64: buf.toString('base64'), aspectRatio: meta.width / meta.height };
+      if (pe && pe.focus && pe.focus[p.base]) ph.objectPosition = pe.focus[p.base];
+      halfPhotos.push(ph);
+      const cap = capMap[p.base] || '';
+      const norm = cap.toLowerCase().replace(/\s+/g, ' ').trim();
+      if (cap && !seenCap.has(norm)) { seenCap.add(norm); photoCaptions.push({ photoIndex: i, caption: cap, people: '' }); }
+    }
+    photosOrdered.push(...halfPhotos);
+    halves.push({
+      title: sec.title.toUpperCase(),
+      section: SECTION_NAMES[folder],
+      bodyCopy: sec.bodyCopy,
+      quotes: sec.quotes,
+      photoCaptions,
+      _photoCount: halfPhotos.length,
+    });
+  }
+  console.log(`${pairSpec}: ${photosOrdered.length} photos, split-academic`);
+  const pageContent = { split: halves, photoSplit: halves[0]._photoCount };
+  let html = renderHandTemplate('split-academic', pageContent, photosOrdered, { dpi: 100, variant: 0 });
+  const srcKey = (str) => `${str.length}:${str.slice(-48)}`;
+  const photoMeta = photosOrdered.map(p => ({
+    key: srcKey(`data:image/jpeg;base64,${p.base64}`),
+    base: p.base,
+    pos: p.objectPosition || '',
+  }));
+  const editorJs = editorChrome(pairSpec, navList, photoMeta, { split: halves[0]._photoCount, folderA: fa });
   html = html.replace('</body>', editorJs + '\n</body>');
-  const outPath = path.join(PACK_DIR, '_review', `edit_${folder}.html`);
+  const outPath = path.join(PACK_DIR, '_review', `edit_${pairSpec}.html`);
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, html);
   console.log(`Editor: ${outPath}`);
@@ -336,19 +435,19 @@ rescale();
 
 async function main() {
   const arg = process.argv[2];
-  if (!arg || (arg !== 'all' && !SECTION_NAMES[arg])) {
-    console.error('Usage: node scripts/edit-spread.js <spreadFolder>|all');
-    console.error('Known folders:', Object.keys(SECTION_NAMES).join(', '));
+  const nonAcademic = Object.keys(SECTION_NAMES).filter(f => !/^0[1-8]_/.test(f));
+  const navList = [...PAIRS, ...nonAcademic];
+  const valid = arg === 'all' || navList.includes(arg) || SECTION_NAMES[arg];
+  if (!arg || !valid) {
+    console.error('Usage: node scripts/edit-spread.js <spreadFolder|pairA+pairB>|all');
+    console.error('Spreads:', navList.join(', '));
     process.exit(1);
   }
-  const folders = arg === 'all' ? Object.keys(SECTION_NAMES) : [arg];
-  // Nav list: every folder that could have an editor page (built or not);
-  // pages link to their siblings, so build `all` for full click-through.
-  const navList = Object.keys(SECTION_NAMES);
+  const specs = arg === 'all' ? navList : [arg];
   const built = [];
-  for (const f of folders) {
+  for (const f of specs) {
     try {
-      built.push(await buildOne(f, navList));
+      built.push(f.includes('+') ? await buildPair(f, navList) : await buildOne(f, navList));
     } catch (e) {
       console.log(`${f}: skipped (${e.message.split('\n')[0]})`);
     }

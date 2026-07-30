@@ -475,6 +475,15 @@ async function generatePair(pairSpec, sections, outDir) {
   const { renderHandTemplate } = require('../src/services/templates');
   const { exportToFile } = require('../src/services/exporter');
 
+  // Hand-arranged pair layout from scripts/edit-spread.js — saved into
+  // FOLDER A's _layout_edit.json with per-half orders + crops.
+  let pairEdit = null;
+  const pePath = path.join(PACK_DIR, fa, '_layout_edit.json');
+  if (fs.existsSync(pePath)) {
+    const pe = JSON.parse(fs.readFileSync(pePath, 'utf8'));
+    if (pe.orderA || pe.orderB || pe.focus) pairEdit = pe;
+  }
+
   const halves = [];
   const allPhotos = [];
   const flags = [];
@@ -502,6 +511,18 @@ async function generatePair(pairSpec, sections, outDir) {
       unique.push(p);
       if (unique.length === 5) break;
     }
+    // Apply the editor's per-half order + crops.
+    const halfOrder = pairEdit && (folder === fa ? pairEdit.orderA : pairEdit.orderB);
+    if (Array.isArray(halfOrder)) {
+      const byBase = new Map(unique.map(p => [p.base, p]));
+      const ordered = halfOrder.map(b => byBase.get(b)).filter(Boolean);
+      const rest = unique.filter(p => !halfOrder.includes(p.base));
+      unique.length = 0;
+      unique.push(...ordered, ...rest);
+    }
+    if (pairEdit && pairEdit.focus) {
+      unique.forEach(p => { if (pairEdit.focus[p.base]) p.objectPosition = pairEdit.focus[p.base]; });
+    }
     const capMap = manifestCaptions(folder);
     const seenCapText = new Set();
     const photoCaptions = unique.map((p, i) => {
@@ -514,7 +535,8 @@ async function generatePair(pairSpec, sections, outDir) {
     }).filter(Boolean);
     for (const p of unique) {
       const buf = await sharp(p.file).rotate().resize(2000, 2000, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 86 }).toBuffer();
-      allPhotos.push({ base64: buf.toString('base64'), captioned: p.captioned });
+      allPhotos.push({ base64: buf.toString('base64'), captioned: p.captioned,
+        ...(p.objectPosition ? { objectPosition: p.objectPosition } : {}) });
     }
     halves.push({
       title: sec.title.toUpperCase(),
