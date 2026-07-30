@@ -408,13 +408,23 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
     1: 'hero-top-bleed', 2: 'hero-left-magazine', 3: 'hero-dominant-sidebar',
     4: 'sidebar-mods-bleed', 5: 'cross-gutter-mosaic',
   };
-  if (process.env.TEMPLATE) {
-    const style = TEMPLATE_IDS[process.env.TEMPLATE] || process.env.TEMPLATE;
+  // Per-spread layout overrides persist in the pack (variety pass keeps
+  // adjacent spreads off the same template); env vars win for one-off runs.
+  //   _layout_overrides.json: { "<folder>": { "template": 1-5, "mirror": true } }
+  let override = {};
+  const ovPath = path.join(PACK_DIR, '_layout_overrides.json');
+  if (fs.existsSync(ovPath)) {
+    override = JSON.parse(fs.readFileSync(ovPath, 'utf8'))[spreadFolder] || {};
+  }
+  const tplPick = process.env.TEMPLATE || override.template;
+  if (tplPick) {
+    const style = TEMPLATE_IDS[tplPick] || tplPick;
     pageContent.layoutStyle = style;
     form.append('layoutStyle', style);
   }
   // MIRROR=1 flips the layout left↔right (templates with mirror support).
-  if (process.env.MIRROR === '1') pageContent.mirror = true;
+  const mirrorPick = process.env.MIRROR != null ? process.env.MIRROR === '1' : !!override.mirror;
+  if (mirrorPick) pageContent.mirror = true;
   form.append('pageContent', JSON.stringify(pageContent));
   form.append('pageType', 'spread');
   form.append('format', 'png');
