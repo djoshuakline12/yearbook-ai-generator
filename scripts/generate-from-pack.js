@@ -416,11 +416,15 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
   };
 
   const form = new FormData();
+  // Print runs upload near-original resolution so the 600 DPI export has
+  // real pixels; normal runs stay light for fast iteration.
+  const upMax = process.env.HIRES === '1' ? 4400 : 2400;
+  const upQ = process.env.HIRES === '1' ? 92 : 88;
   for (const p of unique) {
     const buf = await sharp(p.file)
       .rotate()
-      .resize(2400, 2400, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: 88 })
+      .resize(upMax, upMax, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: upQ })
       .toBuffer();
     form.append('photos', new Blob([buf], { type: 'image/jpeg' }), p.base + '.jpg');
   }
@@ -563,8 +567,10 @@ async function generatePair(pairSpec, sections, outDir) {
       seenCapText.add(norm);
       return { photoIndex: i, caption: cap, people: '' };
     }).filter(Boolean);
+    const pairMax = process.env.HIRES === '1' ? 4400 : 2000;
+    const pairQ = process.env.HIRES === '1' ? 92 : 86;
     for (const p of unique) {
-      const buf = await sharp(p.file).rotate().resize(2000, 2000, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 86 }).toBuffer();
+      const buf = await sharp(p.file).rotate().resize(pairMax, pairMax, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: pairQ }).toBuffer();
       allPhotos.push({ base64: buf.toString('base64'), captioned: p.captioned,
         ...(p.objectPosition ? { objectPosition: p.objectPosition } : {}) });
     }

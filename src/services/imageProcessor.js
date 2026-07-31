@@ -16,8 +16,9 @@ async function processPhotos(files) {
     const orientation = metadata.width >= metadata.height ? 'landscape' : 'portrait';
     const aspectRatio = metadata.width / metadata.height;
 
-    // Resize to max 3000px on longest side for rendering (keeps quality high for 300 DPI)
-    const maxDim = 3000;
+    // Resize to max 4400px on longest side — enough for a large photo
+    // placement at the 600 DPI final export (a 7in-wide photo needs 4200px).
+    const maxDim = 4400;
     let resizeOpts = {};
     if (metadata.width > maxDim || metadata.height > maxDim) {
       resizeOpts = metadata.width > metadata.height
