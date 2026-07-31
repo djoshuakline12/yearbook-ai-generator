@@ -34,6 +34,9 @@ function ensureCompiledTxt() {
 const NAME_FIXES = {
   'VJ': 'VJ Ryan',
   'Niko': 'Niko Diakos',
+  // Goes by Jack (Josh 2026-07-30) — doc wrote John, roster says Jonathan.
+  'John Louden': 'Jack Louden',
+  'Jonathan Louden': 'Jack Louden',
 };
 
 // Doc sections with no pack folder yet — they still BOUND the previous
