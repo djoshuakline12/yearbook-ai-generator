@@ -83,6 +83,8 @@ const SECTION_NAMES = {
   // Swim + Golf feature spreads (140-page plan, 2026-07-30). Book order
   // places them after Field Hockey; numbering here is just a slug.
   '44_swim': 'Swim', '45_golf': 'Golf',
+  // Second collage (140-page plan filler) — spirit week outtakes.
+  '46_collage_2': 'Second Collage',
 };
 
 // ---------------------------------------------------------------------------
