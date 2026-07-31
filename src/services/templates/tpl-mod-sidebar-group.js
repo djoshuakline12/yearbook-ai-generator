@@ -67,7 +67,8 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
   const subheadCandidates = [
     pageContent.subheadline,
     pageContent.record,
-    ...(pageContent.highlights || []),
+    // Stats & Facts lines no longer fall through to the subhead bar
+    // (Josh 2026-07-30) — no bar beats a random stat as the subheading.
   ].filter(t => t && !t.includes('['));
   const subheadText = (subheadCandidates.find(t =>
     t.toUpperCase().trim() !== titleRaw.toUpperCase().trim() && t.length <= 80) || '').toUpperCase();

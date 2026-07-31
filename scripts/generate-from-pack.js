@@ -360,6 +360,9 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
 
   // Captions indexed against the deduped photo list.
   const capMap = manifestCaptions(spreadFolder);
+  if (edit && edit.captions) {
+    for (const [b, c] of Object.entries(edit.captions)) capMap[b] = c;
+  }
   const seenCapText = new Set();
   const photoCaptions = unique.map((p, i) => {
     // Confirmed captions (captions_confirmed.csv) key by basename, so
@@ -460,6 +463,30 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
   result.status = 'ok';
   result.out = outPath;
   result.seconds = Math.round((Date.now() - t0) / 1000);
+
+  // HIRES=1: re-export this session at print resolution (600 DPI default,
+  // DPI env overrides) via /api/export-final and save alongside.
+  if (process.env.HIRES === '1') {
+    const sessionId = res.headers.get('x-session-id');
+    if (sessionId) {
+      const dpi = parseInt(process.env.DPI, 10) || 600;
+      const fRes = await fetch(`${apiBase}/api/export-final`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, format: 'png', dpi }),
+      });
+      if (fRes.ok) {
+        const fBuf = Buffer.from(await fRes.arrayBuffer());
+        result.printOut = path.join(outDir, `${spreadFolder}_print_${dpi}dpi.png`);
+        fs.writeFileSync(result.printOut, fBuf);
+        result.flags.push(`print export saved (${dpi} DPI)`);
+      } else {
+        result.flags.push(`print export FAILED (${fRes.status})`);
+      }
+    } else {
+      result.flags.push('print export skipped — no session id from server');
+    }
+  }
   return result;
 }
 
@@ -524,6 +551,9 @@ async function generatePair(pairSpec, sections, outDir) {
       unique.forEach(p => { if (pairEdit.focus[p.base]) p.objectPosition = pairEdit.focus[p.base]; });
     }
     const capMap = manifestCaptions(folder);
+    if (pairEdit && pairEdit.captions) {
+      for (const [b, c] of Object.entries(pairEdit.captions)) capMap[b] = c;
+    }
     const seenCapText = new Set();
     const photoCaptions = unique.map((p, i) => {
       const cap = capMap[p.base] || '';
@@ -553,11 +583,20 @@ async function generatePair(pairSpec, sections, outDir) {
   const out = await exportToFile(html, 'png', 'spread');
   const outPath = path.join(outDir, `${fa}+${fb}.${out.extension}`);
   fs.writeFileSync(outPath, out.buffer);
+  let printOut = null;
+  if (process.env.HIRES === '1') {
+    const dpi = parseInt(process.env.DPI, 10) || 600;
+    const htmlHi = renderHandTemplate('split-academic', pageContent, allPhotos, { dpi, variant: 0 });
+    const outHi = await exportToFile(htmlHi, 'png', 'spread', { quality: 'final', dpi });
+    printOut = path.join(outDir, `${fa}+${fb}_print_${dpi}dpi.png`);
+    fs.writeFileSync(printOut, outHi.buffer);
+  }
   return {
     spread: pairSpec,
     title: `${halves[0].title} / ${halves[1].title}`,
     photos: allPhotos.length, quotes: halves[0].quotes.length + halves[1].quotes.length,
-    flags, status: 'ok', out: outPath, seconds: Math.round((Date.now() - t0) / 1000),
+    flags, status: 'ok', out: outPath, ...(printOut ? { printOut } : {}),
+    seconds: Math.round((Date.now() - t0) / 1000),
   };
 }
 

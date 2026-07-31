@@ -1,18 +1,19 @@
 #!/usr/bin/env node
-// Spread editor: open a spread in the browser, drag inside any photo to
-// re-crop it, swap two photos between their blocks, then Save — producing
-// <packFolder>/_layout_edit.json which generate-from-pack.js honors on
-// every future render (crops override smart crop; the photo->slot order
-// renders with aspect repair locked). Captions & badges follow their
-// photos when the spread regenerates.
+// Spread editor.
 //
-// Usage:
-//   node scripts/edit-spread.js <spreadFolder>
-//   TEMPLATE=5 MIRROR=1 node scripts/edit-spread.js 19_softball
+//   node scripts/edit-spread.js serve            <- the good way: local server,
+//        saves write straight into the pack, print-quality downloads work,
+//        face-crop warnings live. Opens http://localhost:4477
+//   node scripts/edit-spread.js <spread|pair>    <- build one static page
+//   node scripts/edit-spread.js all              <- build every static page
 //
-// The preview renders locally (unpolished copy, default variant), so text
-// lengths can differ slightly from the production spread — photo slots,
-// crops, and ordering are what this tool is for.
+// In the editor: drag inside a photo to re-crop - click two photos (Swap
+// mode) to trade blocks - double-click a caption (or a photo) to edit its
+// caption - Save writes <folder>/_layout_edit.json (order + focus +
+// captions), honored by generate-from-pack.js on every future render.
+// Captions and number badges follow their photos when the spread
+// regenerates. Face boxes come from scripts/detect_faces.py (detection
+// only — no identification; names stay human-verified).
 
 const fs = require('fs');
 const path = require('path');
@@ -21,6 +22,8 @@ const os = require('os');
 const REPO = path.join(__dirname, '..');
 const sharp = require(path.join(REPO, 'node_modules', 'sharp'));
 const { renderHandTemplate } = require(path.join(REPO, 'src', 'services', 'templates'));
+const { escapeHtml } = require(path.join(REPO, 'src', 'services', 'templates', 'utils'));
+const { scoreSpread, adviceFor } = require('./lib-quality');
 
 // Reuse the generator's parsing/collection logic.
 const gen = fs.readFileSync(path.join(__dirname, 'generate-from-pack.js'), 'utf8')
@@ -30,7 +33,7 @@ const tmp = path.join(os.tmpdir(), 'gfp-editor-lib.js');
 fs.writeFileSync(tmp, gen);
 const { SECTION_NAMES, parseCompiled, ensureCompiledTxt, manifestCaptions, collectPhotos, COMPILED_TXT, PACK_DIR } = require(tmp);
 
-// Hash-assigned templates per spread (from the 2026-07-29 variety audit);
+// Hash-assigned templates per spread (2026-07-29 variety audit);
 // _layout_overrides.json and TEMPLATE/MIRROR env win over these.
 const TPL_DEFAULT = {
   '12_praise_and_worship': 4, '13_gym_health': 1, '14_boys_soccer': 3,
@@ -50,7 +53,6 @@ const TEMPLATE_IDS = {
   1: 'hero-top-bleed', 2: 'hero-left-magazine', 3: 'hero-dominant-sidebar',
   4: 'sidebar-mods-bleed', 5: 'cross-gutter-mosaic',
 };
-
 // Academics run as split pairs (Josh 2026-07-28) — the editor rotation
 // shows the pair spreads, never the full-spread academic versions.
 const PAIRS = [
@@ -58,6 +60,72 @@ const PAIRS = [
   '05_history+06_spanish', '07_art+08_media',
 ];
 
+const REVIEW_DIR = path.join(PACK_DIR, '_review');
+const PHOTO_FILES = {};   // base -> absolute source file (for face detection)
+
+const srcKey = (s) => `${s.length}:${s.slice(-48)}`;
+const imgSrcs = (html) => [...html.matchAll(/<img[^>]*src="(data:image\/[^"]+)"/g)].map(m => m[1]);
+
+async function dedupTop(collected, cap) {
+  const seen = [];
+  const out = [];
+  for (const p of collected) {
+    const px = await sharp(p.file).rotate().grayscale().resize(8, 8, { fit: 'fill' }).raw().toBuffer();
+    const avg = px.reduce((a, b) => a + b, 0) / px.length;
+    let bits = 0n;
+    for (let i = 0; i < 64; i++) bits = (bits << 1n) | (px[i] > avg ? 1n : 0n);
+    const ham = (x, y) => { let v = x ^ y, n = 0; while (v) { n += Number(v & 1n); v >>= 1n; } return n; };
+    if (seen.some(s => ham(s, bits) <= 6)) continue;
+    seen.push(bits);
+    out.push(p);
+    if (cap && out.length >= cap) break;
+  }
+  return out;
+}
+
+async function loadPhoto(p) {
+  const meta0 = await sharp(p.file).metadata();
+  const rot = (meta0.orientation || 1) >= 5;
+  const w0 = rot ? meta0.height : meta0.width;
+  const h0 = rot ? meta0.width : meta0.height;
+  const buf = await sharp(p.file).rotate().resize(900, 900, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 78 }).toBuffer();
+  const meta = await sharp(buf).metadata();
+  PHOTO_FILES[p.base] = p.file;
+  return {
+    base: p.base, captioned: p.captioned,
+    base64: buf.toString('base64'), aspectRatio: meta.width / meta.height,
+    longSide: Math.max(w0 || 0, h0 || 0),
+  };
+}
+
+function readEdit(folder) {
+  const fp = path.join(PACK_DIR, folder, '_layout_edit.json');
+  return fs.existsSync(fp) ? JSON.parse(fs.readFileSync(fp, 'utf8')) : null;
+}
+
+function holdFlagsFor(spec) {
+  try {
+    const rep = JSON.parse(fs.readFileSync(path.join(os.homedir(), 'Downloads', 'finished spreads', '_content_report.json'), 'utf8'));
+    const e = rep.find(r => r.spread === spec);
+    return e ? e.flags : [];
+  } catch { return []; }
+}
+
+// Wrap caption texts so the client can live-update them on swaps/edits.
+function tagCaptions(html, capByBase) {
+  for (const [base, cap] of Object.entries(capByBase)) {
+    if (!cap) continue;
+    const esc = escapeHtml(cap);
+    if (html.includes(esc)) {
+      html = html.replace(esc, `<span class="capline" data-capbase="${base}">${esc}</span>`);
+    }
+  }
+  return html;
+}
+
+// ---------------------------------------------------------------------------
+// Single-spread build
+// ---------------------------------------------------------------------------
 async function buildOne(folder, navList) {
   let overrides = {};
   const ovPath = path.join(PACK_DIR, '_layout_overrides.json');
@@ -72,42 +140,25 @@ async function buildOne(folder, navList) {
   const sec = sections[SECTION_NAMES[folder]];
   if (!sec) throw new Error('no copy in the compiled doc');
 
-  // Photos: same collection + perceptual dedup as generate-from-pack.
-  const collected = collectPhotos(folder);
-  const ahash = async (file) => {
-    const px = await sharp(file).rotate().grayscale().resize(8, 8, { fit: 'fill' }).raw().toBuffer();
-    const avg = px.reduce((a, b) => a + b, 0) / px.length;
-    let bits = 0n;
-    for (let i = 0; i < 64; i++) bits = (bits << 1n) | (px[i] > avg ? 1n : 0n);
-    return bits;
-  };
-  const hamming = (a, b) => { let x = a ^ b, n = 0; while (x) { n += Number(x & 1n); x >>= 1n; } return n; };
-  const seen = [];
+  const unique = await dedupTop(collectPhotos(folder), 0);
   const photos = [];
-  for (const p of collected) {
-    const h = await ahash(p.file);
-    if (seen.some(s => hamming(s, h) <= 6)) continue;
-    seen.push(h);
-    const buf = await sharp(p.file).rotate().resize(900, 900, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 78 }).toBuffer();
-    const meta = await sharp(buf).metadata();
-    photos.push({ base: p.base, captioned: p.captioned, base64: buf.toString('base64'), aspectRatio: meta.width / meta.height });
-  }
+  for (const p of unique) photos.push(await loadPhoto(p));
   console.log(`${folder}: ${photos.length} photos, template ${tplN}${mirror ? ' (mirrored)' : ''}`);
 
-  // Existing crop overrides show as the starting crop.
+  const edit = readEdit(folder);
   const priorFocus = {};
-  for (const [file, key] of [['_focus.json', null], ['_layout_edit.json', 'focus']]) {
-    const fp = path.join(PACK_DIR, folder, file);
-    if (!fs.existsSync(fp)) continue;
-    const data = JSON.parse(fs.readFileSync(fp, 'utf8'));
-    Object.assign(priorFocus, key ? (data[key] || {}) : data);
-  }
+  const fPath = path.join(PACK_DIR, folder, '_focus.json');
+  if (fs.existsSync(fPath)) Object.assign(priorFocus, JSON.parse(fs.readFileSync(fPath, 'utf8')));
+  if (edit && edit.focus) Object.assign(priorFocus, edit.focus);
   photos.forEach(p => { if (priorFocus[p.base]) p.objectPosition = priorFocus[p.base]; });
 
   const capMap = manifestCaptions(folder);
+  if (edit && edit.captions) Object.assign(capMap, edit.captions);
+  const capByBase = {};
+  photos.forEach(p => { capByBase[p.base] = capMap[p.base] || ''; });
   const seenCapText = new Set();
   const photoCaptions = photos.map((p, i) => {
-    const cap = capMap[p.base] || '';
+    const cap = capByBase[p.base];
     if (!cap) return null;
     const norm = cap.toLowerCase().replace(/\s+/g, ' ').trim();
     if (seenCapText.has(norm)) return null;
@@ -125,33 +176,32 @@ async function buildOne(folder, navList) {
     photoCaptions,
   };
 
-  // Recover the aspect-repair slot assignment by diffing an automatic
-  // render against a locked identity render: DOM img position j shows
-  // photo p_j (auto) / slot index q_j (locked identity), so slot q_j
-  // holds photo p_j. Template-agnostic — no slot tables needed.
-  const srcKey = (s) => `${s.length}:${s.slice(-48)}`;
-  const imgSrcs = (html) => [...html.matchAll(/<img[^>]*src="(data:image\/[^"]+)"/g)].map(m => m[1]);
+  // Recover the aspect-repair slot assignment (or honor a saved order) by
+  // diffing an automatic render against a locked identity render.
   const keyToIdx = new Map(photos.map((p, i) => [srcKey(`data:image/jpeg;base64,${p.base64}`), i]));
-
-  const autoHtml = renderHandTemplate(styleId, { ...baseContent }, photos, { dpi: 100, variant });
-  const identHtml = renderHandTemplate(styleId, { ...baseContent, _lockOrder: true }, photos, { dpi: 100, variant });
-  const autoIdx = imgSrcs(autoHtml).map(s => keyToIdx.get(srcKey(s)));
-  const identIdx = imgSrcs(identHtml).map(s => keyToIdx.get(srcKey(s)));
-
-  const order = photos.map((_, i) => i);  // slot -> photo index
-  if (autoIdx.length === identIdx.length) {
-    identIdx.forEach((slot, j) => {
-      if (slot != null && autoIdx[j] != null) order[slot] = autoIdx[j];
-    });
+  let finalOrder;
+  if (edit && Array.isArray(edit.order)) {
+    const idxByBase = new Map(photos.map((p, i) => [p.base, i]));
+    finalOrder = edit.order.map(b => idxByBase.get(b)).filter(i => i != null);
+    photos.forEach((_, i) => { if (!finalOrder.includes(i)) finalOrder.push(i); });
+  } else {
+    const autoHtml = renderHandTemplate(styleId, { ...baseContent }, photos, { dpi: 100, variant });
+    const identHtml = renderHandTemplate(styleId, { ...baseContent, _lockOrder: true }, photos, { dpi: 100, variant });
+    const autoIdx = imgSrcs(autoHtml).map(s => keyToIdx.get(srcKey(s)));
+    const identIdx = imgSrcs(identHtml).map(s => keyToIdx.get(srcKey(s)));
+    const order = photos.map((_, i) => i);
+    if (autoIdx.length === identIdx.length) {
+      identIdx.forEach((slot, j) => {
+        if (slot != null && autoIdx[j] != null) order[slot] = autoIdx[j];
+      });
+    }
+    const used = new Set();
+    finalOrder = [];
+    for (const i of order) if (i != null && !used.has(i)) { used.add(i); finalOrder.push(i); }
+    photos.forEach((_, i) => { if (!used.has(i)) finalOrder.push(i); });
   }
-  // Fill any photo lost by the mapping (shouldn't happen) and dedupe.
-  const used = new Set();
-  const finalOrder = [];
-  for (const i of order) if (i != null && !used.has(i)) { used.add(i); finalOrder.push(i); }
-  photos.forEach((_, i) => { if (!used.has(i)) finalOrder.push(i); });
 
   const photosOrdered = finalOrder.map(i => photos[i]);
-  // Remap captions to the new indexes so the preview pairs them correctly.
   const capByOld = new Map(photoCaptions.map(c => [c.photoIndex, c.caption]));
   const orderedContent = {
     ...baseContent,
@@ -161,247 +211,49 @@ async function buildOne(folder, navList) {
     _lockOrder: true,
   };
   let html = renderHandTemplate(styleId, orderedContent, photosOrdered, { dpi: 100, variant });
+  html = tagCaptions(html, capByBase);
 
-  // ---- Editor chrome ----
-  const photoMeta = photosOrdered.map(p => ({
-    key: srcKey(`data:image/jpeg;base64,${p.base64}`),
-    base: p.base,
-    pos: p.objectPosition || '',
-  }));
-  const editorJs = editorChrome(folder, navList, photoMeta, null);
-
-  html = html.replace('</body>', editorJs + '\n</body>');
-  const outPath = path.join(PACK_DIR, '_review', `edit_${folder}.html`);
-  fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  fs.writeFileSync(outPath, html);
-  console.log(`Editor: ${outPath}`);
-  return outPath;
+  const quality = buildQuality(photosOrdered, capByBase, sec, holdFlagsFor(folder));
+  return finishPage(html, folder, navList, photosOrdered, null, quality);
 }
 
-function editorChrome(label, navList, photoMeta, pair) {
-  return `
-<style>
-  html { background: #2b2733; }
-  body { width: auto !important; height: auto !important; overflow: auto !important; margin: 0; }
-  #edbar {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
-    background: #1d1926; color: #eee; font: 14px -apple-system, sans-serif;
-    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-    box-shadow: 0 2px 8px rgba(0,0,0,.5);
-  }
-  #edbar select {
-    font-size: 13px; padding: 5px 8px; border-radius: 6px; border: 1px solid #555;
-    background: #35304a; color: #eee;
-  }
-  #edbar button {
-    font-size: 13px; padding: 6px 14px; border-radius: 6px; border: 1px solid #555;
-    background: #35304a; color: #eee; cursor: pointer;
-  }
-  #edbar button.active { background: #7c5cd6; border-color: #7c5cd6; }
-  #edbar button#save { background: #2e7d32; border-color: #2e7d32; margin-left: auto; }
-  #edbar .hint { color: #aaa; font-size: 12.5px; }
-  #edwrap { margin: 58px auto 30px; transform-origin: top left; }
-  .spread { box-shadow: 0 4px 24px rgba(0,0,0,.6); background: white; }
-  img.ed-target { cursor: grab; }
-  img.ed-changed { outline: 3px solid #2e7d32; outline-offset: -3px; }
-  img.ed-selected { outline: 3px solid #ffb300 !important; outline-offset: -3px; }
-  body.swapmode img.ed-target { cursor: pointer; }
-</style>
-<div id="edbar">
-  <button id="prevBtn" title="Previous spread">&#8249;</button>
-  <select id="navSel">${navList.map(f => `<option value="edit_${f}.html"${f === label ? ' selected' : ''}>${f}</option>`).join('')}</select>
-  <button id="nextBtn" title="Next spread">&#8250;</button>
-  <button id="cropBtn" class="active">Crop (drag inside a photo)</button>
-  <button id="swapBtn">Swap (click two photos)</button>
-  <button id="resetBtn">Reset</button>
-  <span class="hint">Green outline = edited. Captions &amp; badges follow their photos when you regenerate.</span>
-  <button id="save">Save layout file</button>
-</div>
-<script>
-const FOLDER = ${JSON.stringify(label)};
-const PAIR = ${JSON.stringify(pair)};          // {split, folderA} for academic pairs
-const PHOTOS = ${JSON.stringify(photoMeta)};   // slot order
-let ORDER = PHOTOS.map(p => p.base);           // slot index -> basename
-const FOCUS = {};                              // basename -> "x% y%"
-PHOTOS.forEach(p => { if (p.pos) FOCUS[p.base] = p.pos; });
-
-const srcKey = s => s.length + ':' + s.slice(-48);
-const keyToSlot = new Map(PHOTOS.map((p, i) => [p.key, i]));
-
-// Scale the spread to the window.
-const spread = document.querySelector('.spread');
-const wrap = document.createElement('div');
-wrap.id = 'edwrap';
-spread.parentNode.insertBefore(wrap, spread);
-wrap.appendChild(spread);
-function rescale() {
-  const s = Math.min(1, (window.innerWidth - 40) / spread.offsetWidth);
-  wrap.style.transform = 'scale(' + s + ')';
-  wrap.style.width = (spread.offsetWidth * s) + 'px';
-  wrap.style.height = (spread.offsetHeight * s) + 'px';
-}
-window.addEventListener('resize', rescale);
-
-// Tag images with their slot.
-const imgs = [...document.querySelectorAll('.spread img')].filter(im => im.src.startsWith('data:image/'));
-imgs.forEach(im => {
-  const slot = keyToSlot.get(srcKey(im.getAttribute('src')));
-  if (slot != null) { im.dataset.slot = slot; im.classList.add('ed-target'); }
-});
-
-let mode = 'crop';
-const cropBtn = document.getElementById('cropBtn');
-const swapBtn = document.getElementById('swapBtn');
-function setMode(m) {
-  mode = m;
-  cropBtn.classList.toggle('active', m === 'crop');
-  swapBtn.classList.toggle('active', m === 'swap');
-  document.body.classList.toggle('swapmode', m === 'swap');
-  if (selected) { selected.classList.remove('ed-selected'); selected = null; }
-}
-cropBtn.onclick = () => setMode('crop');
-swapBtn.onclick = () => setMode('swap');
-
-const baseOf = im => ORDER[+im.dataset.slot];
-
-function parsePos(im) {
-  const raw = im.style.objectPosition || getComputedStyle(im).objectPosition || '50% 35%';
-  const norm = raw.replace('left', '0%').replace('right', '100%')
-                  .replace('top', '0%').replace('bottom', '100%').replace(/center/g, '50%');
-  const m = norm.match(/([\\d.]+)%\\s+([\\d.]+)%/);
-  return m ? [parseFloat(m[1]), parseFloat(m[2])] : [50, 35];
-}
-
-// Crop drag.
-let drag = null;
-document.addEventListener('pointerdown', e => {
-  const im = e.target.closest('img.ed-target');
-  if (!im) return;
-  if (mode === 'swap') { handleSwapClick(im); e.preventDefault(); return; }
-  const [x, y] = parsePos(im);
-  drag = { im, sx: e.clientX, sy: e.clientY, x, y, rect: im.getBoundingClientRect() };
-  im.style.cursor = 'grabbing';
-  e.preventDefault();
-});
-document.addEventListener('pointermove', e => {
-  if (!drag) return;
-  const dx = (e.clientX - drag.sx) / drag.rect.width * 130;
-  const dy = (e.clientY - drag.sy) / drag.rect.height * 130;
-  const nx = Math.max(0, Math.min(100, drag.x - dx));
-  const ny = Math.max(0, Math.min(100, drag.y - dy));
-  drag.im.style.objectPosition = nx.toFixed(1) + '% ' + ny.toFixed(1) + '%';
-});
-document.addEventListener('pointerup', () => {
-  if (!drag) return;
-  const im = drag.im;
-  im.style.cursor = 'grab';
-  FOCUS[baseOf(im)] = im.style.objectPosition;
-  im.classList.add('ed-changed');
-  drag = null;
-});
-
-// Swap.
-let selected = null;
-function handleSwapClick(im) {
-  if (!selected) { selected = im; im.classList.add('ed-selected'); return; }
-  if (selected === im) { im.classList.remove('ed-selected'); selected = null; return; }
-  const a = selected, b = im;
-  const sa = +a.dataset.slot, sb = +b.dataset.slot;
-  if (PAIR && (sa < PAIR.split) !== (sb < PAIR.split)) {
-    alert('Photos stay within their class — swap within the same half of the spread.');
-    a.classList.remove('ed-selected'); selected = null; return;
-  }
-  [ORDER[sa], ORDER[sb]] = [ORDER[sb], ORDER[sa]];
-  const tmpSrc = a.getAttribute('src');
-  a.setAttribute('src', b.getAttribute('src'));
-  b.setAttribute('src', tmpSrc);
-  const posA = FOCUS[ORDER[sa]] || '', posB = FOCUS[ORDER[sb]] || '';
-  a.style.objectPosition = posA; b.style.objectPosition = posB;
-  a.classList.add('ed-changed'); b.classList.add('ed-changed');
-  a.classList.remove('ed-selected');
-  selected = null;
-}
-
-document.getElementById('resetBtn').onclick = () => location.reload();
-
-// Spread navigation. Warn if there are unsaved edits.
-let dirty = false;
-document.addEventListener('pointerup', () => { setTimeout(() => { dirty = document.querySelectorAll('img.ed-changed').length > 0; }, 0); });
-function go(href) {
-  if (dirty && !confirm('Unsaved edits on this spread — leave anyway?')) return;
-  location.href = href;
-}
-const navSel = document.getElementById('navSel');
-navSel.onchange = () => go(navSel.value);
-document.getElementById('prevBtn').onclick = () => { if (navSel.selectedIndex > 0) { navSel.selectedIndex--; go(navSel.value); } };
-document.getElementById('nextBtn').onclick = () => { if (navSel.selectedIndex < navSel.options.length - 1) { navSel.selectedIndex++; go(navSel.value); } };
-
-document.getElementById('save').onclick = () => {
-  const out = PAIR
-    ? { orderA: ORDER.slice(0, PAIR.split), orderB: ORDER.slice(PAIR.split), focus: FOCUS }
-    : { order: ORDER, focus: FOCUS };
-  const destFolder = PAIR ? PAIR.folderA : FOLDER;
-  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
-  const aEl = document.createElement('a');
-  aEl.href = URL.createObjectURL(blob);
-  aEl.download = '_layout_edit.json';
-  aEl.click();
-  alert('Saved _layout_edit.json to Downloads.\\n\\nMove it into yearbook_import_pack/' + destFolder + '/ (replacing any old one) and regenerate the spread.');
-};
-
-rescale();
-</script>`;
-
-}
-
-// Academic pair spreads (Tpl6): identity slot order (no aspect repair),
-// two halves, photos never cross the class boundary.
+// ---------------------------------------------------------------------------
+// Academic pair build (Tpl6 — identity slot order, halves stay separate)
+// ---------------------------------------------------------------------------
 async function buildPair(pairSpec, navList) {
   const [fa, fb] = pairSpec.split('+');
   ensureCompiledTxt();
   const sections = parseCompiled(fs.readFileSync(COMPILED_TXT, 'utf8'));
+  const pe = readEdit(fa);
   const halves = [];
   const photosOrdered = [];
+  const capByBase = {};
+  let bodyLen = 0, quoteCount = 0, statsCount = 0, hasTagline = false;
   for (const folder of [fa, fb]) {
     const sec = sections[SECTION_NAMES[folder]];
     if (!sec) throw new Error(folder + ': no copy in the compiled doc');
-    const collected = collectPhotos(folder, 6);
-    const seen = [];
-    const unique = [];
-    for (const p of collected) {
-      const px = await sharp(p.file).rotate().grayscale().resize(8, 8, { fit: 'fill' }).raw().toBuffer();
-      const avg = px.reduce((a, b) => a + b, 0) / px.length;
-      let bits = 0n;
-      for (let i = 0; i < 64; i++) bits = (bits << 1n) | (px[i] > avg ? 1n : 0n);
-      const ham = (x, y) => { let v = x ^ y, n = 0; while (v) { n += Number(v & 1n); v >>= 1n; } return n; };
-      if (seen.some(sb => ham(sb, bits) <= 6)) continue;
-      seen.push(bits);
-      unique.push(p);
-      if (unique.length === 5) break;
-    }
-    // Existing pair edits (stored in folder A) shape the starting state.
-    let pe = null;
-    const pePath = path.join(PACK_DIR, fa, '_layout_edit.json');
-    if (fs.existsSync(pePath)) pe = JSON.parse(fs.readFileSync(pePath, 'utf8'));
+    bodyLen += (sec.bodyCopy || '').length;
+    quoteCount += (sec.quotes || []).length;
+    statsCount += (sec.highlights || []).length;
+    hasTagline = hasTagline || !!sec.subheadline;
+    let unique = await dedupTop(collectPhotos(folder, 6), 5);
     const halfOrder = pe && (folder === fa ? pe.orderA : pe.orderB);
     if (Array.isArray(halfOrder)) {
       const byBase = new Map(unique.map(p => [p.base, p]));
       const ordered = halfOrder.map(b => byBase.get(b)).filter(Boolean);
-      const rest = unique.filter(p => !halfOrder.includes(p.base));
-      unique.length = 0;
-      unique.push(...ordered, ...rest);
+      unique = [...ordered, ...unique.filter(p => !halfOrder.includes(p.base))];
     }
     const capMap = manifestCaptions(folder);
+    if (pe && pe.captions) Object.assign(capMap, pe.captions);
     const seenCap = new Set();
     const photoCaptions = [];
     const halfPhotos = [];
     for (const [i, p] of unique.entries()) {
-      const buf = await sharp(p.file).rotate().resize(900, 900, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 78 }).toBuffer();
-      const meta = await sharp(buf).metadata();
-      const ph = { base: p.base, captioned: p.captioned, base64: buf.toString('base64'), aspectRatio: meta.width / meta.height };
+      const ph = await loadPhoto(p);
       if (pe && pe.focus && pe.focus[p.base]) ph.objectPosition = pe.focus[p.base];
       halfPhotos.push(ph);
       const cap = capMap[p.base] || '';
+      capByBase[p.base] = cap;
       const norm = cap.toLowerCase().replace(/\s+/g, ' ').trim();
       if (cap && !seenCap.has(norm)) { seenCap.add(norm); photoCaptions.push({ photoIndex: i, caption: cap, people: '' }); }
     }
@@ -418,40 +270,473 @@ async function buildPair(pairSpec, navList) {
   console.log(`${pairSpec}: ${photosOrdered.length} photos, split-academic`);
   const pageContent = { split: halves, photoSplit: halves[0]._photoCount };
   let html = renderHandTemplate('split-academic', pageContent, photosOrdered, { dpi: 100, variant: 0 });
-  const srcKey = (str) => `${str.length}:${str.slice(-48)}`;
+  html = tagCaptions(html, capByBase);
+
+  const quality = buildQuality(photosOrdered, capByBase,
+    { bodyCopy: 'x'.repeat(bodyLen), quotes: new Array(quoteCount), highlights: new Array(statsCount), subheadline: hasTagline ? 'x' : '' },
+    holdFlagsFor(pairSpec));
+  return finishPage(html, pairSpec, navList, photosOrdered,
+    { split: halves[0]._photoCount, folderA: fa }, quality);
+}
+
+function buildQuality(photos, capByBase, sec, holdFlags) {
+  const input = {
+    photoCount: photos.length,
+    captionedCount: photos.filter(p => capByBase[p.base]).length,
+    aspects: photos.map(p => p.aspectRatio),
+    minLongSide: photos.length ? Math.min(...photos.map(p => p.longSide || 0)) : 0,
+    bodyLen: (sec.bodyCopy || '').length,
+    quoteCount: (sec.quotes || []).length,
+    hasTagline: !!sec.subheadline,
+    statsCount: (sec.highlights || []).length,
+    holdFlags,
+  };
+  const { score, parts } = scoreSpread(input);
+  return { score, parts, tips: adviceFor(parts, input) };
+}
+
+function finishPage(html, label, navList, photosOrdered, pair, quality) {
   const photoMeta = photosOrdered.map(p => ({
     key: srcKey(`data:image/jpeg;base64,${p.base64}`),
     base: p.base,
     pos: p.objectPosition || '',
+    ar: +p.aspectRatio.toFixed(4),
   }));
-  const editorJs = editorChrome(pairSpec, navList, photoMeta, { split: halves[0]._photoCount, folderA: fa });
+  const editorJs = editorChrome(label, navList, photoMeta, pair, quality);
   html = html.replace('</body>', editorJs + '\n</body>');
-  const outPath = path.join(PACK_DIR, '_review', `edit_${pairSpec}.html`);
-  fs.mkdirSync(path.dirname(outPath), { recursive: true });
+  const outPath = path.join(REVIEW_DIR, `edit_${label}.html`);
+  fs.mkdirSync(REVIEW_DIR, { recursive: true });
   fs.writeFileSync(outPath, html);
-  console.log(`Editor: ${outPath}`);
+  console.log(`Editor: ${outPath}  (quality ${quality.score}/100)`);
   return outPath;
 }
 
+// ---------------------------------------------------------------------------
+// Editor chrome (toolbar + interactions), served or static
+// ---------------------------------------------------------------------------
+function editorChrome(label, navList, photoMeta, pair, quality) {
+  const qColor = quality.score >= 85 ? '#2e7d32' : quality.score >= 65 ? '#e08700' : '#c62828';
+  return `
+<style>
+  html { background: #2b2733; }
+  body { width: auto !important; height: auto !important; overflow: auto !important; margin: 0; }
+  #edbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+    background: #1d1926; color: #eee; font: 14px -apple-system, sans-serif;
+    display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.5); flex-wrap: wrap;
+  }
+  #edbar select {
+    font-size: 13px; padding: 5px 8px; border-radius: 6px; border: 1px solid #555;
+    background: #35304a; color: #eee; max-width: 230px;
+  }
+  #edbar button {
+    font-size: 13px; padding: 6px 12px; border-radius: 6px; border: 1px solid #555;
+    background: #35304a; color: #eee; cursor: pointer;
+  }
+  #edbar button.active { background: #7c5cd6; border-color: #7c5cd6; }
+  #edbar button#save { background: #2e7d32; border-color: #2e7d32; }
+  #edbar button#print { background: #1565c0; border-color: #1565c0; }
+  #edbar button:disabled { opacity: .5; cursor: wait; }
+  #edbar .hint { color: #aaa; font-size: 12px; }
+  #qbadge {
+    background: ${qColor}; color: white; border-radius: 12px; padding: 4px 12px;
+    font-weight: 700; cursor: help; font-size: 13px;
+  }
+  #edwrap { margin: 58px auto 30px; transform-origin: top left; position: relative; }
+  .spread { box-shadow: 0 4px 24px rgba(0,0,0,.6); background: white; }
+  img.ed-target { cursor: grab; }
+  img.ed-changed { outline: 3px solid #2e7d32; outline-offset: -3px; }
+  img.ed-selected { outline: 3px solid #ffb300 !important; outline-offset: -3px; }
+  body.swapmode img.ed-target { cursor: pointer; }
+  .capline { cursor: text; }
+  .capline.ed-changed-cap { background: rgba(46,125,50,.18); outline: 1px dashed #2e7d32; }
+  .facebox { position: absolute; border: 2px solid #00e5ff; border-radius: 3px; pointer-events: none; z-index: 5; }
+  .facebox.out { border-color: #ff1744; border-style: dashed; }
+  .facewarn {
+    position: absolute; z-index: 6; background: #c62828; color: white;
+    font: 700 11px -apple-system, sans-serif; padding: 2px 7px; border-radius: 10px;
+    pointer-events: none;
+  }
+</style>
+<div id="edbar">
+  <button id="prevBtn" title="Previous spread">&#8249;</button>
+  <select id="navSel">${navList.map(f => `<option value="edit_${f}.html"${f === label ? ' selected' : ''}>${f}</option>`).join('')}</select>
+  <button id="nextBtn" title="Next spread">&#8250;</button>
+  <span id="qbadge" title="${escapeHtml(quality.tips.length ? 'To improve: ' + quality.tips.join(' | ') : 'No issues found')}">${quality.score}</span>
+  <button id="cropBtn" class="active">Crop</button>
+  <button id="swapBtn">Swap</button>
+  <button id="facesBtn">Faces</button>
+  <button id="resetBtn">Reset</button>
+  <span class="hint">Drag = crop &middot; dbl-click caption/photo = edit caption &middot; red badge = face cropped out</span>
+  <button id="save">Save</button>
+  <button id="print" title="Render at print quality via the production pipeline">Print PNG 600 DPI</button>
+</div>
+<script>
+const FOLDER = ${JSON.stringify(label)};
+const PAIR = ${JSON.stringify(pair)};
+const PHOTOS = ${JSON.stringify(photoMeta)};   // slot order
+const SERVED = location.protocol.startsWith('http');
+let ORDER = PHOTOS.map(function(p) { return p.base; });
+const FOCUS = {};
+const CAP_EDITS = {};
+PHOTOS.forEach(function(p) { if (p.pos) FOCUS[p.base] = p.pos; });
+const AR = {}; PHOTOS.forEach(function(p) { AR[p.base] = p.ar; });
+let FACES = null;
+
+const srcKey = function(s) { return s.length + ':' + s.slice(-48); };
+const keyToSlot = new Map(PHOTOS.map(function(p, i) { return [p.key, i]; }));
+
+const spread = document.querySelector('.spread');
+const wrap = document.createElement('div');
+wrap.id = 'edwrap';
+spread.parentNode.insertBefore(wrap, spread);
+wrap.appendChild(spread);
+let SCALE = 1;
+function rescale() {
+  SCALE = Math.min(1, (window.innerWidth - 40) / spread.offsetWidth);
+  wrap.style.transform = 'scale(' + SCALE + ')';
+  wrap.style.width = (spread.offsetWidth * SCALE) + 'px';
+  wrap.style.height = (spread.offsetHeight * SCALE) + 'px';
+}
+window.addEventListener('resize', function() { rescale(); refreshFaces(); });
+
+const imgs = Array.from(document.querySelectorAll('.spread img')).filter(function(im) { return im.src.startsWith('data:image/'); });
+imgs.forEach(function(im) {
+  const slot = keyToSlot.get(srcKey(im.getAttribute('src')));
+  if (slot != null) { im.dataset.slot = slot; im.classList.add('ed-target'); }
+});
+
+let mode = 'crop';
+const cropBtn = document.getElementById('cropBtn');
+const swapBtn = document.getElementById('swapBtn');
+function setMode(m) {
+  mode = m;
+  cropBtn.classList.toggle('active', m === 'crop');
+  swapBtn.classList.toggle('active', m === 'swap');
+  document.body.classList.toggle('swapmode', m === 'swap');
+  if (selected) { selected.classList.remove('ed-selected'); selected = null; }
+}
+cropBtn.onclick = function() { setMode('crop'); };
+swapBtn.onclick = function() { setMode('swap'); };
+
+const baseOf = function(im) { return ORDER[+im.dataset.slot]; };
+
+function parsePos(im) {
+  const raw = im.style.objectPosition || getComputedStyle(im).objectPosition || '50% 35%';
+  const norm = raw.replace('left', '0%').replace('right', '100%')
+                  .replace('top', '0%').replace('bottom', '100%').replace(/center/g, '50%');
+  const m = norm.match(/([\\d.]+)%\\s+([\\d.]+)%/);
+  return m ? [parseFloat(m[1]), parseFloat(m[2])] : [50, 35];
+}
+
+// ---- crop drag ----
+let drag = null;
+document.addEventListener('pointerdown', function(e) {
+  const im = e.target.closest('img.ed-target');
+  if (!im) return;
+  if (mode === 'swap') { handleSwapClick(im); e.preventDefault(); return; }
+  const p = parsePos(im);
+  drag = { im: im, sx: e.clientX, sy: e.clientY, x: p[0], y: p[1], rect: im.getBoundingClientRect() };
+  im.style.cursor = 'grabbing';
+  e.preventDefault();
+});
+document.addEventListener('pointermove', function(e) {
+  if (!drag) return;
+  const dx = (e.clientX - drag.sx) / drag.rect.width * 130;
+  const dy = (e.clientY - drag.sy) / drag.rect.height * 130;
+  const nx = Math.max(0, Math.min(100, drag.x - dx));
+  const ny = Math.max(0, Math.min(100, drag.y - dy));
+  drag.im.style.objectPosition = nx.toFixed(1) + '% ' + ny.toFixed(1) + '%';
+});
+document.addEventListener('pointerup', function() {
+  if (!drag) return;
+  const im = drag.im;
+  im.style.cursor = 'grab';
+  FOCUS[baseOf(im)] = im.style.objectPosition;
+  im.classList.add('ed-changed');
+  drag = null;
+  refreshFaces();
+});
+
+// ---- swap (captions follow their photos live) ----
+let selected = null;
+function capNodeFor(base) {
+  return document.querySelector('.capline[data-capbase="' + base + '"]');
+}
+function handleSwapClick(im) {
+  if (!selected) { selected = im; im.classList.add('ed-selected'); return; }
+  if (selected === im) { im.classList.remove('ed-selected'); selected = null; return; }
+  const a = selected, b = im;
+  const sa = +a.dataset.slot, sb = +b.dataset.slot;
+  if (PAIR && (sa < PAIR.split) !== (sb < PAIR.split)) {
+    alert('Photos stay within their class — swap within the same half of the spread.');
+    a.classList.remove('ed-selected'); selected = null; return;
+  }
+  const baseA = ORDER[sa], baseB = ORDER[sb];
+  ORDER[sa] = baseB; ORDER[sb] = baseA;
+  const t = a.getAttribute('src');
+  a.setAttribute('src', b.getAttribute('src'));
+  b.setAttribute('src', t);
+  a.style.objectPosition = FOCUS[ORDER[sa]] || '';
+  b.style.objectPosition = FOCUS[ORDER[sb]] || '';
+  // Captions travel with their photos; badge numbers stay with the layout.
+  const na = capNodeFor(baseA), nb = capNodeFor(baseB);
+  if (na && nb) {
+    const ta = na.textContent;
+    na.textContent = nb.textContent;
+    nb.textContent = ta;
+    na.setAttribute('data-capbase', baseB);
+    nb.setAttribute('data-capbase', baseA);
+  } else if (na || nb) {
+    (na || nb).style.opacity = .5;
+    (na || nb).title = 'caption placement updates when the spread regenerates';
+  }
+  a.classList.add('ed-changed'); b.classList.add('ed-changed');
+  a.classList.remove('ed-selected');
+  selected = null;
+  refreshFaces();
+}
+
+// ---- caption editing ----
+function editCaption(base) {
+  const node = capNodeFor(base);
+  const current = CAP_EDITS[base] != null ? CAP_EDITS[base] : (node ? node.textContent : '');
+  const next = prompt('Caption for ' + base + ':', current);
+  if (next == null || next === current) return;
+  CAP_EDITS[base] = next;
+  if (node) { node.textContent = next; node.classList.add('ed-changed-cap'); }
+  else alert('This photo has no caption line in the preview — the new caption appears when the spread regenerates.');
+  markDirty();
+}
+document.addEventListener('dblclick', function(e) {
+  const cap = e.target.closest('.capline');
+  if (cap) { editCaption(cap.getAttribute('data-capbase')); return; }
+  const im = e.target.closest('img.ed-target');
+  if (im) editCaption(baseOf(im));
+});
+
+// ---- face boxes + crop-out warnings ----
+function visibleWindow(base, rect) {
+  const pa = AR[base] || 1.5, sa = rect.width / rect.height;
+  const pos = FOCUS[base] || '50% 35%';
+  const m = pos.match(/([\\d.]+)%\\s+([\\d.]+)%/) || [0, 50, 35];
+  const px = parseFloat(m[1]) / 100, py = parseFloat(m[2]) / 100;
+  if (pa > sa) {
+    const w = sa / pa;
+    return { x0: px * (1 - w), y0: 0, w: w, h: 1 };
+  }
+  const h = pa / sa;
+  return { x0: 0, y0: py * (1 - h), w: 1, h: h };
+}
+let facesOn = false;
+document.getElementById('facesBtn').onclick = function() {
+  facesOn = !facesOn;
+  document.getElementById('facesBtn').classList.toggle('active', facesOn);
+  refreshFaces();
+};
+function refreshFaces() {
+  document.querySelectorAll('.facebox, .facewarn').forEach(function(el) { el.remove(); });
+  if (!FACES) return;
+  const spreadRect = spread.getBoundingClientRect();
+  imgs.forEach(function(im) {
+    const base = baseOf(im);
+    const faces = FACES[base];
+    if (!faces || !faces.length) return;
+    const rect = im.getBoundingClientRect();
+    const win = visibleWindow(base, rect);
+    let out = 0;
+    faces.forEach(function(f) {
+      const cx = f.x + f.w / 2, cy = f.y + f.h / 2;
+      const inside = cx >= win.x0 && cx <= win.x0 + win.w && cy >= win.y0 && cy <= win.y0 + win.h;
+      if (!inside) out++;
+      if (facesOn) {
+        const bx = (f.x - win.x0) / win.w, by = (f.y - win.y0) / win.h;
+        if (bx + f.w / win.w < 0 || bx > 1 || by + f.h / win.h < 0 || by > 1) return;
+        const div = document.createElement('div');
+        div.className = 'facebox' + (inside ? '' : ' out');
+        div.style.left = ((rect.left - spreadRect.left) / SCALE + bx * rect.width / SCALE) + 'px';
+        div.style.top = ((rect.top - spreadRect.top) / SCALE + by * rect.height / SCALE) + 'px';
+        div.style.width = (f.w / win.w * rect.width / SCALE) + 'px';
+        div.style.height = (f.h / win.h * rect.height / SCALE) + 'px';
+        spread.appendChild(div);
+      }
+    });
+    if (out > 0) {
+      const warn = document.createElement('div');
+      warn.className = 'facewarn';
+      warn.textContent = out + ' face' + (out > 1 ? 's' : '') + ' cropped out';
+      warn.style.left = ((rect.left - spreadRect.left) / SCALE + 6) + 'px';
+      warn.style.top = ((rect.top - spreadRect.top) / SCALE + 6) + 'px';
+      spread.appendChild(warn);
+    }
+  });
+}
+fetch('face_boxes.json').then(function(r) { return r.ok ? r.json() : null; })
+  .then(function(d) { FACES = d; refreshFaces(); })
+  .catch(function() {});
+
+// ---- navigation ----
+document.getElementById('resetBtn').onclick = function() { location.reload(); };
+let dirty = false;
+function markDirty() { dirty = document.querySelectorAll('img.ed-changed, .ed-changed-cap').length > 0 || Object.keys(CAP_EDITS).length > 0; }
+document.addEventListener('pointerup', function() { setTimeout(markDirty, 0); });
+function go(href) {
+  if (dirty && !confirm('Unsaved edits on this spread — leave anyway?')) return;
+  location.href = href;
+}
+const navSel = document.getElementById('navSel');
+navSel.onchange = function() { go(navSel.value); };
+document.getElementById('prevBtn').onclick = function() { if (navSel.selectedIndex > 0) { navSel.selectedIndex--; go(navSel.value); } };
+document.getElementById('nextBtn').onclick = function() { if (navSel.selectedIndex < navSel.options.length - 1) { navSel.selectedIndex++; go(navSel.value); } };
+
+// ---- save / print ----
+function layoutPayload() {
+  const out = PAIR
+    ? { orderA: ORDER.slice(0, PAIR.split), orderB: ORDER.slice(PAIR.split), focus: FOCUS }
+    : { order: ORDER, focus: FOCUS };
+  if (Object.keys(CAP_EDITS).length) out.captions = CAP_EDITS;
+  return out;
+}
+document.getElementById('save').onclick = async function() {
+  const payload = layoutPayload();
+  if (SERVED) {
+    const r = await fetch('/api/save/' + encodeURIComponent(FOLDER), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (r.ok) {
+      dirty = false;
+      document.getElementById('save').textContent = 'Saved \\u2713';
+      setTimeout(function() { document.getElementById('save').textContent = 'Save'; }, 1500);
+    } else alert('Save failed: ' + (await r.text()));
+  } else {
+    const destFolder = PAIR ? PAIR.folderA : FOLDER;
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const aEl = document.createElement('a');
+    aEl.href = URL.createObjectURL(blob);
+    aEl.download = '_layout_edit.json';
+    aEl.click();
+    alert('Saved _layout_edit.json to Downloads.\\n\\nMove it into yearbook_import_pack/' + destFolder + '/ and regenerate — or run the editor with "serve" to skip this step.');
+  }
+};
+document.getElementById('print').onclick = async function() {
+  if (!SERVED) { alert('Print export needs the server:\\n\\nnode scripts/edit-spread.js serve'); return; }
+  const btn = document.getElementById('print');
+  btn.disabled = true; btn.textContent = 'Rendering\\u2026 (1-3 min)';
+  try {
+    await fetch('/api/save/' + encodeURIComponent(FOLDER), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(layoutPayload()),
+    });
+    const r = await fetch('/api/print/' + encodeURIComponent(FOLDER), { method: 'POST' });
+    if (!r.ok) throw new Error(await r.text());
+    const blob = await r.blob();
+    const aEl = document.createElement('a');
+    aEl.href = URL.createObjectURL(blob);
+    aEl.download = FOLDER + '_print_600dpi.png';
+    aEl.click();
+    dirty = false;
+  } catch (e) { alert('Print render failed: ' + e.message); }
+  btn.disabled = false; btn.textContent = 'Print PNG 600 DPI';
+};
+
+rescale();
+</script>`;
+}
+
+// ---------------------------------------------------------------------------
+// Serve mode: save-in-place + print rendering
+// ---------------------------------------------------------------------------
+function navListAll() {
+  const nonAcademic = Object.keys(SECTION_NAMES).filter(f => !/^0[1-8]_/.test(f));
+  return [...PAIRS, ...nonAcademic];
+}
+
+async function buildSpec(spec, navList) {
+  return spec.includes('+') ? buildPair(spec, navList) : buildOne(spec, navList);
+}
+
+async function serve(port) {
+  const express = require(path.join(REPO, 'node_modules', 'express'));
+  const { execFile } = require('child_process');
+  const navList = navListAll();
+
+  console.log('Building editor pages…');
+  const built = [];
+  for (const f of navList) {
+    try { built.push(await buildSpec(f, navList)); }
+    catch (e) { console.log(`${f}: skipped (${e.message.split('\n')[0]})`); }
+  }
+  fs.writeFileSync(path.join(REVIEW_DIR, 'editor_photos.json'), JSON.stringify(PHOTO_FILES, null, 1));
+
+  const app = express();
+  app.use(express.json({ limit: '5mb' }));
+  app.use(express.static(REVIEW_DIR));
+
+  app.post('/api/save/:spec', async (req, res) => {
+    try {
+      const spec = req.params.spec;
+      const destFolder = spec.includes('+') ? spec.split('+')[0] : spec;
+      if (!SECTION_NAMES[destFolder]) return res.status(400).send('unknown spread');
+      const fp = path.join(PACK_DIR, destFolder, '_layout_edit.json');
+      fs.writeFileSync(fp, JSON.stringify(req.body, null, 2));
+      console.log(`saved ${fp}`);
+      // Rebuild the page so a reload reflects the saved state.
+      await buildSpec(spec, navList);
+      res.send('ok');
+    } catch (e) { res.status(500).send(e.message); }
+  });
+
+  app.post('/api/print/:spec', (req, res) => {
+    const spec = req.params.spec;
+    const isPair = spec.includes('+');
+    const folder = isPair ? spec.split('+')[0] : spec;
+    if (!SECTION_NAMES[folder]) return res.status(400).send('unknown spread');
+    const args = isPair
+      ? ['scripts/generate-from-pack.js', 'pair', spec]
+      : ['scripts/generate-from-pack.js', spec];
+    console.log(`print render: ${spec}`);
+    execFile('node', args, {
+      cwd: REPO, timeout: 8 * 60 * 1000,
+      env: { ...process.env, HIRES: '1' },
+    }, (err, stdout) => {
+      if (err) { console.error(stdout); return res.status(500).send('render failed: ' + err.message); }
+      const outDir = path.join(os.homedir(), 'Downloads', 'finished spreads');
+      const printPath = path.join(outDir, `${spec}_print_600dpi.png`);
+      if (!fs.existsSync(printPath)) return res.status(500).send('render succeeded but no print file — check flags:\n' + stdout);
+      console.log(stdout.trim().split('\n').pop());
+      res.set('Content-Type', 'image/png');
+      fs.createReadStream(printPath).pipe(res);
+    });
+  });
+
+  app.listen(port, () => {
+    const first = built.length ? path.basename(built[0]) : '';
+    const url = `http://localhost:${port}/${first}`;
+    console.log(`\nSpread editor: ${url}`);
+    require('child_process').execFileSync('open', [url]);
+  });
+}
+
+// ---------------------------------------------------------------------------
 async function main() {
   const arg = process.argv[2];
-  const nonAcademic = Object.keys(SECTION_NAMES).filter(f => !/^0[1-8]_/.test(f));
-  const navList = [...PAIRS, ...nonAcademic];
+  const navList = navListAll();
+  if (arg === 'serve') return serve(parseInt(process.argv[3], 10) || 4477);
   const valid = arg === 'all' || navList.includes(arg) || SECTION_NAMES[arg];
   if (!arg || !valid) {
-    console.error('Usage: node scripts/edit-spread.js <spreadFolder|pairA+pairB>|all');
+    console.error('Usage: node scripts/edit-spread.js serve | <spread|pairA+pairB> | all');
     console.error('Spreads:', navList.join(', '));
     process.exit(1);
   }
   const specs = arg === 'all' ? navList : [arg];
   const built = [];
   for (const f of specs) {
-    try {
-      built.push(f.includes('+') ? await buildPair(f, navList) : await buildOne(f, navList));
-    } catch (e) {
-      console.log(`${f}: skipped (${e.message.split('\n')[0]})`);
-    }
+    try { built.push(await buildSpec(f, navList)); }
+    catch (e) { console.log(`${f}: skipped (${e.message.split('\n')[0]})`); }
   }
+  fs.writeFileSync(path.join(REVIEW_DIR, 'editor_photos.json'), JSON.stringify(PHOTO_FILES, null, 1));
   if (built.length) require('child_process').execFileSync('open', [built[0]]);
 }
 

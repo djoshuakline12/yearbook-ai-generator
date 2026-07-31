@@ -72,7 +72,8 @@ function renderMainHeadlineBleed(pageContent, photos, options = {}) {
   const modCandidates = [
     pageContent.subheadline,
     pageContent.record,
-    ...(pageContent.highlights || []),
+    // Stats & Facts lines no longer fall through to the subhead bar
+    // (Josh 2026-07-30) — no bar beats a random stat as the subheading.
   ].filter(t => t && !t.includes('['));
   const modBarText = (modCandidates.find(t =>
     t.toUpperCase().trim() !== titleRaw.trim() && t.length <= 70) || '').toUpperCase();
