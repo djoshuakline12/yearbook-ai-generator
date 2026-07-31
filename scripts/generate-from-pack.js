@@ -77,6 +77,9 @@ const SECTION_NAMES = {
   // JTerm confirmed for this year's book (Josh 2026-07-28) — photos and
   // copy incoming; held until both land.
   '43_jterm': 'JTerm',
+  // Swim + Golf feature spreads (140-page plan, 2026-07-30). Book order
+  // places them after Field Hockey; numbering here is just a slug.
+  '44_swim': 'Swim', '45_golf': 'Golf',
 };
 
 // ---------------------------------------------------------------------------
