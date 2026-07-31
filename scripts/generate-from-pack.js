@@ -358,6 +358,20 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
   }
   if (unique.length < photos.length) result.flags.push(`dropped ${photos.length - unique.length} near-duplicate photo(s)`);
 
+  // Editor arrangement (scripts/edit-spread.js): _layout_edit.json fixes
+  // the photo->slot order (rendered with aspect repair locked) and carries
+  // hand-set crops. Photos the editor didn't know about append at the end.
+  let lockOrder = false;
+  const editPath = path.join(PACK_DIR, spreadFolder, '_layout_edit.json');
+  const edit = fs.existsSync(editPath) ? JSON.parse(fs.readFileSync(editPath, 'utf8')) : null;
+  if (edit && Array.isArray(edit.order)) {
+    const byBase = new Map(unique.map(p => [p.base, p]));
+    const ordered = edit.order.map(b => byBase.get(b)).filter(Boolean);
+    const rest = unique.filter(p => !edit.order.includes(p.base));
+    unique = [...ordered, ...rest];
+    lockOrder = true;
+  }
+
   // Captions indexed against the deduped photo list.
   const capMap = manifestCaptions(spreadFolder);
   if (edit && edit.captions) {
@@ -375,20 +389,6 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
     seenCapText.add(norm);
     return { photoIndex: i, caption: cap, people: '' };
   }).filter(Boolean);
-
-  // Editor arrangement (scripts/edit-spread.js): _layout_edit.json fixes
-  // the photo->slot order (rendered with aspect repair locked) and carries
-  // hand-set crops. Photos the editor didn't know about append at the end.
-  let lockOrder = false;
-  const editPath = path.join(PACK_DIR, spreadFolder, '_layout_edit.json');
-  const edit = fs.existsSync(editPath) ? JSON.parse(fs.readFileSync(editPath, 'utf8')) : null;
-  if (edit && Array.isArray(edit.order)) {
-    const byBase = new Map(unique.map(p => [p.base, p]));
-    const ordered = edit.order.map(b => byBase.get(b)).filter(Boolean);
-    const rest = unique.filter(p => !edit.order.includes(p.base));
-    unique = [...ordered, ...rest];
-    lockOrder = true;
-  }
 
   // Per-photo focal overrides: <folder>/_focus.json maps basename -> CSS
   // object-position ("38% 45%"). Editor crops (_layout_edit.json focus)
