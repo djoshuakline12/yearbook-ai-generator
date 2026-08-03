@@ -203,6 +203,14 @@ async function buildOne(folder, navList) {
   }
   const spreadSet = poolOrdered.slice(0, Math.min(13, poolOrdered.length));
   const benchSet = poolOrdered.slice(spreadSet.length, spreadSet.length + 40);
+  // Official team photos ride the bench unless a saved layout picked them.
+  const dirFiles = fs.readdirSync(path.join(PACK_DIR, folder)).filter(f => f.startsWith('z_teamphoto') && /\.jpe?g$/i.test(f));
+  for (const f of dirFiles) {
+    const base = f.replace(/\.\w+$/, '');
+    if (!spreadSet.some(p => p.base === base) && !benchSet.some(p => p.base === base)) {
+      benchSet.push({ file: path.join(PACK_DIR, folder, f), base, captioned: true });
+    }
+  }
   const photos = [];
   for (const p of spreadSet) photos.push(await loadPhoto(p));
   console.log(`${folder}: ${photos.length} photos (+${benchSet.length} bench), template ${tplN}${mirror ? ' (mirrored)' : ''}`);

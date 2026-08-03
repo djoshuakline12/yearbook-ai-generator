@@ -238,7 +238,7 @@ function collectPhotos(spreadFolder, maxPhotos = 13) {
       .slice(0, maxPhotos);
   }
   const top = fs.readdirSync(dir)
-    .filter(f => /\.(jpe?g|png)$/i.test(f) && fs.statSync(path.join(dir, f)).isFile() && keep(f))
+    .filter(f => /\.(jpe?g|png)$/i.test(f) && !f.startsWith('z_teamphoto') && fs.statSync(path.join(dir, f)).isFile() && keep(f))
     .sort()
     .map(f => ({ file: path.join(dir, f), base: f.replace(/\.\w+$/, ''), captioned: true }));
   const pulls = [];
@@ -360,6 +360,13 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
   const edit0 = edit0FromPath(spreadFolder);
   const pinned = new Set(edit0 && Array.isArray(edit0.order) ? edit0.order : []);
   const photos = collectPhotos(spreadFolder, pinned.size ? 60 : 13);
+  // Tray-only extras (official team photos): join only by explicit pick.
+  for (const b of pinned) {
+    if (b.startsWith('z_teamphoto') && !photos.some(p => p.base === b)) {
+      const f = path.join(PACK_DIR, spreadFolder, `${b}.jpg`);
+      if (fs.existsSync(f)) photos.push({ file: f, base: b, captioned: true });
+    }
+  }
   await attachAspects(photos);
   const flags = auditSpread(spreadFolder, sec, photos);
   const result = { spread: spreadFolder, title: sec ? sec.title : '(no copy)', photos: photos.length, quotes: sec ? sec.quotes.length : 0, flags, status: 'skipped' };
