@@ -37,6 +37,9 @@ const NAME_FIXES = {
   // Goes by Jack (Josh 2026-07-30) — doc wrote John, roster says Jonathan.
   'John Louden': 'Jack Louden',
   'Jonathan Louden': 'Jack Louden',
+  // Jack Rogers (Josh 2026-07-31): doc wrote Rodgers, RenWeb says John.
+  'Jack Rodgers': 'Jack Rogers',
+  'John Rogers': 'Jack Rogers',
 };
 
 // Doc sections with no pack folder yet — they still BOUND the previous
@@ -45,8 +48,8 @@ const NAME_FIXES = {
 const EXTRA_SECTIONS = [
   'Consumer Science', 'Industrial Arts', 'Aspire Leadership (Thrive)',
   'Baccalaureate',
-  // Cut from the book (Josh 2026-07-28) — kept as a parser boundary.
-  'Ambassadors',
+  // Cut from the book (Josh 2026-07-28/31) — kept as parser boundaries.
+  'Ambassadors', 'Fall Fest / Harvest Party',
 ];
 
 // Folder slug → section name as it appears in the compiled doc.
@@ -71,7 +74,7 @@ const SECTION_NAMES = {
   '28_spirit_week': 'Spirit Week', '29_artist_showcase': 'Artist Showcase',
   '30_christmas_show': 'Christmas Show',
   '31_spring_production_a_week_away': 'Spring Production: A Week Away',
-  '32_royal_ball': 'Royal Ball', '33_fall_fest_harvest_party': 'Fall Fest / Harvest Party',
+  '32_royal_ball': 'Royal Ball',
   '34_scholarship_banquet': 'Scholarship Banquet', '35_grandparents_day': "Grandparents' Day",
   '36_community_service': 'Community Service',
   '37_student_leadership_council_slc': 'Student Leadership Council (SLC)',
@@ -324,10 +327,39 @@ async function attachAspects(photos) {
   }
 }
 
+const _editCache = {};
+function edit0FromPath(folder) {
+  if (!(folder in _editCache)) {
+    const fp = path.join(PACK_DIR, folder, '_layout_edit.json');
+    _editCache[folder] = fs.existsSync(fp) ? JSON.parse(fs.readFileSync(fp, 'utf8')) : null;
+  }
+  return _editCache[folder];
+}
+
+// Text overrides from the spread editor (keys: title, subheadline,
+// body:N, quote:N; pairs use a:/b: prefixes).
+function applyTextEdits(sec, text, prefix) {
+  const pick = (k) => text[prefix + k];
+  if (pick('title')) sec.title = pick('title');
+  if (pick('subheadline')) sec.subheadline = pick('subheadline');
+  const paras = (sec.bodyCopy || '').split(/\n\s*\n/).filter(t => t.trim());
+  let changed = false;
+  paras.forEach((t, i) => { if (pick('body:' + i)) { paras[i] = pick('body:' + i); changed = true; } });
+  if (changed) sec.bodyCopy = paras.join('\n\n');
+  (sec.quotes || []).forEach((q, i) => { if (pick('quote:' + i)) q.text = pick('quote:' + i); });
+}
+
 async function generateSpread(spreadFolder, sections, outDir, apiBase) {
   const sectionName = SECTION_NAMES[spreadFolder];
   const sec = sections[sectionName];
-  const photos = collectPhotos(spreadFolder);
+  if (sec && edit0FromPath(spreadFolder) && edit0FromPath(spreadFolder).text) {
+    applyTextEdits(sec, edit0FromPath(spreadFolder).text, '');
+  }
+  // Editor layouts may swap in photos beyond the default first-13 — widen
+  // the pool when a saved layout exists so its picks are collectable.
+  const edit0 = edit0FromPath(spreadFolder);
+  const pinned = new Set(edit0 && Array.isArray(edit0.order) ? edit0.order : []);
+  const photos = collectPhotos(spreadFolder, pinned.size ? 60 : 13);
   await attachAspects(photos);
   const flags = auditSpread(spreadFolder, sec, photos);
   const result = { spread: spreadFolder, title: sec ? sec.title : '(no copy)', photos: photos.length, quotes: sec ? sec.quotes.length : 0, flags, status: 'skipped' };
@@ -360,7 +392,8 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
   let unique = [];
   for (const p of photos) {
     const h = await ahash(p.file);
-    if (seen.some(s => hamming(s, h) <= 6)) continue;
+    // Editor-chosen photos never fall to the near-duplicate drop.
+    if (!pinned.has(p.base) && seen.some(s => hamming(s, h) <= 6)) continue;
     seen.push(h);
     unique.push(p);
   }
@@ -370,13 +403,13 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
   // the photo->slot order (rendered with aspect repair locked) and carries
   // hand-set crops. Photos the editor didn't know about append at the end.
   let lockOrder = false;
-  const editPath = path.join(PACK_DIR, spreadFolder, '_layout_edit.json');
-  const edit = fs.existsSync(editPath) ? JSON.parse(fs.readFileSync(editPath, 'utf8')) : null;
+  const edit = edit0;
   if (edit && Array.isArray(edit.order)) {
     const byBase = new Map(unique.map(p => [p.base, p]));
     const ordered = edit.order.map(b => byBase.get(b)).filter(Boolean);
     const rest = unique.filter(p => !edit.order.includes(p.base));
-    unique = [...ordered, ...rest];
+    // Widened pool: cap back to the template maximum after ordering.
+    unique = [...ordered, ...rest].slice(0, Math.max(13, ordered.length));
     lockOrder = true;
   }
 
@@ -421,6 +454,7 @@ async function generateSpread(spreadFolder, sections, outDir, apiBase) {
     photoCaptions,
     ...(Object.keys(photoFocus).length ? { photoFocus } : {}),
     ...(lockOrder ? { _lockOrder: true } : {}),
+    ...(edit && edit.text ? { _textLocked: true } : {}),
   };
 
   const form = new FormData();
@@ -528,7 +562,10 @@ async function generatePair(pairSpec, sections, outDir) {
   const flags = [];
   for (const folder of [fa, fb]) {
     const sec = sections[SECTION_NAMES[folder]];
-    const photosRaw = collectPhotos(folder, 6);
+    if (sec && pairEdit && pairEdit.text) applyTextEdits(sec, pairEdit.text, folder === fa ? 'a:' : 'b:');
+    const halfOrderPins = new Set(
+      pairEdit ? (folder === fa ? pairEdit.orderA : pairEdit.orderB) || [] : []);
+    const photosRaw = collectPhotos(folder, halfOrderPins.size ? 30 : 6);
     await attachAspects(photosRaw);
     const halfFlags = auditSpread(folder, sec, photosRaw).map(f => `${folder}: ${f}`);
     flags.push(...halfFlags);
@@ -545,19 +582,19 @@ async function generatePair(pairSpec, sections, outDir) {
       let bits = 0n;
       for (let i = 0; i < 64; i++) bits = (bits << 1n) | (pxbuf[i] > avg ? 1n : 0n);
       const ham = (x, y) => { let v = x ^ y, n = 0; while (v) { n += Number(v & 1n); v >>= 1n; } return n; };
-      if (seen.some(s => ham(s, bits) <= 6)) continue;
+      if (!halfOrderPins.has(p.base) && seen.some(s => ham(s, bits) <= 6)) continue;
       seen.push(bits);
       unique.push(p);
-      if (unique.length === 5) break;
+      if (!halfOrderPins.size && unique.length === 5) break;
     }
-    // Apply the editor's per-half order + crops.
+    // Apply the editor's per-half order + crops (cap back to 5 after).
     const halfOrder = pairEdit && (folder === fa ? pairEdit.orderA : pairEdit.orderB);
     if (Array.isArray(halfOrder)) {
       const byBase = new Map(unique.map(p => [p.base, p]));
       const ordered = halfOrder.map(b => byBase.get(b)).filter(Boolean);
       const rest = unique.filter(p => !halfOrder.includes(p.base));
       unique.length = 0;
-      unique.push(...ordered, ...rest);
+      unique.push(...ordered.concat(rest).slice(0, Math.max(5, ordered.length)));
     }
     if (pairEdit && pairEdit.focus) {
       unique.forEach(p => { if (pairEdit.focus[p.base]) p.objectPosition = pairEdit.focus[p.base]; });

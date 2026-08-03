@@ -24,7 +24,7 @@ const LADDER = [
   { divider: 'STUDENT LIFE', tagline: 'the moments between the milestones', sections: [
     'Chapel & Community Groups', 'See You At The Pole', 'Freshman Retreat',
     'Senior Retreat', 'Spirit Week', 'Artist Showcase', 'Christmas Show',
-    'Spring Production', 'Royal Ball', 'Fall Fest', 'Scholarship Banquet',
+    'Spring Production', 'Royal Ball', 'Scholarship Banquet',
     "Grandparents' Day", 'Community Service', 'Spiritual Emphasis Day',
     'JTerm', 'Collage',
   ] },

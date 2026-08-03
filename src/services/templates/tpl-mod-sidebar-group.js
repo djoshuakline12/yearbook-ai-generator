@@ -88,10 +88,14 @@ function renderModSidebarGroup(pageContent, photos, options = {}) {
   const heroQuoteLines = heroPick ? heroPick.lines : [];
   const modQuotes = quotes.filter(q => q !== heroQuote).slice(0, 4);
 
-  // Mod question bar: a question-ish framing of the section
+  // Mod question bar: a question-ish framing of the section. When the
+  // fallback would echo the page title ("SPIRIT WEEK" + "INSIDE SPIRIT
+  // WEEK" reads doubled), label the quote rail generically instead.
+  const sectionUp = (pageContent.section || '').toUpperCase().trim();
+  const titleEchoesSection = sectionUp && titleRaw.toUpperCase().includes(sectionUp);
   const modQuestion = (pageContent.headline && pageContent.headline.toUpperCase().trim() !== titleRaw.toUpperCase().trim()
     ? pageContent.headline
-    : `Inside ${pageContent.section || 'the story'}`).toUpperCase();
+    : (titleEchoesSection ? 'In their words' : `Inside ${pageContent.section || 'the story'}`)).toUpperCase();
 
   // ---- Captions ----
   const capText = (i) => {

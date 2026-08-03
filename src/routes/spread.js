@@ -185,7 +185,7 @@ router.post('/generate-spread', uploadAny.any(), async (req, res) => {
 
     // 2. CONTENT POLISHING - AI enhances all text before layout
     // Skip for index pages that just have topic/page lists
-    if (USE_CONTENT_POLISHING && category !== 'index') {
+    if (USE_CONTENT_POLISHING && category !== 'index' && !(pageContent && pageContent._textLocked)) {
       console.log('Content Polishing - Starting...');
       const polishCheck = needsPolishing(pageContent);
       console.log('Content Polishing - Needs polish:', polishCheck.needsPolishing, polishCheck.issues);

@@ -48,6 +48,7 @@ const TPL_DEFAULT = {
   '36_community_service': 5, '37_student_leadership_council_slc': 5,
   '39_senior_thesis_project_stp': 1, '40_graduation': 1,
   '42_collage_spread': 3, '43_jterm': 5,
+  '15_girls_soccer': 4, '44_swim': 4, '45_golf': 5, '46_collage_2': 4,
 };
 const TEMPLATE_IDS = {
   1: 'hero-top-bleed', 2: 'hero-left-magazine', 3: 'hero-dominant-sidebar',
@@ -66,7 +67,7 @@ const PHOTO_FILES = {};   // base -> absolute source file (for face detection)
 const srcKey = (s) => `${s.length}:${s.slice(-48)}`;
 const imgSrcs = (html) => [...html.matchAll(/<img[^>]*src="(data:image\/[^"]+)"/g)].map(m => m[1]);
 
-async function dedupTop(collected, cap) {
+async function dedupTop(collected, cap, pins) {
   const seen = [];
   const out = [];
   for (const p of collected) {
@@ -75,12 +76,24 @@ async function dedupTop(collected, cap) {
     let bits = 0n;
     for (let i = 0; i < 64; i++) bits = (bits << 1n) | (px[i] > avg ? 1n : 0n);
     const ham = (x, y) => { let v = x ^ y, n = 0; while (v) { n += Number(v & 1n); v >>= 1n; } return n; };
-    if (seen.some(s => ham(s, bits) <= 6)) continue;
+    if (!(pins && pins.has(p.base)) && seen.some(s => ham(s, bits) <= 6)) continue;
     seen.push(bits);
     out.push(p);
-    if (cap && out.length >= cap) break;
+    if (cap && out.length >= cap && !(pins && pins.size)) break;
   }
   return out;
+}
+
+async function loadBench(p, capMap) {
+  const buf = await sharp(p.file).rotate().resize(480, 480, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 68 }).toBuffer();
+  const meta = await sharp(buf).metadata();
+  PHOTO_FILES[p.base] = p.file;
+  return {
+    base: p.base,
+    src: `data:image/jpeg;base64,${buf.toString('base64')}`,
+    ar: +(meta.width / meta.height).toFixed(4),
+    cap: capMap[p.base] || '',
+  };
 }
 
 async function loadPhoto(p) {
@@ -98,6 +111,18 @@ async function loadPhoto(p) {
   };
 }
 
+// Apply saved text edits to a parsed section (prefix '' or 'a:'/'b:').
+function applyTextEdits(sec, text, prefix) {
+  const pick = (k) => text[prefix + k];
+  if (pick('title')) sec.title = pick('title');
+  if (pick('subheadline')) sec.subheadline = pick('subheadline');
+  const paras = (sec.bodyCopy || '').split(/\n\s*\n/).filter(t => t.trim());
+  let changed = false;
+  paras.forEach((t, i) => { if (pick('body:' + i)) { paras[i] = pick('body:' + i); changed = true; } });
+  if (changed) sec.bodyCopy = paras.join('\n\n');
+  (sec.quotes || []).forEach((q, i) => { if (pick('quote:' + i)) q.text = pick('quote:' + i); });
+}
+
 function readEdit(folder) {
   const fp = path.join(PACK_DIR, folder, '_layout_edit.json');
   return fs.existsSync(fp) ? JSON.parse(fs.readFileSync(fp, 'utf8')) : null;
@@ -109,6 +134,30 @@ function holdFlagsFor(spec) {
     const e = rep.find(r => r.spread === spec);
     return e ? e.flags : [];
   } catch { return []; }
+}
+
+// Wrap title/tagline/body/quote texts so they're double-click editable.
+// Matching is exact-text (post-escape); split or truncated renders stay
+// read-only. Keys: title, subheadline, body:N, quote:N (pairs prefix a:/b:).
+function tagText(html, fields) {
+  for (const [key, text] of Object.entries(fields)) {
+    if (!text) continue;
+    const esc = escapeHtml(text);
+    if (html.includes(esc)) {
+      html = html.replace(esc, `<span class="textline" data-textfield="${key}">${esc}</span>`);
+    }
+  }
+  return html;
+}
+
+function textFieldsFor(sec, prefix) {
+  const f = {};
+  const pre = prefix || '';
+  if (sec.title) f[pre + 'title'] = sec.title.toUpperCase();
+  if (sec.subheadline) f[pre + 'subheadline'] = sec.subheadline.toUpperCase();
+  (sec.bodyCopy || '').split(/\n\s*\n/).filter(t => t.trim()).forEach((t, i) => { f[pre + 'body:' + i] = t.trim(); });
+  (sec.quotes || []).forEach((q, i) => { if (q && q.text) f[pre + 'quote:' + i] = q.text; });
+  return f;
 }
 
 // Wrap caption texts so the client can live-update them on swaps/edits.
@@ -140,12 +189,23 @@ async function buildOne(folder, navList) {
   const sec = sections[SECTION_NAMES[folder]];
   if (!sec) throw new Error('no copy in the compiled doc');
 
-  const unique = await dedupTop(collectPhotos(folder), 0);
-  const photos = [];
-  for (const p of unique) photos.push(await loadPhoto(p));
-  console.log(`${folder}: ${photos.length} photos, template ${tplN}${mirror ? ' (mirrored)' : ''}`);
-
   const edit = readEdit(folder);
+  if (edit && edit.text) applyTextEdits(sec, edit.text, '');
+  const pins = new Set(edit && Array.isArray(edit.order) ? edit.order : []);
+  // Full pool: on-spread photos plus the bench for the Replace tray.
+  const pool = await dedupTop(collectPhotos(folder, 60), 0, pins);
+  const onCount = Math.max(13, pins.size ? [...pins].filter(b => pool.some(p => p.base === b)).length : 0);
+  let poolOrdered = pool;
+  if (pins.size) {
+    const byBase = new Map(pool.map(p => [p.base, p]));
+    const ordered = (edit.order || []).map(b => byBase.get(b)).filter(Boolean);
+    poolOrdered = [...ordered, ...pool.filter(p => !pins.has(p.base))];
+  }
+  const spreadSet = poolOrdered.slice(0, Math.min(13, poolOrdered.length));
+  const benchSet = poolOrdered.slice(spreadSet.length, spreadSet.length + 40);
+  const photos = [];
+  for (const p of spreadSet) photos.push(await loadPhoto(p));
+  console.log(`${folder}: ${photos.length} photos (+${benchSet.length} bench), template ${tplN}${mirror ? ' (mirrored)' : ''}`);
   const priorFocus = {};
   const fPath = path.join(PACK_DIR, folder, '_focus.json');
   if (fs.existsSync(fPath)) Object.assign(priorFocus, JSON.parse(fs.readFileSync(fPath, 'utf8')));
@@ -156,6 +216,8 @@ async function buildOne(folder, navList) {
   if (edit && edit.captions) Object.assign(capMap, edit.captions);
   const capByBase = {};
   photos.forEach(p => { capByBase[p.base] = capMap[p.base] || ''; });
+  const bench = [];
+  for (const p of benchSet) bench.push(await loadBench(p, capMap));
   const seenCapText = new Set();
   const photoCaptions = photos.map((p, i) => {
     const cap = capByBase[p.base];
@@ -212,9 +274,10 @@ async function buildOne(folder, navList) {
   };
   let html = renderHandTemplate(styleId, orderedContent, photosOrdered, { dpi: 100, variant });
   html = tagCaptions(html, capByBase);
+  html = tagText(html, textFieldsFor(sec, ''));
 
   const quality = buildQuality(photosOrdered, capByBase, sec, holdFlagsFor(folder));
-  return finishPage(html, folder, navList, photosOrdered, null, quality);
+  return finishPage(html, folder, navList, photosOrdered, null, quality, bench);
 }
 
 // ---------------------------------------------------------------------------
@@ -228,23 +291,34 @@ async function buildPair(pairSpec, navList) {
   const halves = [];
   const photosOrdered = [];
   const capByBase = {};
+  const benchAll = [];
   let bodyLen = 0, quoteCount = 0, statsCount = 0, hasTagline = false;
   for (const folder of [fa, fb]) {
     const sec = sections[SECTION_NAMES[folder]];
     if (!sec) throw new Error(folder + ': no copy in the compiled doc');
+    if (pe && pe.text) applyTextEdits(sec, pe.text, folder === fa ? 'a:' : 'b:');
     bodyLen += (sec.bodyCopy || '').length;
     quoteCount += (sec.quotes || []).length;
     statsCount += (sec.highlights || []).length;
     hasTagline = hasTagline || !!sec.subheadline;
-    let unique = await dedupTop(collectPhotos(folder, 6), 5);
     const halfOrder = pe && (folder === fa ? pe.orderA : pe.orderB);
-    if (Array.isArray(halfOrder)) {
-      const byBase = new Map(unique.map(p => [p.base, p]));
+    const halfPins = new Set(Array.isArray(halfOrder) ? halfOrder : []);
+    const halfPool = await dedupTop(collectPhotos(folder, 30), 0, halfPins);
+    let poolOrdered = halfPool;
+    if (halfPins.size) {
+      const byBase = new Map(halfPool.map(p => [p.base, p]));
       const ordered = halfOrder.map(b => byBase.get(b)).filter(Boolean);
-      unique = [...ordered, ...unique.filter(p => !halfOrder.includes(p.base))];
+      poolOrdered = [...ordered, ...halfPool.filter(p => !halfPins.has(p.base))];
     }
+    const unique = poolOrdered.slice(0, Math.min(5, poolOrdered.length));
+    const halfBench = poolOrdered.slice(unique.length, unique.length + 20);
     const capMap = manifestCaptions(folder);
     if (pe && pe.captions) Object.assign(capMap, pe.captions);
+    for (const bp of halfBench) {
+      const be = await loadBench(bp, capMap);
+      be.half = folder === fa ? 0 : 1;
+      benchAll.push(be);
+    }
     const seenCap = new Set();
     const photoCaptions = [];
     const halfPhotos = [];
@@ -271,12 +345,13 @@ async function buildPair(pairSpec, navList) {
   const pageContent = { split: halves, photoSplit: halves[0]._photoCount };
   let html = renderHandTemplate('split-academic', pageContent, photosOrdered, { dpi: 100, variant: 0 });
   html = tagCaptions(html, capByBase);
+  html = tagText(html, { ...textFieldsFor(sections[SECTION_NAMES[fa]], 'a:'), ...textFieldsFor(sections[SECTION_NAMES[fb]], 'b:') });
 
   const quality = buildQuality(photosOrdered, capByBase,
     { bodyCopy: 'x'.repeat(bodyLen), quotes: new Array(quoteCount), highlights: new Array(statsCount), subheadline: hasTagline ? 'x' : '' },
     holdFlagsFor(pairSpec));
   return finishPage(html, pairSpec, navList, photosOrdered,
-    { split: halves[0]._photoCount, folderA: fa }, quality);
+    { split: halves[0]._photoCount, folderA: fa }, quality, benchAll);
 }
 
 function buildQuality(photos, capByBase, sec, holdFlags) {
@@ -295,14 +370,14 @@ function buildQuality(photos, capByBase, sec, holdFlags) {
   return { score, parts, tips: adviceFor(parts, input) };
 }
 
-function finishPage(html, label, navList, photosOrdered, pair, quality) {
+function finishPage(html, label, navList, photosOrdered, pair, quality, bench) {
   const photoMeta = photosOrdered.map(p => ({
     key: srcKey(`data:image/jpeg;base64,${p.base64}`),
     base: p.base,
     pos: p.objectPosition || '',
     ar: +p.aspectRatio.toFixed(4),
   }));
-  const editorJs = editorChrome(label, navList, photoMeta, pair, quality);
+  const editorJs = editorChrome(label, navList, photoMeta, pair, quality, bench || []);
   html = html.replace('</body>', editorJs + '\n</body>');
   const outPath = path.join(REVIEW_DIR, `edit_${label}.html`);
   fs.mkdirSync(REVIEW_DIR, { recursive: true });
@@ -314,7 +389,7 @@ function finishPage(html, label, navList, photosOrdered, pair, quality) {
 // ---------------------------------------------------------------------------
 // Editor chrome (toolbar + interactions), served or static
 // ---------------------------------------------------------------------------
-function editorChrome(label, navList, photoMeta, pair, quality) {
+function editorChrome(label, navList, photoMeta, pair, quality, bench) {
   const qColor = quality.score >= 85 ? '#2e7d32' : quality.score >= 65 ? '#e08700' : '#c62828';
   return `
 <style>
@@ -350,6 +425,24 @@ function editorChrome(label, navList, photoMeta, pair, quality) {
   img.ed-selected { outline: 3px solid #ffb300 !important; outline-offset: -3px; }
   body.swapmode img.ed-target { cursor: pointer; }
   .capline { cursor: text; }
+  .textline { cursor: text; }
+  .textline.ed-changed-cap { background: rgba(46,125,50,.14); outline: 1px dashed #2e7d32; }
+  #tmodal {
+    display: none; position: fixed; inset: 0; z-index: 10000;
+    background: rgba(0,0,0,.55); align-items: center; justify-content: center;
+  }
+  #tmodal.open { display: flex; }
+  #tmodal .box {
+    background: white; border-radius: 10px; padding: 18px; width: min(680px, 90vw);
+    font: 14px -apple-system, sans-serif;
+  }
+  #tmodal textarea {
+    width: 100%; min-height: 140px; font: 14px -apple-system, sans-serif;
+    padding: 10px; border: 1px solid #bbb; border-radius: 6px; box-sizing: border-box;
+  }
+  #tmodal .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+  #tmodal button { padding: 7px 16px; border-radius: 6px; border: 1px solid #999; cursor: pointer; }
+  #tmodal button.primary { background: #2e7d32; border-color: #2e7d32; color: white; }
   .capline.ed-changed-cap { background: rgba(46,125,50,.18); outline: 1px dashed #2e7d32; }
   .facebox { position: absolute; border: 2px solid #00e5ff; border-radius: 3px; pointer-events: none; z-index: 5; }
   .facebox.out { border-color: #ff1744; border-style: dashed; }
@@ -358,7 +451,22 @@ function editorChrome(label, navList, photoMeta, pair, quality) {
     font: 700 11px -apple-system, sans-serif; padding: 2px 7px; border-radius: 10px;
     pointer-events: none;
   }
+  #tray {
+    display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 9998;
+    background: #1d1926; padding: 10px 14px; box-shadow: 0 -2px 12px rgba(0,0,0,.5);
+    max-height: 200px; overflow-x: auto; white-space: nowrap;
+  }
+  #tray.open { display: block; }
+  #tray .thead { color: #ccc; font: 13px -apple-system, sans-serif; margin-bottom: 8px; }
+  #tray img {
+    height: 120px; width: auto; margin-right: 8px; border-radius: 4px;
+    cursor: pointer; border: 2px solid transparent; display: inline-block; vertical-align: top;
+  }
+  #tray img:hover { border-color: #7c5cd6; }
+  #tray .empty { color: #888; font: 13px -apple-system, sans-serif; }
 </style>
+<div id="tmodal"><div class="box"><div id="tmTitle" style="font-weight:700;margin-bottom:8px;"></div><textarea id="tmText"></textarea><div class="row"><button id="tmCancel">Cancel</button><button id="tmSave" class="primary">Apply</button></div><div style="color:#777;font-size:12px;margin-top:8px;">Edited text is locked verbatim — the AI copy polisher will not rewrite it.</div></div></div>
+<div id="tray"><div class="thead">Pick a replacement — captions &amp; crops follow the photo. <span id="trayClose" style="float:right;cursor:pointer;color:#aaa;">✕ close</span></div><div id="trayItems"></div></div>
 <div id="edbar">
   <button id="prevBtn" title="Previous spread">&#8249;</button>
   <select id="navSel">${navList.map(f => `<option value="edit_${f}.html"${f === label ? ' selected' : ''}>${f}</option>`).join('')}</select>
@@ -366,9 +474,10 @@ function editorChrome(label, navList, photoMeta, pair, quality) {
   <span id="qbadge" title="${escapeHtml(quality.tips.length ? 'To improve: ' + quality.tips.join(' | ') : 'No issues found')}">${quality.score}</span>
   <button id="cropBtn" class="active">Crop</button>
   <button id="swapBtn">Swap</button>
+  <button id="replBtn">Replace</button>
   <button id="facesBtn">Faces</button>
   <button id="resetBtn">Reset</button>
-  <span class="hint">Drag = crop &middot; dbl-click caption/photo = edit caption &middot; red badge = face cropped out</span>
+  <span class="hint">Drag = crop &middot; Replace = pick from unused photos &middot; dbl-click = edit caption</span>
   <button id="save">Save</button>
   <button id="print" title="Render at print quality via the production pipeline">Print PNG 600 DPI</button>
 </div>
@@ -380,8 +489,13 @@ const SERVED = location.protocol.startsWith('http');
 let ORDER = PHOTOS.map(function(p) { return p.base; });
 const FOCUS = {};
 const CAP_EDITS = {};
+const TEXT_EDITS = {};
 PHOTOS.forEach(function(p) { if (p.pos) FOCUS[p.base] = p.pos; });
 const AR = {}; PHOTOS.forEach(function(p) { AR[p.base] = p.ar; });
+const BENCH = ${JSON.stringify(bench)};   // replacement pool (off-spread)
+const CAPS = {};
+BENCH.forEach(function(b) { AR[b.base] = b.ar; if (b.cap) CAPS[b.base] = b.cap; });
+document.querySelectorAll('.capline').forEach(function(n) { CAPS[n.getAttribute('data-capbase')] = n.textContent; });
 let FACES = null;
 
 const srcKey = function(s) { return s.length + ':' + s.slice(-48); };
@@ -410,15 +524,70 @@ imgs.forEach(function(im) {
 let mode = 'crop';
 const cropBtn = document.getElementById('cropBtn');
 const swapBtn = document.getElementById('swapBtn');
+const replBtn = document.getElementById('replBtn');
 function setMode(m) {
   mode = m;
   cropBtn.classList.toggle('active', m === 'crop');
   swapBtn.classList.toggle('active', m === 'swap');
-  document.body.classList.toggle('swapmode', m === 'swap');
+  replBtn.classList.toggle('active', m === 'replace');
+  document.body.classList.toggle('swapmode', m !== 'crop');
+  if (m !== 'replace') closeTray();
   if (selected) { selected.classList.remove('ed-selected'); selected = null; }
 }
 cropBtn.onclick = function() { setMode('crop'); };
 swapBtn.onclick = function() { setMode('swap'); };
+replBtn.onclick = function() { setMode('replace'); };
+
+// ---- replace (bench tray) ----
+const tray = document.getElementById('tray');
+const trayItems = document.getElementById('trayItems');
+let replaceTarget = null;
+document.getElementById('trayClose').onclick = closeTray;
+function closeTray() {
+  tray.classList.remove('open');
+  if (replaceTarget) { replaceTarget.classList.remove('ed-selected'); replaceTarget = null; }
+}
+function openTray(im) {
+  replaceTarget = im;
+  im.classList.add('ed-selected');
+  const slot = +im.dataset.slot;
+  const half = PAIR ? (slot < PAIR.split ? 0 : 1) : null;
+  const usable = BENCH.filter(function(b) { return half == null || b.half === half; });
+  trayItems.innerHTML = usable.length
+    ? usable.map(function(b, i) { return '<img src="' + b.src + '" data-bi="' + BENCH.indexOf(b) + '" title="' + (b.cap || b.base) + '">'; }).join('')
+    : '<span class="empty">No unused photos left in this folder' + (half != null ? ' half' : '') + '.</span>';
+  tray.classList.add('open');
+}
+trayItems.addEventListener('click', function(e) {
+  const t = e.target.closest('img[data-bi]');
+  if (!t || !replaceTarget) return;
+  const b = BENCH[+t.dataset.bi];
+  const im = replaceTarget;
+  const slot = +im.dataset.slot;
+  const oldBase = ORDER[slot];
+  // displaced photo goes back to the bench (keep its full-res src)
+  BENCH.push({ base: oldBase, src: im.getAttribute('src'), ar: AR[oldBase] || 1.5, cap: CAPS[oldBase] || '', half: b.half });
+  BENCH.splice(BENCH.indexOf(b), 1);
+  ORDER[slot] = b.base;
+  im.setAttribute('src', b.src);
+  im.style.objectPosition = FOCUS[b.base] || '';
+  // caption follows the photo
+  const node = capNodeFor(oldBase);
+  if (node) {
+    if (b.cap || CAPS[b.base]) {
+      node.textContent = CAPS[b.base] || b.cap;
+      node.setAttribute('data-capbase', b.base);
+    } else {
+      node.textContent = '(caption needed — dbl-click to write one)';
+      node.setAttribute('data-capbase', b.base);
+      node.classList.add('ed-changed-cap');
+    }
+  }
+  im.classList.add('ed-changed');
+  markDirty();
+  closeTray();
+  refreshFaces();
+});
 
 const baseOf = function(im) { return ORDER[+im.dataset.slot]; };
 
@@ -435,7 +604,7 @@ let drag = null;
 document.addEventListener('pointerdown', function(e) {
   const im = e.target.closest('img.ed-target');
   if (!im) return;
-  if (mode === 'swap') { handleSwapClick(im); e.preventDefault(); return; }
+  if (mode !== 'crop') { handleSwapClick(im); e.preventDefault(); return; }
   const p = parsePos(im);
   drag = { im: im, sx: e.clientX, sy: e.clientY, x: p[0], y: p[1], rect: im.getBoundingClientRect() };
   im.style.cursor = 'grabbing';
@@ -465,6 +634,7 @@ function capNodeFor(base) {
   return document.querySelector('.capline[data-capbase="' + base + '"]');
 }
 function handleSwapClick(im) {
+  if (mode === 'replace') { openTray(im); return; }
   if (!selected) { selected = im; im.classList.add('ed-selected'); return; }
   if (selected === im) { im.classList.remove('ed-selected'); selected = null; return; }
   const a = selected, b = im;
@@ -510,11 +680,39 @@ function editCaption(base) {
   markDirty();
 }
 document.addEventListener('dblclick', function(e) {
+  const tx = e.target.closest('.textline');
+  if (tx) { editText(tx); return; }
   const cap = e.target.closest('.capline');
   if (cap) { editCaption(cap.getAttribute('data-capbase')); return; }
   const im = e.target.closest('img.ed-target');
   if (im) editCaption(baseOf(im));
 });
+
+// ---- text editing (title / tagline / body / quotes) ----
+const tmodal = document.getElementById('tmodal');
+let tmTarget = null;
+function editText(node) {
+  tmTarget = node;
+  const field = node.getAttribute('data-textfield');
+  document.getElementById('tmTitle').textContent = 'Edit ' + field.replace(/^\w:/, '').replace(':', ' paragraph ');
+  document.getElementById('tmText').value = TEXT_EDITS[field] != null ? TEXT_EDITS[field] : node.textContent;
+  tmodal.classList.add('open');
+  document.getElementById('tmText').focus();
+}
+document.getElementById('tmCancel').onclick = function() { tmodal.classList.remove('open'); tmTarget = null; };
+document.getElementById('tmSave').onclick = function() {
+  if (!tmTarget) return;
+  const field = tmTarget.getAttribute('data-textfield');
+  const val = document.getElementById('tmText').value.trim();
+  if (val && val !== tmTarget.textContent) {
+    TEXT_EDITS[field] = val;
+    tmTarget.textContent = val;
+    tmTarget.classList.add('ed-changed-cap');
+    markDirty();
+  }
+  tmodal.classList.remove('open');
+  tmTarget = null;
+};
 
 // ---- face boxes + crop-out warnings ----
 function visibleWindow(base, rect) {
@@ -579,7 +777,7 @@ fetch('face_boxes.json').then(function(r) { return r.ok ? r.json() : null; })
 // ---- navigation ----
 document.getElementById('resetBtn').onclick = function() { location.reload(); };
 let dirty = false;
-function markDirty() { dirty = document.querySelectorAll('img.ed-changed, .ed-changed-cap').length > 0 || Object.keys(CAP_EDITS).length > 0; }
+function markDirty() { dirty = document.querySelectorAll('img.ed-changed, .ed-changed-cap').length > 0 || Object.keys(CAP_EDITS).length > 0 || Object.keys(TEXT_EDITS).length > 0; }
 document.addEventListener('pointerup', function() { setTimeout(markDirty, 0); });
 function go(href) {
   if (dirty && !confirm('Unsaved edits on this spread — leave anyway?')) return;
@@ -596,6 +794,7 @@ function layoutPayload() {
     ? { orderA: ORDER.slice(0, PAIR.split), orderB: ORDER.slice(PAIR.split), focus: FOCUS }
     : { order: ORDER, focus: FOCUS };
   if (Object.keys(CAP_EDITS).length) out.captions = CAP_EDITS;
+  if (Object.keys(TEXT_EDITS).length) out.text = TEXT_EDITS;
   return out;
 }
 document.getElementById('save').onclick = async function() {
