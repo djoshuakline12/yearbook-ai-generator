@@ -101,15 +101,19 @@ function renderHeadlineHeroRail(pageContent, photos, options = {}) {
     const c = dedupCaption(pickCaption(pageContent.photoCaptions, i));
     return c && (c.lead || c.body) ? [c.lead, c.body].filter(Boolean).join(' ') : null;
   };
-  // Numbers only for captioned photos (a bare badge is confusing).
+  // Numbers only for captioned photos (a bare badge is confusing). All
+  // captioned page photos join one numbered group (Josh 2026-08-01 — the
+  // left insets and quote-column photo used to print caption-less).
+  const capSlots = [['hero', idx.hero], ['under', idx.under],
+    ['inset1', idx.inset1], ['inset2', idx.inset2], ['quoteCol', idx.quoteCol]];
   const capNums3 = {};
   {
     let n3 = 0;
-    for (const [k, i] of [['hero', idx.hero], ['under', idx.under]]) {
+    for (const [k, i] of capSlots) {
       if (i >= 0 && capText(i)) capNums3[k] = ++n3;
     }
   }
-  const heroCaps = [['hero', idx.hero], ['under', idx.under]].map(([k, photoIdx]) => {
+  const heroCaps = capSlots.map(([k, photoIdx]) => {
     if (!capNums3[k]) return null;
     return `<span class="gcap"><b>${capNums3[k]}</b>&nbsp;&nbsp;${escapeHtml(capText(photoIdx))}</span>`;
   }).filter(Boolean).join('\n');
@@ -137,7 +141,7 @@ function renderHeadlineHeroRail(pageContent, photos, options = {}) {
   // Caption text must not straddle the fold: the narrow column ends at
   // 7.9; the wide band (stretched-hero case) sits on the right page only.
   const heroCapsX = underSrc ? 6.6 : 8.2;
-  const heroCapsW = underSrc ? 1.3 : 3.7;
+  const heroCapsW = underSrc ? 1.2 : 3.7;  // narrow column ends 0.2in off the fold
   const heroCapsH = Math.max(0.4, 10.05 - heroCapsTop);
 
   // bit1 swaps the pull-quote column and the inset-photo column.
@@ -347,6 +351,12 @@ ${BRAND.fontLink}
     display: block;
     margin-bottom: ${px(0.06)};
   }
+  .rail-mod .rail-img-cap {
+    font-size: ${pt(7)};
+    line-height: 1.3;
+    color: #666666;
+    margin: ${px(0.03)} 0 ${px(0.08)};
+  }
   .rail-mod .quote {
     font-size: ${pt(7.5)};
     line-height: 1.35;
@@ -378,11 +388,11 @@ ${BRAND.fontLink}
     ${pullQuoteLines.map(l => `<span class="quote-line">${escapeHtml(l)}</span>`).join('\n')}
     ${cleanAttribution(pullQuote.attribution) && !isPlaceholder(cleanAttribution(pullQuote.attribution)) ? `<div class="quote-attr">— ${escapeHtml(cleanAttribution(pullQuote.attribution))}</div>` : ''}
   </div>` : ''}
-  ${insetSrcs[0] ? `<img class="inset-1" src="${insetSrcs[0]}" style="object-position:${insetPos[0]}" alt="">` : ''}
-  ${insetSrcs[1] ? `<img class="inset-2" src="${insetSrcs[1]}" style="object-position:${insetPos[1]}" alt="">` : ''}
+  ${insetSrcs[0] ? `<img class="inset-1" src="${insetSrcs[0]}" style="object-position:${insetPos[0]}" alt="">${capNums3.inset1 ? `<span class="num-badge" style="left:${px(insetColX + 0.08)};top:${px(rowY + inset1H - 0.32)}">${capNums3.inset1}</span>` : ''}` : ''}
+  ${insetSrcs[1] ? `<img class="inset-2" src="${insetSrcs[1]}" style="object-position:${insetPos[1]}" alt="">${capNums3.inset2 ? `<span class="num-badge" style="left:${px(insetColX + 0.08)};top:${px(inset2Y + inset2H - 0.32)}">${capNums3.inset2}</span>` : ''}` : ''}
   ${insetSrcs[1] && idx.inset2 >= 0 && capText(idx.inset2) ? `<div class="inset-2-cap">${escapeHtml(capText(idx.inset2))}</div>` : ''}
 
-  ${showQuoteColPhoto ? `<img class="quote-col-photo" src="${quoteColSrc}" style="object-position:${quoteColPos}" alt="">` : ''}
+  ${showQuoteColPhoto ? `<img class="quote-col-photo" src="${quoteColSrc}" style="object-position:${quoteColPos}" alt="">${capNums3.quoteCol ? `<span class="num-badge" style="left:${px(pullColX + 0.08)};top:${px(quoteColPhotoY + quoteColPhotoH - 0.32)}">${capNums3.quoteCol}</span>` : ''}` : ''}
 
   <!-- CENTER HERO -->
   ${heroSrc ? `<img class="hero" src="${heroSrc}" style="object-position:${heroPos}" alt="">${capNums3.hero ? `<span class="num-badge" style="left:${px(heroX + 0.08)};top:${px(0.4 + heroH - 0.32)}">${capNums3.hero}</span>` : ''}` : ''}
@@ -403,7 +413,9 @@ ${BRAND.fontLink}
     } else {
       body = escapeHtml(m.capOnly);
     }
-    return `<div class="rail-mod" style="top:${px(top)}">${img}<div class="quote">${body}</div></div>`;
+    const railCapIdx = [idx.rail0, idx.rail1, idx.rail2][i];
+    const railCap = m.quoteObj && railCapIdx >= 0 ? capText(railCapIdx) : null;
+    return `<div class="rail-mod" style="top:${px(top)}">${img}${railCap ? `<div class="rail-img-cap">${escapeHtml(railCap)}</div>` : ''}<div class="quote">${body}</div></div>`;
   }).join('\n')}
 
 </div>

@@ -213,8 +213,8 @@ function renderShareAStory(pageContent, photos, options = {}) {
   const modCount = Math.max(1, headMods.length);
   const nRight = Math.floor(headMods.length / 2);
   const nLeft = Math.max(1, headMods.length - nRight);
-  const segL = { x: mirror ? 8.1 : 0.75, w: 7.15 };  // ends clear of the fold
-  const segR = { x: mirror ? 3.4 : 8.1, w: 4.5 };     // both segments fold-safe mirrored
+  const segL = { x: mirror ? 8.25 : 0.75, w: 7.0 };  // ends 0.25in clear of the fold
+  const segR = { x: mirror ? 3.4 : 8.25, w: 4.35 };   // both segments fold-safe mirrored
   const headModBoxes = headMods.map((_, i) => {
     if (i < nLeft) {
       const stride = segL.w / nLeft;

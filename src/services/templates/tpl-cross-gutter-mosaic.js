@@ -193,7 +193,7 @@ function renderCrossGutterMosaic(pageContent, photos, options = {}) {
   const heroL = ML(3.15, heroW);
   const inHeroLeft = heroL + 0.25;
   const inHeroRight = heroL + heroW - 0.25 - 3.8;
-  const quoteSafe = (x) => x >= 0.4 && x + 3.8 <= 15.6 && (x + 3.8 <= 7.9 || x >= 8.1);
+  const quoteSafe = (x) => x >= 0.4 && x + 3.8 <= 15.6 && (x + 3.8 <= 7.8 || x >= 8.2);
   const preferRight = heroFocal.focalX <= 0.45 || (flipQuote && !(heroFocal.focalX >= 0.55));
   const quoteCandidates = preferRight ? [inHeroRight, inHeroLeft] : [inHeroLeft, inHeroRight];
   const quoteLeft = quoteCandidates.find(quoteSafe)
