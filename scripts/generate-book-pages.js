@@ -17,8 +17,8 @@ const { BRAND, inToPx, ptToPx, escapeHtml } = require('../src/services/templates
 const OUT = path.join(os.homedir(), 'Downloads', 'finished spreads', '_book_pages');
 
 // ---------------------------------------------------------------------------
-// PROVISIONAL LADDER (2026-07-30) — spreads in book order per block.
-// Front matter: pp 1-4 theme (Josh's pages), pp 5-26 portraits (11 spreads).
+// LADDER v2 (2026-08-02) — matches Josh's eDesign front matter: pp1-5 theme,
+// 6-17 seniors, 18-19 Baccalaureate, 20-21 Graduation, 22-29 classes+faculty.
 // ---------------------------------------------------------------------------
 const LADDER = [
   { divider: 'STUDENT LIFE', tagline: 'the moments between the milestones', sections: [
@@ -26,7 +26,7 @@ const LADDER = [
     'Senior Retreat', 'Spirit Week', 'Artist Showcase', 'Christmas Show',
     'Spring Production', 'Royal Ball', 'Scholarship Banquet',
     "Grandparents' Day", 'Community Service', 'Spiritual Emphasis Day',
-    'JTerm', 'Collage',
+    'JTerm', 'Collage', 'One More Look',
   ] },
   { divider: 'ACADEMICS', tagline: 'learning that lasts', sections: [
     'Bible & English', 'Math & Science', 'History & Spanish', 'Art & Media',
@@ -38,12 +38,11 @@ const LADDER = [
     'Baseball', 'Softball', 'Girls Volleyball', 'Boys Volleyball', 'Cheer',
     'Cross Country', 'Field Hockey', 'Swim', 'Golf', 'Team Photos',
   ] },
-  { divider: 'ROYAL FINISH', tagline: 'leading, graduating, remembering', sections: [
-    'Student Leadership Council', 'Graduation', 'Baccalaureate',
-    'Senior Recognition', 'Signatures',
+  { divider: 'ROYAL FINISH', tagline: 'leading, serving, remembering', sections: [
+    'Student Leadership Council', 'Senior Recognition', 'Signatures',
   ] },
 ];
-const FIRST_CONTENT_PAGE = 27;  // after theme (4) + portraits (22)
+const FIRST_CONTENT_PAGE = 30;  // after theme (5) + people block (6-29)
 const TEAM_PHOTO_SPREADS = 7;   // Team Photos block is 7 spreads wide
 
 // Assign provisional page numbers: each divider takes a spread, then each
